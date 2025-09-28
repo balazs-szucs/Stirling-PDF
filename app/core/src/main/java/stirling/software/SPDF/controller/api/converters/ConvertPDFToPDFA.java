@@ -1,9 +1,13 @@
 package stirling.software.SPDF.controller.api.converters;
 
+import java.awt.color.ColorSpace;
+import java.awt.color.ICC_Profile;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -53,12 +57,17 @@ public class ConvertPDFToPDFA {
     private static final int PDFA_COMPATIBILITY_POLICY = 1;
 
     private static List<String> buildGhostscriptCommand(
-            Path inputPdf, Path outputPdf, Path iccProfile, Path workingDir, PdfaProfile profile) {
+            Path inputPdf,
+            Path outputPdf,
+            ColorProfiles colorProfiles,
+            Path workingDir,
+            PdfaProfile profile) {
 
         List<String> command = new ArrayList<>();
         command.add("gs");
         command.add("--permit-file-read=" + workingDir.toAbsolutePath());
-        command.add("--permit-file-read=" + iccProfile.toAbsolutePath());
+        command.add("--permit-file-read=" + colorProfiles.rgb().toAbsolutePath());
+        command.add("--permit-file-read=" + colorProfiles.gray().toAbsolutePath());
         command.add("--permit-file-read=" + inputPdf.toAbsolutePath());
         command.add("--permit-file-write=" + workingDir.toAbsolutePath());
         command.add("-sDEVICE=pdfwrite");
@@ -67,7 +76,9 @@ public class ConvertPDFToPDFA {
         command.add("-dCompatibilityLevel=" + profile.compatibilityLevel());
         command.add("-sColorConversionStrategy=RGB");
         command.add("-sProcessColorModel=DeviceRGB");
-        command.add("-sOutputICCProfile=" + iccProfile.toAbsolutePath());
+        command.add("-sOutputICCProfile=" + colorProfiles.rgb().toAbsolutePath());
+        command.add("-sDefaultRGBProfile=" + colorProfiles.rgb().toAbsolutePath());
+        command.add("-sDefaultGrayProfile=" + colorProfiles.gray().toAbsolutePath());
         command.add("-dEmbedAllFonts=true");
         command.add("-dSubsetFonts=true");
         command.add("-dCompressFonts=true");
@@ -226,10 +237,10 @@ public class ConvertPDFToPDFA {
 
     private byte[] convertWithGhostscript(Path inputPdf, Path workingDir, PdfaProfile profile)
             throws IOException, InterruptedException {
-        Path outputPdf = workingDir.resolve("output.pdf");
-        Path iccProfile = copyIccProfile(workingDir);
-        List<String> command =
-                buildGhostscriptCommand(inputPdf, outputPdf, iccProfile, workingDir, profile);
+    Path outputPdf = workingDir.resolve("output.pdf");
+    ColorProfiles colorProfiles = prepareColorProfiles(workingDir);
+    List<String> command =
+        buildGhostscriptCommand(inputPdf, outputPdf, colorProfiles, workingDir, profile);
 
         ProcessExecutorResult result =
                 ProcessExecutor.getInstance(ProcessExecutor.Processes.GHOSTSCRIPT)
@@ -248,16 +259,37 @@ public class ConvertPDFToPDFA {
         return Files.readAllBytes(outputPdf);
     }
 
-    private Path copyIccProfile(Path workingDir) throws IOException {
-        Path iccTarget = workingDir.resolve("sRGB.icc");
-        try (InputStream in = getClass().getResourceAsStream(ICC_RESOURCE_PATH)) {
-            if (in == null) {
-                throw new IOException("ICC profile resource not found: " + ICC_RESOURCE_PATH);
-            }
-            Files.copy(in, iccTarget);
+    private ColorProfiles prepareColorProfiles(Path workingDir) throws IOException {
+        Path rgbProfile = workingDir.resolve("sRGB.icc");
+        copyResourceIcc(ICC_RESOURCE_PATH, rgbProfile);
+
+        Path grayProfile = workingDir.resolve("Gray.icc");
+        try {
+            writeJavaIccProfile(ICC_Profile.getInstance(ColorSpace.CS_GRAY), grayProfile);
+        } catch (IllegalArgumentException e) {
+            log.warn("Falling back to sRGB ICC profile for grayscale defaults", e);
+            Files.copy(rgbProfile, grayProfile, StandardCopyOption.REPLACE_EXISTING);
         }
-        return iccTarget;
+
+        return new ColorProfiles(rgbProfile, grayProfile);
     }
+
+    private void copyResourceIcc(String resourcePath, Path target) throws IOException {
+        try (InputStream in = getClass().getResourceAsStream(resourcePath)) {
+            if (in == null) {
+                throw new IOException("ICC profile resource not found: " + resourcePath);
+            }
+            Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
+        }
+    }
+
+    private void writeJavaIccProfile(ICC_Profile profile, Path target) throws IOException {
+        try (OutputStream out = Files.newOutputStream(target)) {
+            out.write(profile.getData());
+        }
+    }
+
+    private record ColorProfiles(Path rgb, Path gray) {}
 
     private enum PdfaProfile {
         PDF_A_1B(1, "PDF/A-1b", "_PDFA-1b.pdf", "1.4", Format.PDF_A1B, "pdfa-1"),
