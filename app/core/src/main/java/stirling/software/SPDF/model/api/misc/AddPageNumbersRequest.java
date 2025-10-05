@@ -28,7 +28,8 @@ public class AddPageNumbersRequest extends PDFWithPageNums {
 
     @Schema(
             description = "Font type for page numbers",
-            allowableValues = {"helvetica", "courier", "times"},
+            allowableValues = {"Times", "Helvetica", "Courier"},
+            defaultValue = "Times",
             requiredMode = RequiredMode.REQUIRED)
     private String fontType;
 

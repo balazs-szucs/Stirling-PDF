@@ -19,7 +19,7 @@ public class ExtractImageScansRequest {
     @Schema(
             description = "The angle threshold for the image scan extraction",
             requiredMode = Schema.RequiredMode.REQUIRED,
-            defaultValue = "5")
+            defaultValue = "10")
     private int angleThreshold;
 
     @Schema(

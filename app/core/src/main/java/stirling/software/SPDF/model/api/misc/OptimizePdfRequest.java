@@ -22,8 +22,8 @@ public class OptimizePdfRequest extends PDFFile {
 
     @Schema(
             description = "The expected output size, e.g. '100MB', '25KB', etc.",
-            defaultValue = "25KB",
-            requiredMode = Schema.RequiredMode.REQUIRED)
+            example = "25KB",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String expectedOutputSize;
 
     @Schema(

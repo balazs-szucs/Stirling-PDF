@@ -38,12 +38,13 @@ public class RedactPdfRequest extends PDFFile {
     @Schema(
             description = "Custom padding for redaction",
             type = "number",
+            defaultValue = "0.1",
             requiredMode = Schema.RequiredMode.REQUIRED)
     private float customPadding;
 
     @Schema(
             description = "Convert the redacted PDF to an image",
-            defaultValue = "false",
+            defaultValue = "true",
             requiredMode = Schema.RequiredMode.REQUIRED)
     private Boolean convertPDFToImage;
 }

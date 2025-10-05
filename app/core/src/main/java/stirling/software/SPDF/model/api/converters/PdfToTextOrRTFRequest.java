@@ -14,6 +14,7 @@ public class PdfToTextOrRTFRequest extends PDFFile {
     @Schema(
             description = "The output Text or RTF format",
             requiredMode = Schema.RequiredMode.REQUIRED,
-            allowableValues = {"rtf", "txt"})
+            allowableValues = {"rtf", "txt"},
+            defaultValue = "txt")
     private String outputFormat;
 }

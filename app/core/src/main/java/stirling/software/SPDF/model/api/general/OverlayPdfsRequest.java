@@ -26,6 +26,7 @@ public class OverlayPdfsRequest extends PDFFile {
                             + " 'InterleavedOverlay' for round-robin application, 'FixedRepeatOverlay'"
                             + " for fixed repetition based on provided counts",
             allowableValues = {"SequentialOverlay", "InterleavedOverlay", "FixedRepeatOverlay"},
+            defaultValue = "SequentialOverlay",
             requiredMode = Schema.RequiredMode.REQUIRED)
     private String overlayMode;
 
@@ -40,6 +41,7 @@ public class OverlayPdfsRequest extends PDFFile {
     @Schema(
             description = "Overlay position 0 is Foregound, 1 is Background",
             allowableValues = {"0", "1"},
+            defaultValue = "0",
             requiredMode = Schema.RequiredMode.REQUIRED,
             type = "number")
     private int overlayPosition;

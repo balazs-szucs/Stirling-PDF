@@ -34,7 +34,8 @@ public class ProcessPdfWithOcrRequest extends PDFFile {
     @Schema(
             description = "Specify the OCR type, e.g., 'skip-text', 'force-ocr', or 'Normal'",
             requiredMode = Schema.RequiredMode.REQUIRED,
-            allowableValues = {"skip-text", "force-ocr", "Normal"})
+            allowableValues = {"skip-text", "force-ocr", "Normal"},
+            defaultValue = "force-ocr")
     private String ocrType;
 
     @Schema(

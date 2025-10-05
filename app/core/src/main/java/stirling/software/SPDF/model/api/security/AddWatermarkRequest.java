@@ -19,7 +19,7 @@ public class AddWatermarkRequest extends PDFFile {
             requiredMode = Schema.RequiredMode.REQUIRED)
     private String watermarkType;
 
-    @Schema(description = "The watermark text", defaultValue = "Stirling Software")
+    @Schema(description = "The watermark text", example = "Stirling-PDF")
     private String watermarkText;
 
     @Schema(description = "The watermark image")
@@ -27,14 +27,14 @@ public class AddWatermarkRequest extends PDFFile {
 
     @Schema(
             description = "The selected alphabet",
-            allowableValues = {"roman", "arabic", "japanese", "korean", "chinese"},
+            allowableValues = {"roman", "arabic", "japanese", "korean", "chinese", "thai"},
             defaultValue = "roman")
     private String alphabet;
 
     @Schema(description = "The font size of the watermark text", defaultValue = "30")
     private float fontSize;
 
-    @Schema(description = "The rotation of the watermark in degrees", defaultValue = "0")
+    @Schema(description = "The rotation of the watermark in degrees", defaultValue = "45")
     private float rotation;
 
     @Schema(description = "The opacity of the watermark (0.0 - 1.0)", defaultValue = "0.5")

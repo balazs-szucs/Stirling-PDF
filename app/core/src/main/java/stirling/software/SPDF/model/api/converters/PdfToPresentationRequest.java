@@ -14,6 +14,7 @@ public class PdfToPresentationRequest extends PDFFile {
     @Schema(
             description = "The output Presentation format",
             requiredMode = Schema.RequiredMode.REQUIRED,
-            allowableValues = {"ppt", "pptx", "odp"})
+            allowableValues = {"ppt", "pptx", "odp"},
+            defaultValue = "pptx")
     private String outputFormat;
 }

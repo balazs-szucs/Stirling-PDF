@@ -21,7 +21,7 @@ public class SplitPdfBySizeOrCountRequest extends PDFFile {
     @Schema(
             description =
                     "Value for split: size in MB (e.g., '10MB') or number of pages (e.g., '5')",
-            requiredMode = Schema.RequiredMode.NOT_REQUIRED,
-            defaultValue = "10MB")
+            requiredMode = Schema.RequiredMode.REQUIRED,
+            example = "10MB")
     private String splitValue;
 }
