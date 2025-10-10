@@ -96,6 +96,11 @@ public class ProcessExecutor {
                                                 .getProcessExecutor()
                                                 .getSessionLimit()
                                                 .getOcrMyPdfSessionLimit();
+                                case IMAGEMAGICK ->
+                                        applicationProperties
+                                                .getProcessExecutor()
+                                                .getSessionLimit()
+                                                .getImageMagickSessionLimit();
                             };
 
                     long timeoutMinutes =
@@ -150,6 +155,11 @@ public class ProcessExecutor {
                                                 .getProcessExecutor()
                                                 .getTimeoutMinutes()
                                                 .getOcrMyPdfTimeoutMinutes();
+                                case IMAGEMAGICK ->
+                                        applicationProperties
+                                                .getProcessExecutor()
+                                                .getTimeoutMinutes()
+                                                .getImageMagickTimeoutMinutes();
                             };
                     return new ProcessExecutor(semaphoreLimit, liveUpdates, timeoutMinutes);
                 });
@@ -302,7 +312,8 @@ public class ProcessExecutor {
         TESSERACT,
         QPDF,
         GHOSTSCRIPT,
-        OCR_MY_PDF
+        OCR_MY_PDF,
+        IMAGEMAGICK
     }
 
     @Setter
