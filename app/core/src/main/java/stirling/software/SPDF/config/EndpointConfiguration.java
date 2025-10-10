@@ -422,7 +422,6 @@ public class EndpointConfiguration {
         addEndpointAlternative("pdf-to-vector", "Ghostscript");
         addEndpointAlternative("pdf-to-vector", "Java");
         addEndpointAlternative("vector-to-pdf", "Ghostscript");
-        addEndpointAlternative("vector-to-pdf", "ImageMagick");
         addEndpointAlternative("ocr-pdf", "tesseract");
         addEndpointAlternative("ocr-pdf", "OCRmyPDF");
 
@@ -493,8 +492,7 @@ public class EndpointConfiguration {
                 || "Java".equals(group)
                 || "Javascript".equals(group)
                 || "Weasyprint".equals(group)
-                || "Pdftohtml".equals(group)
-                || "ImageMagick".equals(group);
+                || "Pdftohtml".equals(group);
     }
 
     private boolean isEndpointEnabledDirectly(String endpoint) {

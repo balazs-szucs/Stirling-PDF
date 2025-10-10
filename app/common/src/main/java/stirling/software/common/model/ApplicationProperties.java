@@ -614,7 +614,6 @@ public class ApplicationProperties {
             private int tesseractSessionLimit;
             private int ghostscriptSessionLimit;
             private int ocrMyPdfSessionLimit;
-            private int imageMagickSessionLimit;
 
             public int getQpdfSessionLimit() {
                 return qpdfSessionLimit > 0 ? qpdfSessionLimit : 2;
@@ -655,10 +654,6 @@ public class ApplicationProperties {
             public int getOcrMyPdfSessionLimit() {
                 return ocrMyPdfSessionLimit > 0 ? ocrMyPdfSessionLimit : 2;
             }
-
-            public int getImageMagickSessionLimit() {
-                return imageMagickSessionLimit > 0 ? imageMagickSessionLimit : 8;
-            }
         }
 
         @Data
@@ -685,7 +680,6 @@ public class ApplicationProperties {
             private long qpdfTimeoutMinutes;
             private long ghostscriptTimeoutMinutes;
             private long ocrMyPdfTimeoutMinutes;
-            private long imageMagickTimeoutMinutes;
 
             public long getTesseractTimeoutMinutes() {
                 return tesseractTimeoutMinutes > 0 ? tesseractTimeoutMinutes : 30;
@@ -725,10 +719,6 @@ public class ApplicationProperties {
 
             public long getOcrMyPdfTimeoutMinutes() {
                 return ocrMyPdfTimeoutMinutes > 0 ? ocrMyPdfTimeoutMinutes : 30;
-            }
-
-            public long getImageMagickTimeoutMinutes() {
-                return imageMagickTimeoutMinutes > 0 ? imageMagickTimeoutMinutes : 30;
             }
         }
     }
