@@ -68,6 +68,9 @@
       <div
         th:replace="~{fragments/navbarEntry :: navbarEntry('eml-to-pdf', 'email', 'home.EMLToPDF.title', 'home.EMLToPDF.desc', 'EMLToPDF.tags', 'convertto')}">
       </div>
+      <div
+        th:replace="~{fragments/navbarEntry :: navbarEntry('vector-to-pdf', 'picture_as_pdf', 'home.vectorToPdf.title', 'home.vectorToPdf.desc', 'vectorToPdf.tags', 'convertto')}">
+      </div>
     </div>
   </div>
   <div id="groupConvertFrom" class="feature-group">
@@ -102,10 +105,13 @@
         th:replace="~{fragments/navbarEntry :: navbarEntry('pdf-to-xml', 'code', 'home.PDFToXML.title', 'home.PDFToXML.desc', 'PDFToXML.tags', 'convert')}">
       </div>
       <div
-        th:replace="~{fragments/navbarEntry :: navbarEntry('pdf-to-csv', 'csv', 'home.tableExtraxt.title', 'home.tableExtraxt.desc', 'tableExtraxt.tags', 'convert')}">
+        th:replace="~{fragments/navbarEntry :: navbarEntry('pdf-to-csv', 'csv', 'home.tableExtract.title', 'home.tableExtract.desc', 'tableExtract.tags', 'convert')}">
       </div>
       <div
         th:replace="~{fragments/navbarEntry :: navbarEntry ('pdf-to-markdown', 'markdown_copy', 'home.PDFToMarkdown.title', 'home.PDFToMarkdown.desc', 'PDFToMarkdown.tags', 'convert')}">
+      </div>
+      <div
+        th:replace="~{fragments/navbarEntry :: navbarEntry('pdf-to-vector', 'stroke_full', 'home.pdfToVector.title', 'home.pdfToVector.desc', 'pdfToVector.tags', 'convert')}">
       </div>
 
     </div>
@@ -135,6 +141,9 @@
       <div
         th:replace="~{fragments/navbarEntry :: navbarEntry('markdown-to-pdf', 'markdown', 'home.MarkdownToPDF.title', 'home.MarkdownToPDF.desc', 'MarkdownToPDF.tags', 'convertto')}">
       </div>
+      <div
+        th:replace="~{fragments/navbarEntry :: navbarEntry('vector-to-pdf', 'picture_as_pdf', 'home.vectorToPdf.title', 'home.vectorToPdf.desc', 'vectorToPdf.tags', 'convertto')}">
+      </div>
     </div>
     <div th:replace="~{fragments/featureGroupHeader :: featureGroupHeader(groupTitle=#{navbar.sections.convertFrom})}">
     </div>
@@ -161,7 +170,10 @@
         th:replace="~{fragments/navbarEntry :: navbarEntry('pdf-to-xml', 'code', 'home.PDFToXML.title', 'home.PDFToXML.desc', 'PDFToXML.tags', 'convert')}">
       </div>
       <div
-        th:replace="~{fragments/navbarEntry :: navbarEntry('pdf-to-csv', 'csv', 'home.tableExtraxt.title', 'home.tableExtraxt.desc', 'tableExtraxt.tags', 'convert')}">
+        th:replace="~{fragments/navbarEntry :: navbarEntry('pdf-to-csv', 'csv', 'home.tableExtract.title', 'home.tableExtract.desc', 'tableExtract.tags', 'convert')}">
+      </div>
+      <div
+        th:replace="~{fragments/navbarEntry :: navbarEntry('pdf-to-vector', 'stroke_full', 'home.pdfToVector.title', 'home.pdfToVector.desc', 'pdfToVector.tags', 'convert')}">
       </div>
     </div>
   </div>

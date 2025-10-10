@@ -159,6 +159,22 @@ public class ConverterWebController {
         return "convert/pdf-to-pdfa";
     }
 
+    @GetMapping("/pdf-to-vector")
+    @Hidden
+    public ModelAndView pdfToVector() {
+        ModelAndView modelAndView = new ModelAndView("convert/pdf-to-vector");
+        modelAndView.addObject("currentPage", "pdf-to-vector");
+        return modelAndView;
+    }
+
+    @GetMapping("/vector-to-pdf")
+    @Hidden
+    public ModelAndView vectorToPdf() {
+        ModelAndView modelAndView = new ModelAndView("convert/vector-to-pdf");
+        modelAndView.addObject("currentPage", "vector-to-pdf");
+        return modelAndView;
+    }
+
     @GetMapping("/eml-to-pdf")
     @Hidden
     public String convertEmlToPdfForm(Model model) {
