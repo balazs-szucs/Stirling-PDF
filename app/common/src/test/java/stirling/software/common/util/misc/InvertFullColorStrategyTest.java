@@ -1,9 +1,5 @@
 package stirling.software.common.util.misc;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
 import java.awt.Color;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
@@ -21,6 +17,7 @@ import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.graphics.color.PDColor;
 import org.apache.pdfbox.pdmodel.graphics.color.PDDeviceRGB;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.InputStreamResource;
@@ -33,22 +30,9 @@ import stirling.software.common.model.api.misc.ReplaceAndInvert;
 class InvertFullColorStrategyTest {
 
     private InvertFullColorStrategy strategy;
-    private MultipartFile mockPdfFile;
-
-    @BeforeEach
-    void setUp() throws Exception {
-        // Create a simple PDF document for testing
-        byte[] pdfBytes = createSimplePdfWithRectangle();
-        mockPdfFile =
-                new MockMultipartFile(
-                        "file", "test.pdf", MediaType.APPLICATION_PDF_VALUE, pdfBytes);
-
-        // Create the strategy instance
-        strategy = new InvertFullColorStrategy(mockPdfFile, ReplaceAndInvert.FULL_INVERSION);
-    }
 
     /** Helper method to create a simple PDF with a colored rectangle for testing */
-    private byte[] createSimplePdfWithRectangle() throws IOException {
+    private static byte[] createSimplePdfWithRectangle() throws IOException {
         PDDocument document = new PDDocument();
         PDPage page = new PDPage(PDRectangle.A4);
         document.addPage(page);
@@ -68,13 +52,25 @@ class InvertFullColorStrategyTest {
         return baos.toByteArray();
     }
 
+    @BeforeEach
+    void setUp() throws Exception {
+        // Create a simple PDF document for testing
+        byte[] pdfBytes = createSimplePdfWithRectangle();
+        MultipartFile mockPdfFile =
+                new MockMultipartFile(
+                        "file", "test.pdf", MediaType.APPLICATION_PDF_VALUE, pdfBytes);
+
+        // Create the strategy instance
+        strategy = new InvertFullColorStrategy(mockPdfFile, ReplaceAndInvert.FULL_INVERSION);
+    }
+
     @Test
     void testReplace() throws IOException {
         // Test the replace method
         InputStreamResource result = strategy.replace();
 
         // Verify that the result is not null
-        assertNotNull(result, "The result should not be null");
+        Assertions.assertNotNull(result, "The result should not be null");
     }
 
     @Test
@@ -103,15 +99,15 @@ class InvertFullColorStrategyTest {
         Color invertedColor = new Color(image.getRGB(5, 5), true);
 
         // Assert that the inversion worked correctly
-        assertEquals(
+        Assertions.assertEquals(
                 255 - originalColor.getRed(),
                 invertedColor.getRed(),
                 "Red channel should be inverted");
-        assertEquals(
+        Assertions.assertEquals(
                 255 - originalColor.getGreen(),
                 invertedColor.getGreen(),
                 "Green channel should be inverted");
-        assertEquals(
+        Assertions.assertEquals(
                 255 - originalColor.getBlue(),
                 invertedColor.getBlue(),
                 "Blue channel should be inverted");
@@ -137,15 +133,15 @@ class InvertFullColorStrategyTest {
 
         try {
             // Assert that the file exists and is not empty
-            assertNotNull(result, "Result should not be null");
-            assertTrue(result.exists(), "File should exist");
-            assertTrue(result.length() > 0, "File should not be empty");
+            Assertions.assertNotNull(result, "Result should not be null");
+            Assertions.assertTrue(result.exists(), "File should exist");
+            Assertions.assertTrue(result.length() > 0, "File should not be empty");
 
             // Check that the file can be read back as an image
             BufferedImage readBack = ImageIO.read(result);
-            assertNotNull(readBack, "Should be able to read back the image");
-            assertEquals(10, readBack.getWidth(), "Image width should match");
-            assertEquals(10, readBack.getHeight(), "Image height should match");
+            Assertions.assertNotNull(readBack, "Should be able to read back the image");
+            Assertions.assertEquals(10, readBack.getWidth(), "Image width should match");
+            Assertions.assertEquals(10, readBack.getHeight(), "Image height should match");
         } finally {
             // Clean up
             if (result != null && result.exists()) {

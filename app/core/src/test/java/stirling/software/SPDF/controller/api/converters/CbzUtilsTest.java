@@ -1,8 +1,6 @@
 package stirling.software.SPDF.controller.api.converters;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockMultipartFile;
 
@@ -16,7 +14,7 @@ class CbzUtilsTest {
                 new MockMultipartFile(
                         "file", "test.cbz", "application/zip", "test content".getBytes());
 
-        assertTrue(CbzUtils.isCbzFile(cbzFile));
+        Assertions.assertTrue(CbzUtils.isCbzFile(cbzFile));
     }
 
     @Test
@@ -25,7 +23,7 @@ class CbzUtilsTest {
                 new MockMultipartFile(
                         "file", "test.zip", "application/zip", "test content".getBytes());
 
-        assertTrue(CbzUtils.isCbzFile(zipFile));
+        Assertions.assertTrue(CbzUtils.isCbzFile(zipFile));
     }
 
     @Test
@@ -33,7 +31,7 @@ class CbzUtilsTest {
         MockMultipartFile textFile =
                 new MockMultipartFile("file", "test.txt", "text/plain", "test content".getBytes());
 
-        assertFalse(CbzUtils.isCbzFile(textFile));
+        Assertions.assertFalse(CbzUtils.isCbzFile(textFile));
     }
 
     @Test
@@ -41,7 +39,7 @@ class CbzUtilsTest {
         MockMultipartFile noNameFile =
                 new MockMultipartFile("file", null, "application/zip", "test content".getBytes());
 
-        assertFalse(CbzUtils.isCbzFile(noNameFile));
+        Assertions.assertFalse(CbzUtils.isCbzFile(noNameFile));
     }
 
     @Test
@@ -50,7 +48,7 @@ class CbzUtilsTest {
                 new MockMultipartFile(
                         "file", "document.pdf", "application/pdf", "pdf content".getBytes());
 
-        assertFalse(CbzUtils.isCbzFile(pdfFile));
+        Assertions.assertFalse(CbzUtils.isCbzFile(pdfFile));
     }
 
     @Test
@@ -58,7 +56,7 @@ class CbzUtilsTest {
         MockMultipartFile jpegFile =
                 new MockMultipartFile("file", "image.jpg", "image/jpeg", "jpeg content".getBytes());
 
-        assertFalse(CbzUtils.isCbzFile(jpegFile));
+        Assertions.assertFalse(CbzUtils.isCbzFile(jpegFile));
     }
 
     @Test
@@ -70,7 +68,7 @@ class CbzUtilsTest {
                         "application/x-rar-compressed",
                         "rar content".getBytes());
 
-        assertFalse(CbzUtils.isCbzFile(rarFile));
+        Assertions.assertFalse(CbzUtils.isCbzFile(rarFile));
     }
 
     @Test
@@ -79,6 +77,6 @@ class CbzUtilsTest {
                 new MockMultipartFile(
                         "file", "test.CBZ", "application/zip", "test content".getBytes());
 
-        assertTrue(CbzUtils.isCbzFile(cbzFile));
+        Assertions.assertTrue(CbzUtils.isCbzFile(cbzFile));
     }
 }

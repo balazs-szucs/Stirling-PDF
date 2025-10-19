@@ -1,18 +1,14 @@
 package stirling.software.common.util;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
-
 import java.util.stream.Stream;
 
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.mockito.Mockito;
 
 import stirling.software.common.service.SsrfProtectionService;
 
@@ -22,17 +18,20 @@ class CustomHtmlSanitizerTest {
 
     @BeforeEach
     void setUp() {
-        SsrfProtectionService mockSsrfProtectionService = mock(SsrfProtectionService.class);
+        SsrfProtectionService mockSsrfProtectionService = Mockito.mock(SsrfProtectionService.class);
         stirling.software.common.model.ApplicationProperties mockApplicationProperties =
-                mock(stirling.software.common.model.ApplicationProperties.class);
+                Mockito.mock(stirling.software.common.model.ApplicationProperties.class);
         stirling.software.common.model.ApplicationProperties.System mockSystem =
-                mock(stirling.software.common.model.ApplicationProperties.System.class);
+                Mockito.mock(stirling.software.common.model.ApplicationProperties.System.class);
 
         // Allow all URLs by default for basic tests
-        when(mockSsrfProtectionService.isUrlAllowed(org.mockito.ArgumentMatchers.anyString()))
+        Mockito.when(
+                        mockSsrfProtectionService.isUrlAllowed(
+                                org.mockito.ArgumentMatchers.anyString()))
                 .thenReturn(true);
-        when(mockApplicationProperties.getSystem()).thenReturn(mockSystem);
-        when(mockSystem.getDisableSanitize()).thenReturn(false); // Enable sanitization for tests
+        Mockito.when(mockApplicationProperties.getSystem()).thenReturn(mockSystem);
+        Mockito.when(mockSystem.getDisableSanitize())
+                .thenReturn(false); // Enable sanitization for tests
 
         customHtmlSanitizer =
                 new CustomHtmlSanitizer(mockSsrfProtectionService, mockApplicationProperties);
@@ -46,7 +45,7 @@ class CustomHtmlSanitizerTest {
 
         // Assert
         for (String tag : expectedContainedTags) {
-            assertTrue(sanitizedHtml.contains(tag), tag + " should be preserved");
+            Assertions.assertTrue(sanitizedHtml.contains(tag), tag + " should be preserved");
         }
     }
 
@@ -88,9 +87,10 @@ class CustomHtmlSanitizerTest {
         // Assert
         // The OWASP HTML Sanitizer might filter some specific styles, so we only check that
         // the sanitized HTML is not empty and contains a paragraph tag with style
-        assertTrue(sanitizedHtml.contains("<p"), "Paragraph tag should be preserved");
-        assertTrue(sanitizedHtml.contains("style="), "Style attribute should be preserved");
-        assertTrue(sanitizedHtml.contains("Styled text"), "Content should be preserved");
+        Assertions.assertTrue(sanitizedHtml.contains("<p"), "Paragraph tag should be preserved");
+        Assertions.assertTrue(
+                sanitizedHtml.contains("style="), "Style attribute should be preserved");
+        Assertions.assertTrue(sanitizedHtml.contains("Styled text"), "Content should be preserved");
     }
 
     @Test
@@ -104,13 +104,16 @@ class CustomHtmlSanitizerTest {
 
         // Assert
         // The most important aspect is that the link content is preserved
-        assertTrue(sanitizedHtml.contains("Example Link"), "Link text should be preserved");
+        Assertions.assertTrue(
+                sanitizedHtml.contains("Example Link"), "Link text should be preserved");
 
         // Check that the href is present in some form
-        assertTrue(sanitizedHtml.contains("href="), "Link href attribute should be present");
+        Assertions.assertTrue(
+                sanitizedHtml.contains("href="), "Link href attribute should be present");
 
         // Check that the URL is present in some form
-        assertTrue(sanitizedHtml.contains("example.com"), "Link URL should be preserved");
+        Assertions.assertTrue(
+                sanitizedHtml.contains("example.com"), "Link URL should be preserved");
 
         // OWASP sanitizer may handle title attributes differently depending on version
         // So we won't make strict assertions about the title attribute
@@ -125,9 +128,11 @@ class CustomHtmlSanitizerTest {
         String sanitizedHtml = customHtmlSanitizer.sanitize(htmlWithJsLink);
 
         // Assert
-        assertFalse(sanitizedHtml.contains("javascript:"), "JavaScript URLs should be removed");
+        Assertions.assertFalse(
+                sanitizedHtml.contains("javascript:"), "JavaScript URLs should be removed");
         // The link tag might still be there, but the href should be sanitized
-        assertTrue(sanitizedHtml.contains("Malicious Link"), "Link text should be preserved");
+        Assertions.assertTrue(
+                sanitizedHtml.contains("Malicious Link"), "Link text should be preserved");
     }
 
     @Test
@@ -144,17 +149,20 @@ class CustomHtmlSanitizerTest {
         String sanitizedHtml = customHtmlSanitizer.sanitize(htmlWithTable);
 
         // Assert
-        assertTrue(sanitizedHtml.contains("<table"), "Table should be preserved");
-        assertTrue(sanitizedHtml.contains("<tr>"), "Table rows should be preserved");
-        assertTrue(sanitizedHtml.contains("<th>"), "Table headers should be preserved");
-        assertTrue(sanitizedHtml.contains("<td>"), "Table cells should be preserved");
+        Assertions.assertTrue(sanitizedHtml.contains("<table"), "Table should be preserved");
+        Assertions.assertTrue(sanitizedHtml.contains("<tr>"), "Table rows should be preserved");
+        Assertions.assertTrue(sanitizedHtml.contains("<th>"), "Table headers should be preserved");
+        Assertions.assertTrue(sanitizedHtml.contains("<td>"), "Table cells should be preserved");
         // Note: border attribute might be removed as it's deprecated in HTML5
 
         // Check for content values instead of exact tag formats because
         // the sanitizer may normalize tags and attributes
-        assertTrue(sanitizedHtml.contains("Header 1"), "Table header content should be preserved");
-        assertTrue(sanitizedHtml.contains("Cell 1"), "Table cell content should be preserved");
-        assertTrue(sanitizedHtml.contains("Footer"), "Table footer content should be preserved");
+        Assertions.assertTrue(
+                sanitizedHtml.contains("Header 1"), "Table header content should be preserved");
+        Assertions.assertTrue(
+                sanitizedHtml.contains("Cell 1"), "Table cell content should be preserved");
+        Assertions.assertTrue(
+                sanitizedHtml.contains("Footer"), "Table footer content should be preserved");
 
         // OWASP sanitizer may not preserve these structural elements or attributes in the same
         // format
@@ -171,9 +179,10 @@ class CustomHtmlSanitizerTest {
         String sanitizedHtml = customHtmlSanitizer.sanitize(htmlWithImage);
 
         // Assert
-        assertTrue(sanitizedHtml.contains("<img"), "Image tag should be preserved");
-        assertTrue(sanitizedHtml.contains("src=\"image.jpg\""), "Image source should be preserved");
-        assertTrue(
+        Assertions.assertTrue(sanitizedHtml.contains("<img"), "Image tag should be preserved");
+        Assertions.assertTrue(
+                sanitizedHtml.contains("src=\"image.jpg\""), "Image source should be preserved");
+        Assertions.assertTrue(
                 sanitizedHtml.contains("alt=\"An image\""), "Image alt text should be preserved");
         // Width and height might be preserved, but not guaranteed by all sanitizers
     }
@@ -188,7 +197,7 @@ class CustomHtmlSanitizerTest {
         String sanitizedHtml = customHtmlSanitizer.sanitize(htmlWithDataUrlImage);
 
         // Assert
-        assertFalse(
+        Assertions.assertFalse(
                 sanitizedHtml.contains("data:image/svg"),
                 "Data URLs with potentially malicious content should be removed");
     }
@@ -203,12 +212,12 @@ class CustomHtmlSanitizerTest {
         String sanitizedHtml = customHtmlSanitizer.sanitize(htmlWithJsEvent);
 
         // Assert
-        assertFalse(
+        Assertions.assertFalse(
                 sanitizedHtml.contains("onclick"), "JavaScript event handlers should be removed");
-        assertFalse(
+        Assertions.assertFalse(
                 sanitizedHtml.contains("onmouseover"),
                 "JavaScript event handlers should be removed");
-        assertTrue(sanitizedHtml.contains("Click me"), "Link text should be preserved");
+        Assertions.assertTrue(sanitizedHtml.contains("Click me"), "Link text should be preserved");
     }
 
     @Test
@@ -220,8 +229,8 @@ class CustomHtmlSanitizerTest {
         String sanitizedHtml = customHtmlSanitizer.sanitize(htmlWithScript);
 
         // Assert
-        assertFalse(sanitizedHtml.contains("<script>"), "Script tags should be removed");
-        assertTrue(
+        Assertions.assertFalse(sanitizedHtml.contains("<script>"), "Script tags should be removed");
+        Assertions.assertTrue(
                 sanitizedHtml.contains("<p>Safe content</p>"), "Safe content should be preserved");
     }
 
@@ -234,8 +243,9 @@ class CustomHtmlSanitizerTest {
         String sanitizedHtml = customHtmlSanitizer.sanitize(htmlWithNoscript);
 
         // Assert
-        assertFalse(sanitizedHtml.contains("<noscript>"), "Noscript tags should be removed");
-        assertTrue(
+        Assertions.assertFalse(
+                sanitizedHtml.contains("<noscript>"), "Noscript tags should be removed");
+        Assertions.assertTrue(
                 sanitizedHtml.contains("<p>Safe content</p>"), "Safe content should be preserved");
     }
 
@@ -248,8 +258,8 @@ class CustomHtmlSanitizerTest {
         String sanitizedHtml = customHtmlSanitizer.sanitize(htmlWithIframe);
 
         // Assert
-        assertFalse(sanitizedHtml.contains("<iframe"), "Iframe tags should be removed");
-        assertTrue(
+        Assertions.assertFalse(sanitizedHtml.contains("<iframe"), "Iframe tags should be removed");
+        Assertions.assertTrue(
                 sanitizedHtml.contains("<p>Safe content</p>"), "Safe content should be preserved");
     }
 
@@ -265,9 +275,9 @@ class CustomHtmlSanitizerTest {
         String sanitizedHtml = customHtmlSanitizer.sanitize(htmlWithObjects);
 
         // Assert
-        assertFalse(sanitizedHtml.contains("<object"), "Object tags should be removed");
-        assertFalse(sanitizedHtml.contains("<embed"), "Embed tags should be removed");
-        assertTrue(
+        Assertions.assertFalse(sanitizedHtml.contains("<object"), "Object tags should be removed");
+        Assertions.assertFalse(sanitizedHtml.contains("<embed"), "Embed tags should be removed");
+        Assertions.assertTrue(
                 sanitizedHtml.contains("<p>Safe content</p>"), "Safe content should be preserved");
     }
 
@@ -284,10 +294,10 @@ class CustomHtmlSanitizerTest {
         String sanitizedHtml = customHtmlSanitizer.sanitize(htmlWithMetaTags);
 
         // Assert
-        assertFalse(sanitizedHtml.contains("<meta"), "Meta tags should be removed");
-        assertFalse(sanitizedHtml.contains("<base"), "Base tags should be removed");
-        assertFalse(sanitizedHtml.contains("<link"), "Link tags should be removed");
-        assertTrue(
+        Assertions.assertFalse(sanitizedHtml.contains("<meta"), "Meta tags should be removed");
+        Assertions.assertFalse(sanitizedHtml.contains("<base"), "Base tags should be removed");
+        Assertions.assertFalse(sanitizedHtml.contains("<link"), "Link tags should be removed");
+        Assertions.assertTrue(
                 sanitizedHtml.contains("<p>Safe content</p>"), "Safe content should be preserved");
     }
 
@@ -311,29 +321,32 @@ class CustomHtmlSanitizerTest {
         String sanitizedHtml = customHtmlSanitizer.sanitize(complexHtml);
 
         // Assert
-        assertTrue(sanitizedHtml.contains("<div"), "Div should be preserved");
-        assertTrue(sanitizedHtml.contains("<h1"), "H1 should be preserved");
-        assertTrue(
+        Assertions.assertTrue(sanitizedHtml.contains("<div"), "Div should be preserved");
+        Assertions.assertTrue(sanitizedHtml.contains("<h1"), "H1 should be preserved");
+        Assertions.assertTrue(
                 sanitizedHtml.contains("<strong>") && sanitizedHtml.contains("test"),
                 "Strong tag should be preserved");
 
         // Check for content rather than exact formatting
-        assertTrue(
+        Assertions.assertTrue(
                 sanitizedHtml.contains("<a")
                         && sanitizedHtml.contains("href=")
                         && sanitizedHtml.contains("example.com")
                         && sanitizedHtml.contains("link"),
                 "Link should be preserved");
 
-        assertTrue(sanitizedHtml.contains("<table"), "Table should be preserved");
-        assertTrue(sanitizedHtml.contains("<img"), "Image should be preserved");
-        assertFalse(sanitizedHtml.contains("<script>"), "Script tag should be removed");
-        assertFalse(sanitizedHtml.contains("<iframe"), "Iframe tag should be removed");
+        Assertions.assertTrue(sanitizedHtml.contains("<table"), "Table should be preserved");
+        Assertions.assertTrue(sanitizedHtml.contains("<img"), "Image should be preserved");
+        Assertions.assertFalse(sanitizedHtml.contains("<script>"), "Script tag should be removed");
+        Assertions.assertFalse(sanitizedHtml.contains("<iframe"), "Iframe tag should be removed");
 
         // Content checks
-        assertTrue(sanitizedHtml.contains("Welcome"), "Heading content should be preserved");
-        assertTrue(sanitizedHtml.contains("Name"), "Table header content should be preserved");
-        assertTrue(sanitizedHtml.contains("Item 1"), "Table data content should be preserved");
+        Assertions.assertTrue(
+                sanitizedHtml.contains("Welcome"), "Heading content should be preserved");
+        Assertions.assertTrue(
+                sanitizedHtml.contains("Name"), "Table header content should be preserved");
+        Assertions.assertTrue(
+                sanitizedHtml.contains("Item 1"), "Table data content should be preserved");
     }
 
     @Test
@@ -342,7 +355,7 @@ class CustomHtmlSanitizerTest {
         String sanitizedHtml = customHtmlSanitizer.sanitize("");
 
         // Assert
-        assertEquals("", sanitizedHtml, "Empty input should result in empty string");
+        Assertions.assertEquals("", sanitizedHtml, "Empty input should result in empty string");
     }
 
     @Test
@@ -351,6 +364,6 @@ class CustomHtmlSanitizerTest {
         String sanitizedHtml = customHtmlSanitizer.sanitize(null);
 
         // Assert
-        assertEquals("", sanitizedHtml, "Null input should result in empty string");
+        Assertions.assertEquals("", sanitizedHtml, "Null input should result in empty string");
     }
 }

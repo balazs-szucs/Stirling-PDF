@@ -1,15 +1,11 @@
 package stirling.software.proprietary.security.service;
 
-import static org.junit.jupiter.api.Assertions.assertAll;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
-
 import java.util.Properties;
 
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.JavaMailSenderImpl;
 
@@ -22,34 +18,36 @@ class MailConfigTest {
 
     @BeforeEach
     void initMailProperties() {
-        mailProps = mock(ApplicationProperties.Mail.class);
-        when(mailProps.getHost()).thenReturn("smtp.example.com");
-        when(mailProps.getPort()).thenReturn(587);
-        when(mailProps.getUsername()).thenReturn("user@example.com");
-        when(mailProps.getPassword()).thenReturn("password");
+        mailProps = Mockito.mock(ApplicationProperties.Mail.class);
+        Mockito.when(mailProps.getHost()).thenReturn("smtp.example.com");
+        Mockito.when(mailProps.getPort()).thenReturn(587);
+        Mockito.when(mailProps.getUsername()).thenReturn("user@example.com");
+        Mockito.when(mailProps.getPassword()).thenReturn("password");
     }
 
     @Test
     void shouldConfigureJavaMailSenderWithCorrectProperties() {
-        ApplicationProperties appProps = mock(ApplicationProperties.class);
-        when(appProps.getMail()).thenReturn(mailProps);
+        ApplicationProperties appProps = Mockito.mock(ApplicationProperties.class);
+        Mockito.when(appProps.getMail()).thenReturn(mailProps);
 
         MailConfig config = new MailConfig(appProps);
         JavaMailSender sender = config.javaMailSender();
 
-        assertInstanceOf(JavaMailSenderImpl.class, sender);
+        Assertions.assertInstanceOf(JavaMailSenderImpl.class, sender);
         JavaMailSenderImpl impl = (JavaMailSenderImpl) sender;
 
         Properties props = impl.getJavaMailProperties();
 
-        assertAll(
+        Assertions.assertAll(
                 "SMTP configuration",
-                () -> assertEquals("smtp.example.com", impl.getHost()),
-                () -> assertEquals(587, impl.getPort()),
-                () -> assertEquals("user@example.com", impl.getUsername()),
-                () -> assertEquals("password", impl.getPassword()),
-                () -> assertEquals("UTF-8", impl.getDefaultEncoding()),
-                () -> assertEquals("true", props.getProperty("mail.smtp.auth")),
-                () -> assertEquals("true", props.getProperty("mail.smtp.starttls.enable")));
+                () -> Assertions.assertEquals("smtp.example.com", impl.getHost()),
+                () -> Assertions.assertEquals(587, impl.getPort()),
+                () -> Assertions.assertEquals("user@example.com", impl.getUsername()),
+                () -> Assertions.assertEquals("password", impl.getPassword()),
+                () -> Assertions.assertEquals("UTF-8", impl.getDefaultEncoding()),
+                () -> Assertions.assertEquals("true", props.getProperty("mail.smtp.auth")),
+                () ->
+                        Assertions.assertEquals(
+                                "true", props.getProperty("mail.smtp.starttls.enable")));
     }
 }

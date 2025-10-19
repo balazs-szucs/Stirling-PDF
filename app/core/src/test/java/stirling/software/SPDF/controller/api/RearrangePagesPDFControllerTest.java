@@ -1,11 +1,9 @@
 package stirling.software.SPDF.controller.api;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-
 import java.util.Arrays;
 import java.util.List;
 
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -34,8 +32,8 @@ class RearrangePagesPDFControllerTest {
 
         List<Integer> newPageOrder = sut.oddEvenMerge(totalNumberOfPages);
 
-        assertNotNull(newPageOrder, "Returning null instead of page order list");
-        assertEquals(List.of(), newPageOrder, "Page order doesn't match");
+        Assertions.assertNotNull(newPageOrder, "Returning null instead of page order list");
+        Assertions.assertEquals(List.of(), newPageOrder, "Page order doesn't match");
     }
 
     /**
@@ -47,8 +45,9 @@ class RearrangePagesPDFControllerTest {
 
         List<Integer> newPageOrder = sut.oddEvenMerge(totalNumberOfPages);
 
-        assertNotNull(newPageOrder, "Returning null instead of page order list");
-        assertEquals(Arrays.asList(0, 3, 1, 4, 2), newPageOrder, "Page order doesn't match");
+        Assertions.assertNotNull(newPageOrder, "Returning null instead of page order list");
+        Assertions.assertEquals(
+                Arrays.asList(0, 3, 1, 4, 2), newPageOrder, "Page order doesn't match");
     }
 
     /**
@@ -61,8 +60,9 @@ class RearrangePagesPDFControllerTest {
 
         List<Integer> newPageOrder = sut.oddEvenMerge(totalNumberOfPages);
 
-        assertNotNull(newPageOrder, "Returning null instead of page order list");
-        assertEquals(Arrays.asList(0, 3, 1, 4, 2, 5), newPageOrder, "Page order doesn't match");
+        Assertions.assertNotNull(newPageOrder, "Returning null instead of page order list");
+        Assertions.assertEquals(
+                Arrays.asList(0, 3, 1, 4, 2, 5), newPageOrder, "Page order doesn't match");
     }
 
     /**
@@ -87,8 +87,8 @@ class RearrangePagesPDFControllerTest {
     void oddEvenMerge_multi_test(int totalNumberOfPages, String expectedPageOrder) {
         List<Integer> newPageOrder = sut.oddEvenMerge(totalNumberOfPages);
 
-        assertNotNull(newPageOrder, "Returning null instead of page order list");
-        assertEquals(
+        Assertions.assertNotNull(newPageOrder, "Returning null instead of page order list");
+        Assertions.assertEquals(
                 Arrays.stream(expectedPageOrder.split(",")).map(Integer::parseInt).toList(),
                 newPageOrder,
                 "Page order doesn't match");

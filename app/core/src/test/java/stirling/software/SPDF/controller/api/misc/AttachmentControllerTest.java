@@ -1,18 +1,14 @@
 package stirling.software.SPDF.controller.api.misc;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
-
 import java.io.IOException;
 import java.util.List;
 
 import org.apache.pdfbox.pdmodel.PDDocument;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.MockedStatic;
+import org.mockito.*;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -62,8 +58,8 @@ class AttachmentControllerTest {
                         MediaType.IMAGE_JPEG_VALUE,
                         "Image content".getBytes());
         request = new AddAttachmentRequest();
-        mockDocument = mock(PDDocument.class);
-        modifiedMockDocument = mock(PDDocument.class);
+        mockDocument = Mockito.mock(PDDocument.class);
+        modifiedMockDocument = Mockito.mock(PDDocument.class);
     }
 
     @Test
@@ -74,27 +70,27 @@ class AttachmentControllerTest {
         ResponseEntity<byte[]> expectedResponse =
                 ResponseEntity.ok("modified PDF content".getBytes());
 
-        when(pdfDocumentFactory.load(pdfFile, false)).thenReturn(mockDocument);
-        when(pdfAttachmentService.addAttachment(mockDocument, attachments))
+        Mockito.when(pdfDocumentFactory.load(pdfFile, false)).thenReturn(mockDocument);
+        Mockito.when(pdfAttachmentService.addAttachment(mockDocument, attachments))
                 .thenReturn(modifiedMockDocument);
 
         try (MockedStatic<WebResponseUtils> mockedWebResponseUtils =
-                mockStatic(WebResponseUtils.class)) {
+                Mockito.mockStatic(WebResponseUtils.class)) {
             mockedWebResponseUtils
                     .when(
                             () ->
                                     WebResponseUtils.pdfDocToWebResponse(
-                                            eq(modifiedMockDocument),
-                                            eq("test_with_attachments.pdf")))
+                                            ArgumentMatchers.eq(modifiedMockDocument),
+                                            ArgumentMatchers.eq("test_with_attachments.pdf")))
                     .thenReturn(expectedResponse);
 
             ResponseEntity<byte[]> response = attachmentController.addAttachments(request);
 
-            assertNotNull(response);
-            assertEquals(HttpStatus.OK, response.getStatusCode());
-            assertNotNull(response.getBody());
-            verify(pdfDocumentFactory).load(pdfFile, false);
-            verify(pdfAttachmentService).addAttachment(mockDocument, attachments);
+            Assertions.assertNotNull(response);
+            Assertions.assertEquals(HttpStatus.OK, response.getStatusCode());
+            Assertions.assertNotNull(response.getBody());
+            Mockito.verify(pdfDocumentFactory).load(pdfFile, false);
+            Mockito.verify(pdfAttachmentService).addAttachment(mockDocument, attachments);
         }
     }
 
@@ -106,27 +102,27 @@ class AttachmentControllerTest {
         ResponseEntity<byte[]> expectedResponse =
                 ResponseEntity.ok("modified PDF content".getBytes());
 
-        when(pdfDocumentFactory.load(pdfFile, false)).thenReturn(mockDocument);
-        when(pdfAttachmentService.addAttachment(mockDocument, attachments))
+        Mockito.when(pdfDocumentFactory.load(pdfFile, false)).thenReturn(mockDocument);
+        Mockito.when(pdfAttachmentService.addAttachment(mockDocument, attachments))
                 .thenReturn(modifiedMockDocument);
 
         try (MockedStatic<WebResponseUtils> mockedWebResponseUtils =
-                mockStatic(WebResponseUtils.class)) {
+                Mockito.mockStatic(WebResponseUtils.class)) {
             mockedWebResponseUtils
                     .when(
                             () ->
                                     WebResponseUtils.pdfDocToWebResponse(
-                                            eq(modifiedMockDocument),
-                                            eq("test_with_attachments.pdf")))
+                                            ArgumentMatchers.eq(modifiedMockDocument),
+                                            ArgumentMatchers.eq("test_with_attachments.pdf")))
                     .thenReturn(expectedResponse);
 
             ResponseEntity<byte[]> response = attachmentController.addAttachments(request);
 
-            assertNotNull(response);
-            assertEquals(HttpStatus.OK, response.getStatusCode());
-            assertNotNull(response.getBody());
-            verify(pdfDocumentFactory).load(pdfFile, false);
-            verify(pdfAttachmentService).addAttachment(mockDocument, attachments);
+            Assertions.assertNotNull(response);
+            Assertions.assertEquals(HttpStatus.OK, response.getStatusCode());
+            Assertions.assertNotNull(response.getBody());
+            Mockito.verify(pdfDocumentFactory).load(pdfFile, false);
+            Mockito.verify(pdfAttachmentService).addAttachment(mockDocument, attachments);
         }
     }
 
@@ -137,11 +133,12 @@ class AttachmentControllerTest {
         request.setFileInput(pdfFile);
         IOException ioException = new IOException("Failed to load PDF");
 
-        when(pdfDocumentFactory.load(pdfFile, false)).thenThrow(ioException);
+        Mockito.when(pdfDocumentFactory.load(pdfFile, false)).thenThrow(ioException);
 
-        assertThrows(IOException.class, () -> attachmentController.addAttachments(request));
-        verify(pdfDocumentFactory).load(pdfFile, false);
-        verifyNoInteractions(pdfAttachmentService);
+        Assertions.assertThrows(
+                IOException.class, () -> attachmentController.addAttachments(request));
+        Mockito.verify(pdfDocumentFactory).load(pdfFile, false);
+        Mockito.verifyNoInteractions(pdfAttachmentService);
     }
 
     @Test
@@ -151,10 +148,12 @@ class AttachmentControllerTest {
         request.setFileInput(pdfFile);
         IOException ioException = new IOException("Failed to add attachment");
 
-        when(pdfDocumentFactory.load(pdfFile, false)).thenReturn(mockDocument);
-        when(pdfAttachmentService.addAttachment(mockDocument, attachments)).thenThrow(ioException);
+        Mockito.when(pdfDocumentFactory.load(pdfFile, false)).thenReturn(mockDocument);
+        Mockito.when(pdfAttachmentService.addAttachment(mockDocument, attachments))
+                .thenThrow(ioException);
 
-        assertThrows(IOException.class, () -> attachmentController.addAttachments(request));
-        verify(pdfAttachmentService).addAttachment(mockDocument, attachments);
+        Assertions.assertThrows(
+                IOException.class, () -> attachmentController.addAttachments(request));
+        Mockito.verify(pdfAttachmentService).addAttachment(mockDocument, attachments);
     }
 }

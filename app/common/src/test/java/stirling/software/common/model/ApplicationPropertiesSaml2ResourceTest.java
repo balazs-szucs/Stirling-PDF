@@ -1,12 +1,11 @@
 package stirling.software.common.model;
 
-import static org.junit.jupiter.api.Assertions.*;
-
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.Resource;
 
@@ -18,9 +17,9 @@ class ApplicationPropertiesSaml2ResourceTest {
         s.setIdpMetadataUri("classpath:saml/dummy.txt");
 
         try (InputStream in = s.getIdpMetadataUri()) {
-            assertNotNull(in, "Classpath InputStream should not be null");
+            Assertions.assertNotNull(in, "Classpath InputStream should not be null");
             String txt = new String(in.readAllBytes(), StandardCharsets.UTF_8);
-            assertTrue(txt.contains("ok"));
+            Assertions.assertTrue(txt.contains("ok"));
         }
     }
 
@@ -31,9 +30,9 @@ class ApplicationPropertiesSaml2ResourceTest {
         s.setSpCert(null);
         s.setIdpCert(null);
         s.setPrivateKey(null);
-        assertNull(s.getSpCert());
-        assertNull(s.getIdpCert());
-        assertNull(s.getPrivateKey());
+        Assertions.assertNull(s.getSpCert());
+        Assertions.assertNull(s.getIdpCert());
+        Assertions.assertNull(s.getPrivateKey());
 
         s.setSpCert("classpath:saml/dummy.txt");
         s.setIdpCert("classpath:saml/dummy.txt");
@@ -41,15 +40,15 @@ class ApplicationPropertiesSaml2ResourceTest {
         Resource sp = s.getSpCert();
         Resource idp = s.getIdpCert();
         Resource pk = s.getPrivateKey();
-        assertTrue(sp.exists());
-        assertTrue(idp.exists());
-        assertTrue(pk.exists());
+        Assertions.assertTrue(sp.exists());
+        Assertions.assertTrue(idp.exists());
+        Assertions.assertTrue(pk.exists());
 
         Path tmp = Files.createTempFile("spdf-key-", ".pem");
         Files.writeString(tmp, "KEY");
         s.setPrivateKey(tmp.toString());
         Resource pkFs = s.getPrivateKey();
-        assertNotNull(pkFs);
-        assertTrue(pkFs.exists());
+        Assertions.assertNotNull(pkFs);
+        Assertions.assertTrue(pkFs.exists());
     }
 }

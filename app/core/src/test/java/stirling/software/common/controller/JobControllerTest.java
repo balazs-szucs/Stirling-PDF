@@ -1,15 +1,12 @@
 package stirling.software.common.controller;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
-
 import java.util.Map;
+import java.util.Objects;
 
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
+import org.mockito.*;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -42,7 +39,7 @@ class JobControllerTest {
 
         // Setup mock session for tests
         session = new MockHttpSession();
-        when(request.getSession()).thenReturn(session);
+        Mockito.when(request.getSession()).thenReturn(session);
     }
 
     @Test
@@ -51,14 +48,14 @@ class JobControllerTest {
         String jobId = "test-job-id";
         JobResult mockResult = new JobResult();
         mockResult.setJobId(jobId);
-        when(taskManager.getJobResult(jobId)).thenReturn(mockResult);
+        Mockito.when(taskManager.getJobResult(jobId)).thenReturn(mockResult);
 
         // Act
         ResponseEntity<?> response = controller.getJobStatus(jobId);
 
         // Assert
-        assertEquals(HttpStatus.OK, response.getStatusCode());
-        assertEquals(mockResult, response.getBody());
+        Assertions.assertEquals(HttpStatus.OK, response.getStatusCode());
+        Assertions.assertEquals(mockResult, response.getBody());
     }
 
     @Test
@@ -68,37 +65,37 @@ class JobControllerTest {
         JobResult mockResult = new JobResult();
         mockResult.setJobId(jobId);
         mockResult.setComplete(false);
-        when(taskManager.getJobResult(jobId)).thenReturn(mockResult);
-        when(jobQueue.isJobQueued(jobId)).thenReturn(true);
-        when(jobQueue.getJobPosition(jobId)).thenReturn(3);
+        Mockito.when(taskManager.getJobResult(jobId)).thenReturn(mockResult);
+        Mockito.when(jobQueue.isJobQueued(jobId)).thenReturn(true);
+        Mockito.when(jobQueue.getJobPosition(jobId)).thenReturn(3);
 
         // Act
         ResponseEntity<?> response = controller.getJobStatus(jobId);
 
         // Assert
-        assertEquals(HttpStatus.OK, response.getStatusCode());
+        Assertions.assertEquals(HttpStatus.OK, response.getStatusCode());
 
         @SuppressWarnings("unchecked")
         Map<String, Object> responseBody = (Map<String, Object>) response.getBody();
-        assertEquals(mockResult, responseBody.get("jobResult"));
+        Assertions.assertEquals(mockResult, Objects.requireNonNull(responseBody).get("jobResult"));
 
         @SuppressWarnings("unchecked")
         Map<String, Object> queueInfo = (Map<String, Object>) responseBody.get("queueInfo");
-        assertTrue((Boolean) queueInfo.get("inQueue"));
-        assertEquals(3, queueInfo.get("position"));
+        Assertions.assertTrue((Boolean) queueInfo.get("inQueue"));
+        Assertions.assertEquals(3, queueInfo.get("position"));
     }
 
     @Test
     void testGetJobStatus_NonExistentJob() {
         // Arrange
         String jobId = "non-existent-job";
-        when(taskManager.getJobResult(jobId)).thenReturn(null);
+        Mockito.when(taskManager.getJobResult(jobId)).thenReturn(null);
 
         // Act
         ResponseEntity<?> response = controller.getJobStatus(jobId);
 
         // Assert
-        assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
+        Assertions.assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
     }
 
     @Test
@@ -111,14 +108,14 @@ class JobControllerTest {
         String resultObject = "Test result";
         mockResult.completeWithResult(resultObject);
 
-        when(taskManager.getJobResult(jobId)).thenReturn(mockResult);
+        Mockito.when(taskManager.getJobResult(jobId)).thenReturn(mockResult);
 
         // Act
         ResponseEntity<?> response = controller.getJobResult(jobId);
 
         // Assert
-        assertEquals(HttpStatus.OK, response.getStatusCode());
-        assertEquals(resultObject, response.getBody());
+        Assertions.assertEquals(HttpStatus.OK, response.getStatusCode());
+        Assertions.assertEquals(resultObject, response.getBody());
     }
 
     @Test
@@ -135,18 +132,19 @@ class JobControllerTest {
         mockResult.completeWithSingleFile(
                 fileId, originalFileName, contentType, fileContent.length);
 
-        when(taskManager.getJobResult(jobId)).thenReturn(mockResult);
-        when(fileStorage.retrieveBytes(fileId)).thenReturn(fileContent);
+        Mockito.when(taskManager.getJobResult(jobId)).thenReturn(mockResult);
+        Mockito.when(fileStorage.retrieveBytes(fileId)).thenReturn(fileContent);
 
         // Act
         ResponseEntity<?> response = controller.getJobResult(jobId);
 
         // Assert
-        assertEquals(HttpStatus.OK, response.getStatusCode());
-        assertEquals(contentType, response.getHeaders().getFirst("Content-Type"));
-        assertTrue(
-                response.getHeaders().getFirst("Content-Disposition").contains(originalFileName));
-        assertEquals(fileContent, response.getBody());
+        Assertions.assertEquals(HttpStatus.OK, response.getStatusCode());
+        Assertions.assertEquals(contentType, response.getHeaders().getFirst("Content-Type"));
+        Assertions.assertTrue(
+                Objects.requireNonNull(response.getHeaders().getFirst("Content-Disposition"))
+                        .contains(originalFileName));
+        Assertions.assertEquals(fileContent, response.getBody());
     }
 
     @Test
@@ -159,14 +157,15 @@ class JobControllerTest {
         mockResult.setJobId(jobId);
         mockResult.failWithError(errorMessage);
 
-        when(taskManager.getJobResult(jobId)).thenReturn(mockResult);
+        Mockito.when(taskManager.getJobResult(jobId)).thenReturn(mockResult);
 
         // Act
         ResponseEntity<?> response = controller.getJobResult(jobId);
 
         // Assert
-        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
-        assertTrue(response.getBody().toString().contains(errorMessage));
+        Assertions.assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        Assertions.assertTrue(
+                Objects.requireNonNull(response.getBody()).toString().contains(errorMessage));
     }
 
     @Test
@@ -178,27 +177,28 @@ class JobControllerTest {
         mockResult.setJobId(jobId);
         mockResult.setComplete(false);
 
-        when(taskManager.getJobResult(jobId)).thenReturn(mockResult);
+        Mockito.when(taskManager.getJobResult(jobId)).thenReturn(mockResult);
 
         // Act
         ResponseEntity<?> response = controller.getJobResult(jobId);
 
         // Assert
-        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
-        assertTrue(response.getBody().toString().contains("not complete"));
+        Assertions.assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        Assertions.assertTrue(
+                Objects.requireNonNull(response.getBody()).toString().contains("not complete"));
     }
 
     @Test
     void testGetJobResult_NonExistentJob() {
         // Arrange
         String jobId = "non-existent-job";
-        when(taskManager.getJobResult(jobId)).thenReturn(null);
+        Mockito.when(taskManager.getJobResult(jobId)).thenReturn(null);
 
         // Act
         ResponseEntity<?> response = controller.getJobResult(jobId);
 
         // Assert
-        assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
+        Assertions.assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
     }
 
     @Test
@@ -213,15 +213,19 @@ class JobControllerTest {
         mockResult.setJobId(jobId);
         mockResult.completeWithSingleFile(fileId, originalFileName, contentType, 1024L);
 
-        when(taskManager.getJobResult(jobId)).thenReturn(mockResult);
-        when(fileStorage.retrieveBytes(fileId)).thenThrow(new RuntimeException("File not found"));
+        Mockito.when(taskManager.getJobResult(jobId)).thenReturn(mockResult);
+        Mockito.when(fileStorage.retrieveBytes(fileId))
+                .thenThrow(new RuntimeException("File not found"));
 
         // Act
         ResponseEntity<?> response = controller.getJobResult(jobId);
 
         // Assert
-        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
-        assertTrue(response.getBody().toString().contains("Error retrieving file"));
+        Assertions.assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
+        Assertions.assertTrue(
+                Objects.requireNonNull(response.getBody())
+                        .toString()
+                        .contains("Error retrieving file"));
     }
 
     /*
@@ -273,24 +277,26 @@ class JobControllerTest {
         userJobIds.add(jobId);
         session.setAttribute("userJobIds", userJobIds);
 
-        when(jobQueue.isJobQueued(jobId)).thenReturn(true);
-        when(jobQueue.getJobPosition(jobId)).thenReturn(2);
-        when(jobQueue.cancelJob(jobId)).thenReturn(true);
+        Mockito.when(jobQueue.isJobQueued(jobId)).thenReturn(true);
+        Mockito.when(jobQueue.getJobPosition(jobId)).thenReturn(2);
+        Mockito.when(jobQueue.cancelJob(jobId)).thenReturn(true);
 
         // Act
         ResponseEntity<?> response = controller.cancelJob(jobId);
 
         // Assert
-        assertEquals(HttpStatus.OK, response.getStatusCode());
+        Assertions.assertEquals(HttpStatus.OK, response.getStatusCode());
 
         @SuppressWarnings("unchecked")
         Map<String, Object> responseBody = (Map<String, Object>) response.getBody();
-        assertEquals("Job cancelled successfully", responseBody.get("message"));
-        assertTrue((Boolean) responseBody.get("wasQueued"));
-        assertEquals(2, responseBody.get("queuePosition"));
+        Assertions.assertEquals(
+                "Job cancelled successfully", Objects.requireNonNull(responseBody).get("message"));
+        Assertions.assertTrue((Boolean) responseBody.get("wasQueued"));
+        Assertions.assertEquals(2, responseBody.get("queuePosition"));
 
-        verify(jobQueue).cancelJob(jobId);
-        verify(taskManager, never()).setError(anyString(), anyString());
+        Mockito.verify(jobQueue).cancelJob(jobId);
+        Mockito.verify(taskManager, Mockito.never())
+                .setError(ArgumentMatchers.anyString(), ArgumentMatchers.anyString());
     }
 
     @Test
@@ -306,23 +312,24 @@ class JobControllerTest {
         userJobIds.add(jobId);
         session.setAttribute("userJobIds", userJobIds);
 
-        when(jobQueue.isJobQueued(jobId)).thenReturn(false);
-        when(taskManager.getJobResult(jobId)).thenReturn(jobResult);
+        Mockito.when(jobQueue.isJobQueued(jobId)).thenReturn(false);
+        Mockito.when(taskManager.getJobResult(jobId)).thenReturn(jobResult);
 
         // Act
         ResponseEntity<?> response = controller.cancelJob(jobId);
 
         // Assert
-        assertEquals(HttpStatus.OK, response.getStatusCode());
+        Assertions.assertEquals(HttpStatus.OK, response.getStatusCode());
 
         @SuppressWarnings("unchecked")
         Map<String, Object> responseBody = (Map<String, Object>) response.getBody();
-        assertEquals("Job cancelled successfully", responseBody.get("message"));
-        assertFalse((Boolean) responseBody.get("wasQueued"));
-        assertEquals("n/a", responseBody.get("queuePosition"));
+        Assertions.assertEquals(
+                "Job cancelled successfully", Objects.requireNonNull(responseBody).get("message"));
+        Assertions.assertFalse((Boolean) responseBody.get("wasQueued"));
+        Assertions.assertEquals("n/a", responseBody.get("queuePosition"));
 
-        verify(jobQueue, never()).cancelJob(jobId);
-        verify(taskManager).setError(jobId, "Job was cancelled by user");
+        Mockito.verify(jobQueue, Mockito.never()).cancelJob(jobId);
+        Mockito.verify(taskManager).setError(jobId, "Job was cancelled by user");
     }
 
     @Test
@@ -335,14 +342,14 @@ class JobControllerTest {
         userJobIds.add(jobId);
         session.setAttribute("userJobIds", userJobIds);
 
-        when(jobQueue.isJobQueued(jobId)).thenReturn(false);
-        when(taskManager.getJobResult(jobId)).thenReturn(null);
+        Mockito.when(jobQueue.isJobQueued(jobId)).thenReturn(false);
+        Mockito.when(taskManager.getJobResult(jobId)).thenReturn(null);
 
         // Act
         ResponseEntity<?> response = controller.cancelJob(jobId);
 
         // Assert
-        assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
+        Assertions.assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
     }
 
     @Test
@@ -358,18 +365,20 @@ class JobControllerTest {
         userJobIds.add(jobId);
         session.setAttribute("userJobIds", userJobIds);
 
-        when(jobQueue.isJobQueued(jobId)).thenReturn(false);
-        when(taskManager.getJobResult(jobId)).thenReturn(jobResult);
+        Mockito.when(jobQueue.isJobQueued(jobId)).thenReturn(false);
+        Mockito.when(taskManager.getJobResult(jobId)).thenReturn(jobResult);
 
         // Act
         ResponseEntity<?> response = controller.cancelJob(jobId);
 
         // Assert
-        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        Assertions.assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
 
         @SuppressWarnings("unchecked")
         Map<String, Object> responseBody = (Map<String, Object>) response.getBody();
-        assertEquals("Cannot cancel job that is already complete", responseBody.get("message"));
+        Assertions.assertEquals(
+                "Cannot cancel job that is already complete",
+                Objects.requireNonNull(responseBody).get("message"));
     }
 
     @Test
@@ -387,16 +396,19 @@ class JobControllerTest {
         ResponseEntity<?> response = controller.cancelJob(jobId);
 
         // Assert
-        assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode());
+        Assertions.assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode());
 
         @SuppressWarnings("unchecked")
         Map<String, Object> responseBody = (Map<String, Object>) response.getBody();
-        assertEquals("You are not authorized to cancel this job", responseBody.get("message"));
+        Assertions.assertEquals(
+                "You are not authorized to cancel this job",
+                Objects.requireNonNull(responseBody).get("message"));
 
         // Verify no cancellation attempts were made
-        verify(jobQueue, never()).isJobQueued(anyString());
-        verify(jobQueue, never()).cancelJob(anyString());
-        verify(taskManager, never()).getJobResult(anyString());
-        verify(taskManager, never()).setError(anyString(), anyString());
+        Mockito.verify(jobQueue, Mockito.never()).isJobQueued(ArgumentMatchers.anyString());
+        Mockito.verify(jobQueue, Mockito.never()).cancelJob(ArgumentMatchers.anyString());
+        Mockito.verify(taskManager, Mockito.never()).getJobResult(ArgumentMatchers.anyString());
+        Mockito.verify(taskManager, Mockito.never())
+                .setError(ArgumentMatchers.anyString(), ArgumentMatchers.anyString());
     }
 }

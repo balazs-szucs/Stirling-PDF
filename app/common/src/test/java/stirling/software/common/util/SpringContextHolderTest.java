@@ -1,10 +1,9 @@
 package stirling.software.common.util;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
-
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.context.ApplicationContext;
 
 class SpringContextHolderTest {
@@ -14,7 +13,7 @@ class SpringContextHolderTest {
 
     @BeforeEach
     void setUp() {
-        mockApplicationContext = mock(ApplicationContext.class);
+        mockApplicationContext = Mockito.mock(ApplicationContext.class);
         contextHolder = new SpringContextHolder();
     }
 
@@ -24,7 +23,7 @@ class SpringContextHolderTest {
         contextHolder.setApplicationContext(mockApplicationContext);
 
         // Assert
-        assertTrue(SpringContextHolder.isInitialized());
+        Assertions.assertTrue(SpringContextHolder.isInitialized());
     }
 
     @Test
@@ -32,14 +31,14 @@ class SpringContextHolderTest {
         // Arrange
         contextHolder.setApplicationContext(mockApplicationContext);
         TestBean expectedBean = new TestBean();
-        when(mockApplicationContext.getBean(TestBean.class)).thenReturn(expectedBean);
+        Mockito.when(mockApplicationContext.getBean(TestBean.class)).thenReturn(expectedBean);
 
         // Act
         TestBean result = SpringContextHolder.getBean(TestBean.class);
 
         // Assert
-        assertSame(expectedBean, result);
-        verify(mockApplicationContext).getBean(TestBean.class);
+        Assertions.assertSame(expectedBean, result);
+        Mockito.verify(mockApplicationContext).getBean(TestBean.class);
     }
 
     @Test
@@ -50,23 +49,29 @@ class SpringContextHolderTest {
         TestBean result = SpringContextHolder.getBean(TestBean.class);
 
         // Assert
-        assertNull(result);
+        Assertions.assertNull(result);
     }
 
     @Test
     void testGetBean_BeanNotFound() {
         // Arrange
         contextHolder.setApplicationContext(mockApplicationContext);
-        when(mockApplicationContext.getBean(TestBean.class))
-                .thenThrow(new org.springframework.beans.BeansException("Bean not found") {});
+        Mockito.when(mockApplicationContext.getBean(TestBean.class))
+                .thenThrow(new MyBeansException());
 
         // Act
         TestBean result = SpringContextHolder.getBean(TestBean.class);
 
         // Assert
-        assertNull(result);
+        Assertions.assertNull(result);
     }
 
     // Simple test class
     private static class TestBean {}
+
+    private static class MyBeansException extends org.springframework.beans.BeansException {
+        public MyBeansException() {
+            super("Bean not found");
+        }
+    }
 }

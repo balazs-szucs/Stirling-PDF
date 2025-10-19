@@ -1,13 +1,5 @@
 package stirling.software.SPDF.controller.api.converters;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.reset;
-import static org.mockito.Mockito.when;
-
 import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -16,11 +8,14 @@ import java.util.List;
 import java.util.Map;
 
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentMatchers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -44,10 +39,10 @@ class PdfVectorExportControllerTest {
 
     @BeforeEach
     void setup() throws Exception {
-        when(tempFileManager.createTempFile(any()))
+        Mockito.when(tempFileManager.createTempFile(ArgumentMatchers.any()))
                 .thenAnswer(
                         invocation -> {
-                            String suffix = invocation.<String>getArgument(0);
+                            String suffix = invocation.getArgument(0);
                             Path path =
                                     Files.createTempFile(
                                             "vector_test", suffix == null ? "" : suffix);
@@ -77,25 +72,26 @@ class PdfVectorExportControllerTest {
         if (originalExecutors != null) {
             instances.putAll(originalExecutors);
         }
-        reset(ghostscriptExecutor, tempFileManager, endpointConfiguration);
+        Mockito.reset(ghostscriptExecutor, tempFileManager, endpointConfiguration);
         for (Path path : tempPaths) {
             Files.deleteIfExists(path);
         }
         tempPaths.clear();
     }
 
-    private ProcessExecutorResult mockResult(int rc) {
-        ProcessExecutorResult result = mock(ProcessExecutorResult.class);
-        lenient().when(result.getRc()).thenReturn(rc);
-        lenient().when(result.getMessages()).thenReturn("");
+    private ProcessExecutorResult mockResult() {
+        ProcessExecutorResult result = Mockito.mock(ProcessExecutorResult.class);
+        Mockito.lenient().when(result.getRc()).thenReturn(0);
+        Mockito.lenient().when(result.getMessages()).thenReturn("");
         return result;
     }
 
     @Test
     void convertGhostscript_psToPdf_success() throws Exception {
-        when(endpointConfiguration.isGroupEnabled("Ghostscript")).thenReturn(true);
-        ProcessExecutorResult result = mockResult(0);
-        when(ghostscriptExecutor.runCommandWithOutputHandling(any())).thenReturn(result);
+        Mockito.when(endpointConfiguration.isGroupEnabled("Ghostscript")).thenReturn(true);
+        ProcessExecutorResult result = mockResult();
+        Mockito.when(ghostscriptExecutor.runCommandWithOutputHandling(ArgumentMatchers.any()))
+                .thenReturn(result);
 
         MockMultipartFile file =
                 new MockMultipartFile(
@@ -108,15 +104,17 @@ class PdfVectorExportControllerTest {
 
         ResponseEntity<byte[]> response = controller.convertGhostscriptInputsToPdf(request);
 
-        assertThat(response.getStatusCode()).isEqualTo(org.springframework.http.HttpStatus.OK);
-        assertThat(response.getHeaders().getContentType()).isEqualTo(MediaType.APPLICATION_PDF);
+        org.assertj.core.api.Assertions.assertThat(response.getStatusCode())
+                .isEqualTo(org.springframework.http.HttpStatus.OK);
+        org.assertj.core.api.Assertions.assertThat(response.getHeaders().getContentType())
+                .isEqualTo(MediaType.APPLICATION_PDF);
     }
 
     @Test
     void convertGhostscript_pdfPassThrough_success() throws Exception {
-        when(endpointConfiguration.isGroupEnabled("Ghostscript")).thenReturn(false);
+        Mockito.when(endpointConfiguration.isGroupEnabled("Ghostscript")).thenReturn(false);
 
-        byte[] content = new byte[] {1};
+        byte[] content = {1};
         MockMultipartFile file =
                 new MockMultipartFile(
                         "fileInput", "input.pdf", MediaType.APPLICATION_PDF_VALUE, content);
@@ -125,21 +123,23 @@ class PdfVectorExportControllerTest {
 
         ResponseEntity<byte[]> response = controller.convertGhostscriptInputsToPdf(request);
 
-        assertThat(response.getStatusCode()).isEqualTo(org.springframework.http.HttpStatus.OK);
-        assertThat(response.getHeaders().getContentType()).isEqualTo(MediaType.APPLICATION_PDF);
-        assertThat(response.getBody()).contains(content);
+        org.assertj.core.api.Assertions.assertThat(response.getStatusCode())
+                .isEqualTo(org.springframework.http.HttpStatus.OK);
+        org.assertj.core.api.Assertions.assertThat(response.getHeaders().getContentType())
+                .isEqualTo(MediaType.APPLICATION_PDF);
+        org.assertj.core.api.Assertions.assertThat(response.getBody()).contains(content);
     }
 
     @Test
-    void convertGhostscript_unsupportedFormatThrows() throws Exception {
-        when(endpointConfiguration.isGroupEnabled("Ghostscript")).thenReturn(false);
+    void convertGhostscript_unsupportedFormatThrows() {
+        Mockito.when(endpointConfiguration.isGroupEnabled("Ghostscript")).thenReturn(false);
         MockMultipartFile file =
                 new MockMultipartFile(
                         "fileInput", "vector.svg", MediaType.APPLICATION_XML_VALUE, new byte[] {1});
         PdfVectorExportRequest request = new PdfVectorExportRequest();
         request.setFileInput(file);
 
-        assertThrows(
+        Assertions.assertThrows(
                 IllegalArgumentException.class,
                 () -> controller.convertGhostscriptInputsToPdf(request));
     }

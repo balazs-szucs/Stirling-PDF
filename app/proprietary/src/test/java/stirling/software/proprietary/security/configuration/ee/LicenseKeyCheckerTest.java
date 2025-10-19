@@ -1,19 +1,15 @@
 package stirling.software.proprietary.security.configuration.ee;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.when;
-import static stirling.software.proprietary.security.configuration.ee.KeygenLicenseVerifier.License;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import stirling.software.common.model.ApplicationProperties;
@@ -31,8 +27,9 @@ class LicenseKeyCheckerTest {
 
         LicenseKeyChecker checker = new LicenseKeyChecker(verifier, props);
 
-        assertEquals(License.NORMAL, checker.getPremiumLicenseEnabledResult());
-        verifyNoInteractions(verifier);
+        Assertions.assertEquals(
+                KeygenLicenseVerifier.License.NORMAL, checker.getPremiumLicenseEnabledResult());
+        Mockito.verifyNoInteractions(verifier);
     }
 
     @Test
@@ -40,12 +37,13 @@ class LicenseKeyCheckerTest {
         ApplicationProperties props = new ApplicationProperties();
         props.getPremium().setEnabled(true);
         props.getPremium().setKey("abc");
-        when(verifier.verifyLicense("abc")).thenReturn(License.PRO);
+        Mockito.when(verifier.verifyLicense("abc")).thenReturn(KeygenLicenseVerifier.License.PRO);
 
         LicenseKeyChecker checker = new LicenseKeyChecker(verifier, props);
 
-        assertEquals(License.PRO, checker.getPremiumLicenseEnabledResult());
-        verify(verifier).verifyLicense("abc");
+        Assertions.assertEquals(
+                KeygenLicenseVerifier.License.PRO, checker.getPremiumLicenseEnabledResult());
+        Mockito.verify(verifier).verifyLicense("abc");
     }
 
     @Test
@@ -56,12 +54,14 @@ class LicenseKeyCheckerTest {
         ApplicationProperties props = new ApplicationProperties();
         props.getPremium().setEnabled(true);
         props.getPremium().setKey("file:" + file.toString());
-        when(verifier.verifyLicense("filekey")).thenReturn(License.ENTERPRISE);
+        Mockito.when(verifier.verifyLicense("filekey"))
+                .thenReturn(KeygenLicenseVerifier.License.ENTERPRISE);
 
         LicenseKeyChecker checker = new LicenseKeyChecker(verifier, props);
 
-        assertEquals(License.ENTERPRISE, checker.getPremiumLicenseEnabledResult());
-        verify(verifier).verifyLicense("filekey");
+        Assertions.assertEquals(
+                KeygenLicenseVerifier.License.ENTERPRISE, checker.getPremiumLicenseEnabledResult());
+        Mockito.verify(verifier).verifyLicense("filekey");
     }
 
     @Test
@@ -73,7 +73,8 @@ class LicenseKeyCheckerTest {
 
         LicenseKeyChecker checker = new LicenseKeyChecker(verifier, props);
 
-        assertEquals(License.NORMAL, checker.getPremiumLicenseEnabledResult());
-        verifyNoInteractions(verifier);
+        Assertions.assertEquals(
+                KeygenLicenseVerifier.License.NORMAL, checker.getPremiumLicenseEnabledResult());
+        Mockito.verifyNoInteractions(verifier);
     }
 }

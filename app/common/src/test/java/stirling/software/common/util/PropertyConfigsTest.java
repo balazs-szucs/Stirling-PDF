@@ -1,10 +1,11 @@
 package stirling.software.common.util;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Arrays;
 import java.util.List;
 
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 public class PropertyConfigsTest {
@@ -22,7 +23,7 @@ public class PropertyConfigsTest {
         boolean result = PropertyConfigs.getBooleanValue(keys, defaultValue);
 
         // Verify the result
-        assertEquals(true, result);
+        assertTrue(result);
     }
 
     @Test
@@ -38,7 +39,7 @@ public class PropertyConfigsTest {
         String result = PropertyConfigs.getStringValue(keys, defaultValue);
 
         // Verify the result
-        assertEquals("value", result);
+        Assertions.assertEquals("value", result);
     }
 
     @Test
@@ -51,7 +52,7 @@ public class PropertyConfigsTest {
         boolean result = PropertyConfigs.getBooleanValue(key, defaultValue);
 
         // Verify the result
-        assertEquals(true, result);
+        assertTrue(result);
     }
 
     @Test
@@ -64,6 +65,6 @@ public class PropertyConfigsTest {
         String result = PropertyConfigs.getStringValue(key, defaultValue);
 
         // Verify the result
-        assertEquals("default", result);
+        Assertions.assertEquals("default", result);
     }
 }

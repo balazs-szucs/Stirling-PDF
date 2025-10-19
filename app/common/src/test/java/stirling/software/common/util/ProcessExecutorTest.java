@@ -1,14 +1,10 @@
 package stirling.software.common.util;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -34,8 +30,8 @@ public class ProcessExecutorTest {
                 processExecutor.runCommandWithOutputHandling(command);
 
         // Check the exit code and output messages
-        assertEquals(0, result.getRc());
-        assertNotNull(result.getMessages()); // Check if messages are not null
+        Assertions.assertEquals(0, result.getRc());
+        Assertions.assertNotNull(result.getMessages()); // Check if messages are not null
     }
 
     @Test
@@ -46,15 +42,13 @@ public class ProcessExecutorTest {
 
         // Execute the command and expect an IOException
         IOException thrown =
-                assertThrows(
+                Assertions.assertThrows(
                         IOException.class,
-                        () -> {
-                            processExecutor.runCommandWithOutputHandling(command);
-                        });
+                        () -> processExecutor.runCommandWithOutputHandling(command));
 
         // Check the exception message to ensure it indicates the command was not found
         String errorMessage = thrown.getMessage();
-        assertTrue(
+        Assertions.assertTrue(
                 errorMessage.contains("error=2")
                         || errorMessage.contains("No such file or directory"),
                 "Unexpected error message: " + errorMessage);

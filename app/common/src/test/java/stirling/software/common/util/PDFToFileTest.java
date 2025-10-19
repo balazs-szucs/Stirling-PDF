@@ -1,30 +1,23 @@
 package stirling.software.common.util;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.argThat;
-import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.mockStatic;
-import static org.mockito.Mockito.when;
-
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Objects;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -54,12 +47,12 @@ class PDFToFileTest {
     @BeforeEach
     void setUp() throws IOException {
         // Mock the TempFileManager to return real temp files
-        lenient()
-                .when(mockTempFileManager.createTempFile(anyString()))
+        Mockito.lenient()
+                .when(mockTempFileManager.createTempFile(ArgumentMatchers.anyString()))
                 .thenAnswer(
                         invocation ->
                                 Files.createTempFile("test", invocation.getArgument(0)).toFile());
-        lenient()
+        Mockito.lenient()
                 .when(mockTempFileManager.createTempDirectory())
                 .thenAnswer(invocation -> Files.createTempDirectory("test"));
 
@@ -80,7 +73,7 @@ class PDFToFileTest {
         ResponseEntity<byte[]> response = pdfToFile.processPdfToMarkdown(nonPdfFile);
 
         // Verify
-        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        Assertions.assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
     }
 
     @Test
@@ -97,7 +90,7 @@ class PDFToFileTest {
         ResponseEntity<byte[]> response = pdfToFile.processPdfToHtml(nonPdfFile);
 
         // Verify
-        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        Assertions.assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
     }
 
     @Test
@@ -116,7 +109,7 @@ class PDFToFileTest {
                 pdfToFile.processPdfToOfficeFormat(nonPdfFile, "docx", "draw_pdf_import");
 
         // Verify
-        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        Assertions.assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
     }
 
     @Test
@@ -135,14 +128,14 @@ class PDFToFileTest {
                 pdfToFile.processPdfToOfficeFormat(pdfFile, "invalid_format", "draw_pdf_import");
 
         // Verify
-        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        Assertions.assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
     }
 
     @Test
     void testProcessPdfToMarkdown_SingleOutputFile() throws IOException, InterruptedException {
         // Setup mock objects and temp files
         try (MockedStatic<ProcessExecutor> mockedStaticProcessExecutor =
-                mockStatic(ProcessExecutor.class)) {
+                Mockito.mockStatic(ProcessExecutor.class)) {
             // Create a mock PDF file
             MultipartFile pdfFile =
                     new MockMultipartFile(
@@ -162,7 +155,9 @@ class PDFToFileTest {
                     .when(() -> ProcessExecutor.getInstance(ProcessExecutor.Processes.PDFTOHTML))
                     .thenReturn(mockProcessExecutor);
 
-            when(mockProcessExecutor.runCommandWithOutputHandling(anyList(), any(File.class)))
+            Mockito.when(
+                            mockProcessExecutor.runCommandWithOutputHandling(
+                                    ArgumentMatchers.anyList(), ArgumentMatchers.any(File.class)))
                     .thenAnswer(
                             invocation -> {
                                 // When command is executed, simulate creation of output files
@@ -179,10 +174,10 @@ class PDFToFileTest {
             ResponseEntity<byte[]> response = pdfToFile.processPdfToMarkdown(pdfFile);
 
             // Verify
-            assertEquals(HttpStatus.OK, response.getStatusCode());
-            assertNotNull(response.getBody());
-            assertTrue(response.getBody().length > 0);
-            assertTrue(
+            Assertions.assertEquals(HttpStatus.OK, response.getStatusCode());
+            Assertions.assertNotNull(response.getBody());
+            Assertions.assertTrue(response.getBody().length > 0);
+            Assertions.assertTrue(
                     response.getHeaders().getContentDisposition().toString().contains("test.md"));
         }
     }
@@ -191,7 +186,7 @@ class PDFToFileTest {
     void testProcessPdfToMarkdown_MultipleOutputFiles() throws IOException, InterruptedException {
         // Setup mock objects and temp files
         try (MockedStatic<ProcessExecutor> mockedStaticProcessExecutor =
-                mockStatic(ProcessExecutor.class)) {
+                Mockito.mockStatic(ProcessExecutor.class)) {
             // Create a mock PDF file
             MultipartFile pdfFile =
                     new MockMultipartFile(
@@ -205,7 +200,9 @@ class PDFToFileTest {
                     .when(() -> ProcessExecutor.getInstance(ProcessExecutor.Processes.PDFTOHTML))
                     .thenReturn(mockProcessExecutor);
 
-            when(mockProcessExecutor.runCommandWithOutputHandling(anyList(), any(File.class)))
+            Mockito.when(
+                            mockProcessExecutor.runCommandWithOutputHandling(
+                                    ArgumentMatchers.anyList(), ArgumentMatchers.any(File.class)))
                     .thenAnswer(
                             invocation -> {
                                 // When command is executed, simulate creation of output files
@@ -232,12 +229,12 @@ class PDFToFileTest {
             ResponseEntity<byte[]> response = pdfToFile.processPdfToMarkdown(pdfFile);
 
             // Verify
-            assertEquals(HttpStatus.OK, response.getStatusCode());
-            assertNotNull(response.getBody());
-            assertTrue(response.getBody().length > 0);
+            Assertions.assertEquals(HttpStatus.OK, response.getStatusCode());
+            Assertions.assertNotNull(response.getBody());
+            Assertions.assertTrue(response.getBody().length > 0);
 
             // Verify content disposition indicates a zip file
-            assertTrue(
+            Assertions.assertTrue(
                     response.getHeaders()
                             .getContentDisposition()
                             .toString()
@@ -260,8 +257,8 @@ class PDFToFileTest {
                     zipStream.closeEntry();
                 }
 
-                assertTrue(foundMdFiles, "ZIP should contain Markdown files");
-                assertTrue(foundImage, "ZIP should contain image files");
+                Assertions.assertTrue(foundMdFiles, "ZIP should contain Markdown files");
+                Assertions.assertTrue(foundImage, "ZIP should contain image files");
             }
         }
     }
@@ -270,7 +267,7 @@ class PDFToFileTest {
     void testProcessPdfToHtml() throws IOException, InterruptedException {
         // Setup mock objects and temp files
         try (MockedStatic<ProcessExecutor> mockedStaticProcessExecutor =
-                mockStatic(ProcessExecutor.class)) {
+                Mockito.mockStatic(ProcessExecutor.class)) {
             // Create a mock PDF file
             MultipartFile pdfFile =
                     new MockMultipartFile(
@@ -284,7 +281,9 @@ class PDFToFileTest {
                     .when(() -> ProcessExecutor.getInstance(ProcessExecutor.Processes.PDFTOHTML))
                     .thenReturn(mockProcessExecutor);
 
-            when(mockProcessExecutor.runCommandWithOutputHandling(anyList(), any(File.class)))
+            Mockito.when(
+                            mockProcessExecutor.runCommandWithOutputHandling(
+                                    ArgumentMatchers.anyList(), ArgumentMatchers.any(File.class)))
                     .thenAnswer(
                             invocation -> {
                                 // When command is executed, simulate creation of output files
@@ -308,12 +307,12 @@ class PDFToFileTest {
             ResponseEntity<byte[]> response = pdfToFile.processPdfToHtml(pdfFile);
 
             // Verify
-            assertEquals(HttpStatus.OK, response.getStatusCode());
-            assertNotNull(response.getBody());
-            assertTrue(response.getBody().length > 0);
+            Assertions.assertEquals(HttpStatus.OK, response.getStatusCode());
+            Assertions.assertNotNull(response.getBody());
+            Assertions.assertTrue(response.getBody().length > 0);
 
             // Verify content disposition indicates a zip file
-            assertTrue(
+            Assertions.assertTrue(
                     response.getHeaders()
                             .getContentDisposition()
                             .toString()
@@ -339,9 +338,9 @@ class PDFToFileTest {
                     zipStream.closeEntry();
                 }
 
-                assertTrue(foundMainHtml, "ZIP should contain main HTML file");
-                assertTrue(foundIndexHtml, "ZIP should contain index HTML file");
-                assertTrue(foundImage, "ZIP should contain image files");
+                Assertions.assertTrue(foundMainHtml, "ZIP should contain main HTML file");
+                Assertions.assertTrue(foundIndexHtml, "ZIP should contain index HTML file");
+                Assertions.assertTrue(foundImage, "ZIP should contain image files");
             }
         }
     }
@@ -350,7 +349,7 @@ class PDFToFileTest {
     void testProcessPdfToOfficeFormat_SingleOutputFile() throws IOException, InterruptedException {
         // Setup mock objects and temp files
         try (MockedStatic<ProcessExecutor> mockedStaticProcessExecutor =
-                mockStatic(ProcessExecutor.class)) {
+                Mockito.mockStatic(ProcessExecutor.class)) {
             // Create a mock PDF file
             MultipartFile pdfFile =
                     new MockMultipartFile(
@@ -364,11 +363,12 @@ class PDFToFileTest {
                     .when(() -> ProcessExecutor.getInstance(ProcessExecutor.Processes.LIBRE_OFFICE))
                     .thenReturn(mockProcessExecutor);
 
-            when(mockProcessExecutor.runCommandWithOutputHandling(
-                            argThat(
-                                    args ->
-                                            args.contains("--convert-to")
-                                                    && args.contains("docx"))))
+            Mockito.when(
+                            mockProcessExecutor.runCommandWithOutputHandling(
+                                    ArgumentMatchers.argThat(
+                                            args ->
+                                                    args.contains("--convert-to")
+                                                            && args.contains("docx"))))
                     .thenAnswer(
                             invocation -> {
                                 // When command is executed, find the output directory argument
@@ -383,7 +383,7 @@ class PDFToFileTest {
 
                                 // Create output file
                                 Files.write(
-                                        Path.of(outDir, "document.docx"),
+                                        Path.of(Objects.requireNonNull(outDir), "document.docx"),
                                         "Fake DOCX content".getBytes());
 
                                 return mockExecutorResult;
@@ -394,12 +394,12 @@ class PDFToFileTest {
                     pdfToFile.processPdfToOfficeFormat(pdfFile, "docx", "draw_pdf_import");
 
             // Verify
-            assertEquals(HttpStatus.OK, response.getStatusCode());
-            assertNotNull(response.getBody());
-            assertTrue(response.getBody().length > 0);
+            Assertions.assertEquals(HttpStatus.OK, response.getStatusCode());
+            Assertions.assertNotNull(response.getBody());
+            Assertions.assertTrue(response.getBody().length > 0);
 
             // Verify content disposition has correct filename
-            assertTrue(
+            Assertions.assertTrue(
                     response.getHeaders()
                             .getContentDisposition()
                             .toString()
@@ -412,7 +412,7 @@ class PDFToFileTest {
             throws IOException, InterruptedException {
         // Setup mock objects and temp files
         try (MockedStatic<ProcessExecutor> mockedStaticProcessExecutor =
-                mockStatic(ProcessExecutor.class)) {
+                Mockito.mockStatic(ProcessExecutor.class)) {
             // Create a mock PDF file
             MultipartFile pdfFile =
                     new MockMultipartFile(
@@ -426,8 +426,12 @@ class PDFToFileTest {
                     .when(() -> ProcessExecutor.getInstance(ProcessExecutor.Processes.LIBRE_OFFICE))
                     .thenReturn(mockProcessExecutor);
 
-            when(mockProcessExecutor.runCommandWithOutputHandling(
-                            argThat(args -> args.contains("--convert-to") && args.contains("odp"))))
+            Mockito.when(
+                            mockProcessExecutor.runCommandWithOutputHandling(
+                                    ArgumentMatchers.argThat(
+                                            args ->
+                                                    args.contains("--convert-to")
+                                                            && args.contains("odp"))))
                     .thenAnswer(
                             invocation -> {
                                 // When command is executed, find the output directory argument
@@ -443,7 +447,7 @@ class PDFToFileTest {
                                 // Create multiple output files (simulating a presentation with
                                 // multiple files)
                                 Files.write(
-                                        Path.of(outDir, "document.odp"),
+                                        Path.of(Objects.requireNonNull(outDir), "document.odp"),
                                         "Fake ODP content".getBytes());
                                 Files.write(
                                         Path.of(outDir, "document_media1.png"),
@@ -460,12 +464,12 @@ class PDFToFileTest {
                     pdfToFile.processPdfToOfficeFormat(pdfFile, "odp", "draw_pdf_import");
 
             // Verify
-            assertEquals(HttpStatus.OK, response.getStatusCode());
-            assertNotNull(response.getBody());
-            assertTrue(response.getBody().length > 0);
+            Assertions.assertEquals(HttpStatus.OK, response.getStatusCode());
+            Assertions.assertNotNull(response.getBody());
+            Assertions.assertTrue(response.getBody().length > 0);
 
             // Verify content disposition for zip file
-            assertTrue(
+            Assertions.assertTrue(
                     response.getHeaders()
                             .getContentDisposition()
                             .toString()
@@ -488,8 +492,8 @@ class PDFToFileTest {
                     zipStream.closeEntry();
                 }
 
-                assertTrue(foundMainFile, "ZIP should contain main ODP file");
-                assertTrue(foundMediaFiles, "ZIP should contain media files");
+                Assertions.assertTrue(foundMainFile, "ZIP should contain main ODP file");
+                Assertions.assertTrue(foundMediaFiles, "ZIP should contain media files");
             }
         }
     }
@@ -498,7 +502,7 @@ class PDFToFileTest {
     void testProcessPdfToOfficeFormat_TextFormat() throws IOException, InterruptedException {
         // Setup mock objects and temp files
         try (MockedStatic<ProcessExecutor> mockedStaticProcessExecutor =
-                mockStatic(ProcessExecutor.class)) {
+                Mockito.mockStatic(ProcessExecutor.class)) {
             // Create a mock PDF file
             MultipartFile pdfFile =
                     new MockMultipartFile(
@@ -512,11 +516,12 @@ class PDFToFileTest {
                     .when(() -> ProcessExecutor.getInstance(ProcessExecutor.Processes.LIBRE_OFFICE))
                     .thenReturn(mockProcessExecutor);
 
-            when(mockProcessExecutor.runCommandWithOutputHandling(
-                            argThat(
-                                    args ->
-                                            args.contains("--convert-to")
-                                                    && args.contains("txt:Text"))))
+            Mockito.when(
+                            mockProcessExecutor.runCommandWithOutputHandling(
+                                    ArgumentMatchers.argThat(
+                                            args ->
+                                                    args.contains("--convert-to")
+                                                            && args.contains("txt:Text"))))
                     .thenAnswer(
                             invocation -> {
                                 // When command is executed, find the output directory argument
@@ -531,7 +536,7 @@ class PDFToFileTest {
 
                                 // Create text output file
                                 Files.write(
-                                        Path.of(outDir, "document.txt"),
+                                        Path.of(Objects.requireNonNull(outDir), "document.txt"),
                                         "Extracted text content".getBytes());
 
                                 return mockExecutorResult;
@@ -542,12 +547,12 @@ class PDFToFileTest {
                     pdfToFile.processPdfToOfficeFormat(pdfFile, "txt:Text", "draw_pdf_import");
 
             // Verify
-            assertEquals(HttpStatus.OK, response.getStatusCode());
-            assertNotNull(response.getBody());
-            assertTrue(response.getBody().length > 0);
+            Assertions.assertEquals(HttpStatus.OK, response.getStatusCode());
+            Assertions.assertNotNull(response.getBody());
+            Assertions.assertTrue(response.getBody().length > 0);
 
             // Verify content disposition has txt extension
-            assertTrue(
+            Assertions.assertTrue(
                     response.getHeaders()
                             .getContentDisposition()
                             .toString()
@@ -559,7 +564,7 @@ class PDFToFileTest {
     void testProcessPdfToOfficeFormat_NoFilename() throws IOException, InterruptedException {
         // Setup mock objects and temp files
         try (MockedStatic<ProcessExecutor> mockedStaticProcessExecutor =
-                mockStatic(ProcessExecutor.class)) {
+                Mockito.mockStatic(ProcessExecutor.class)) {
             // Create a mock PDF file with no filename
             MultipartFile pdfFile =
                     new MockMultipartFile(
@@ -573,7 +578,9 @@ class PDFToFileTest {
                     .when(() -> ProcessExecutor.getInstance(ProcessExecutor.Processes.LIBRE_OFFICE))
                     .thenReturn(mockProcessExecutor);
 
-            when(mockProcessExecutor.runCommandWithOutputHandling(anyList()))
+            Mockito.when(
+                            mockProcessExecutor.runCommandWithOutputHandling(
+                                    ArgumentMatchers.anyList()))
                     .thenAnswer(
                             invocation -> {
                                 // When command is executed, find the output directory argument
@@ -588,7 +595,7 @@ class PDFToFileTest {
 
                                 // Create output file - uses default name
                                 Files.write(
-                                        Path.of(outDir, "output.docx"),
+                                        Path.of(Objects.requireNonNull(outDir), "output.docx"),
                                         "Fake DOCX content".getBytes());
 
                                 return mockExecutorResult;
@@ -599,12 +606,12 @@ class PDFToFileTest {
                     pdfToFile.processPdfToOfficeFormat(pdfFile, "docx", "draw_pdf_import");
 
             // Verify
-            assertEquals(HttpStatus.OK, response.getStatusCode());
-            assertNotNull(response.getBody());
-            assertTrue(response.getBody().length > 0);
+            Assertions.assertEquals(HttpStatus.OK, response.getStatusCode());
+            Assertions.assertNotNull(response.getBody());
+            Assertions.assertTrue(response.getBody().length > 0);
 
             // Verify content disposition contains output.docx
-            assertTrue(
+            Assertions.assertTrue(
                     response.getHeaders()
                             .getContentDisposition()
                             .toString()

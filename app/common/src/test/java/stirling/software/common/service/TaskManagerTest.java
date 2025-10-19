@@ -1,17 +1,16 @@
 package stirling.software.common.service;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
-
 import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.UUID;
 
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.springframework.http.MediaType;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -47,10 +46,10 @@ class TaskManagerTest {
 
         // Assert
         JobResult result = taskManager.getJobResult(jobId);
-        assertNotNull(result);
-        assertEquals(jobId, result.getJobId());
-        assertFalse(result.isComplete());
-        assertNotNull(result.getCreatedAt());
+        Assertions.assertNotNull(result);
+        Assertions.assertEquals(jobId, result.getJobId());
+        Assertions.assertFalse(result.isComplete());
+        Assertions.assertNotNull(result.getCreatedAt());
     }
 
     @Test
@@ -65,10 +64,10 @@ class TaskManagerTest {
 
         // Assert
         JobResult result = taskManager.getJobResult(jobId);
-        assertNotNull(result);
-        assertTrue(result.isComplete());
-        assertEquals(resultObject, result.getResult());
-        assertNotNull(result.getCompletedAt());
+        Assertions.assertNotNull(result);
+        Assertions.assertTrue(result.isComplete());
+        Assertions.assertEquals(resultObject, result.getResult());
+        Assertions.assertNotNull(result.getCompletedAt());
     }
 
     @Test
@@ -82,27 +81,27 @@ class TaskManagerTest {
         long fileSize = 1024L;
 
         // Mock the fileStorage.getFileSize() call
-        when(fileStorage.getFileSize(fileId)).thenReturn(fileSize);
+        Mockito.when(fileStorage.getFileSize(fileId)).thenReturn(fileSize);
 
         // Act
         taskManager.setFileResult(jobId, fileId, originalFileName, contentType);
 
         // Assert
         JobResult result = taskManager.getJobResult(jobId);
-        assertNotNull(result);
-        assertTrue(result.isComplete());
-        assertTrue(result.hasFiles());
-        assertFalse(result.hasMultipleFiles());
+        Assertions.assertNotNull(result);
+        Assertions.assertTrue(result.isComplete());
+        Assertions.assertTrue(result.hasFiles());
+        Assertions.assertFalse(result.hasMultipleFiles());
 
         var resultFiles = result.getAllResultFiles();
-        assertEquals(1, resultFiles.size());
+        Assertions.assertEquals(1, resultFiles.size());
 
         ResultFile resultFile = resultFiles.get(0);
-        assertEquals(fileId, resultFile.getFileId());
-        assertEquals(originalFileName, resultFile.getFileName());
-        assertEquals(contentType, resultFile.getContentType());
-        assertEquals(fileSize, resultFile.getFileSize());
-        assertNotNull(result.getCompletedAt());
+        Assertions.assertEquals(fileId, resultFile.getFileId());
+        Assertions.assertEquals(originalFileName, resultFile.getFileName());
+        Assertions.assertEquals(contentType, resultFile.getContentType());
+        Assertions.assertEquals(fileSize, resultFile.getFileSize());
+        Assertions.assertNotNull(result.getCompletedAt());
     }
 
     @Test
@@ -117,10 +116,10 @@ class TaskManagerTest {
 
         // Assert
         JobResult result = taskManager.getJobResult(jobId);
-        assertNotNull(result);
-        assertTrue(result.isComplete());
-        assertEquals(errorMessage, result.getError());
-        assertNotNull(result.getCompletedAt());
+        Assertions.assertNotNull(result);
+        Assertions.assertTrue(result.isComplete());
+        Assertions.assertEquals(errorMessage, result.getError());
+        Assertions.assertNotNull(result.getCompletedAt());
     }
 
     @Test
@@ -136,9 +135,9 @@ class TaskManagerTest {
 
         // Assert
         JobResult result = taskManager.getJobResult(jobId);
-        assertNotNull(result);
-        assertTrue(result.isComplete());
-        assertEquals(resultObject, result.getResult());
+        Assertions.assertNotNull(result);
+        Assertions.assertTrue(result.isComplete());
+        Assertions.assertEquals(resultObject, result.getResult());
     }
 
     @Test
@@ -152,9 +151,9 @@ class TaskManagerTest {
 
         // Assert
         JobResult result = taskManager.getJobResult(jobId);
-        assertNotNull(result);
-        assertTrue(result.isComplete());
-        assertEquals("Task completed successfully", result.getResult());
+        Assertions.assertNotNull(result);
+        Assertions.assertTrue(result.isComplete());
+        Assertions.assertEquals("Task completed successfully", result.getResult());
     }
 
     @Test
@@ -164,20 +163,20 @@ class TaskManagerTest {
         taskManager.createTask(jobId);
 
         // Assert - not complete initially
-        assertFalse(taskManager.isComplete(jobId));
+        Assertions.assertFalse(taskManager.isComplete(jobId));
 
         // Act - mark as complete
         taskManager.setComplete(jobId);
 
         // Assert - now complete
-        assertTrue(taskManager.isComplete(jobId));
+        Assertions.assertTrue(taskManager.isComplete(jobId));
     }
 
     @Test
     void testGetJobStats() throws Exception {
         // Arrange
         // Mock fileStorage.getFileSize for file operations
-        when(fileStorage.getFileSize("file-id")).thenReturn(1024L);
+        Mockito.when(fileStorage.getFileSize("file-id")).thenReturn(1024L);
 
         // 1. Create active job
         String activeJobId = "active-job";
@@ -203,19 +202,19 @@ class TaskManagerTest {
         JobStats stats = taskManager.getJobStats();
 
         // Assert
-        assertEquals(4, stats.getTotalJobs());
-        assertEquals(1, stats.getActiveJobs());
-        assertEquals(3, stats.getCompletedJobs());
-        assertEquals(1, stats.getFailedJobs());
-        assertEquals(2, stats.getSuccessfulJobs());
-        assertEquals(1, stats.getFileResultJobs());
-        assertNotNull(stats.getNewestActiveJobTime());
-        assertNotNull(stats.getOldestActiveJobTime());
-        assertTrue(stats.getAverageProcessingTimeMs() >= 0);
+        Assertions.assertEquals(4, stats.getTotalJobs());
+        Assertions.assertEquals(1, stats.getActiveJobs());
+        Assertions.assertEquals(3, stats.getCompletedJobs());
+        Assertions.assertEquals(1, stats.getFailedJobs());
+        Assertions.assertEquals(2, stats.getSuccessfulJobs());
+        Assertions.assertEquals(1, stats.getFileResultJobs());
+        Assertions.assertNotNull(stats.getNewestActiveJobTime());
+        Assertions.assertNotNull(stats.getOldestActiveJobTime());
+        Assertions.assertTrue(stats.getAverageProcessingTimeMs() >= 0);
     }
 
     @Test
-    void testCleanupOldJobs() throws Exception {
+    void testCleanupOldJobs() {
         // Arrange
         // 1. Create a recent completed job
         String recentJobId = "recent-job";
@@ -242,7 +241,7 @@ class TaskManagerTest {
                         .build();
         ReflectionTestUtils.setField(oldJob, "resultFiles", java.util.List.of(resultFile));
 
-        when(fileStorage.deleteFile("file-id")).thenReturn(true);
+        Mockito.when(fileStorage.deleteFile("file-id")).thenReturn(true);
 
         // Obtain access to the private jobResults map
         Map<String, JobResult> jobResultsMap =
@@ -253,22 +252,23 @@ class TaskManagerTest {
         taskManager.createTask(activeJobId);
 
         // Verify all jobs are in the map
-        assertTrue(jobResultsMap.containsKey(recentJobId));
-        assertTrue(jobResultsMap.containsKey(oldJobId));
-        assertTrue(jobResultsMap.containsKey(activeJobId));
+        Assertions.assertNotNull(jobResultsMap);
+        Assertions.assertTrue(jobResultsMap.containsKey(recentJobId));
+        Assertions.assertTrue(jobResultsMap.containsKey(oldJobId));
+        Assertions.assertTrue(jobResultsMap.containsKey(activeJobId));
 
         // Act
         taskManager.cleanupOldJobs();
 
         // Assert - the old job should be removed
-        assertFalse(jobResultsMap.containsKey(oldJobId));
-        assertTrue(jobResultsMap.containsKey(recentJobId));
-        assertTrue(jobResultsMap.containsKey(activeJobId));
-        verify(fileStorage).deleteFile("file-id");
+        Assertions.assertFalse(jobResultsMap.containsKey(oldJobId));
+        Assertions.assertTrue(jobResultsMap.containsKey(recentJobId));
+        Assertions.assertTrue(jobResultsMap.containsKey(activeJobId));
+        Mockito.verify(fileStorage).deleteFile("file-id");
     }
 
     @Test
-    void testShutdown() throws Exception {
+    void testShutdown() {
         // This mainly tests that the shutdown method doesn't throw exceptions
         taskManager.shutdown();
 
@@ -287,12 +287,12 @@ class TaskManagerTest {
         boolean result = taskManager.addNote(jobId, note);
 
         // Assert
-        assertTrue(result);
+        Assertions.assertTrue(result);
         JobResult jobResult = taskManager.getJobResult(jobId);
-        assertNotNull(jobResult);
-        assertNotNull(jobResult.getNotes());
-        assertEquals(1, jobResult.getNotes().size());
-        assertEquals(note, jobResult.getNotes().get(0));
+        Assertions.assertNotNull(jobResult);
+        Assertions.assertNotNull(jobResult.getNotes());
+        Assertions.assertEquals(1, jobResult.getNotes().size());
+        Assertions.assertEquals(note, jobResult.getNotes().get(0));
     }
 
     @Test
@@ -305,6 +305,6 @@ class TaskManagerTest {
         boolean result = taskManager.addNote(jobId, note);
 
         // Assert
-        assertFalse(result);
+        Assertions.assertFalse(result);
     }
 }

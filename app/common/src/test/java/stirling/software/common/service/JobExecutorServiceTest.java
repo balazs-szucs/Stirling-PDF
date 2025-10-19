@@ -1,27 +1,15 @@
 package stirling.software.common.service;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Supplier;
 
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Captor;
-import org.mockito.Mock;
-import org.mockito.Mockito;
+import org.mockito.*;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -63,7 +51,7 @@ class JobExecutorServiceTest {
     }
 
     @Test
-    void shouldRunSyncJobSuccessfully() throws Exception {
+    void shouldRunSyncJobSuccessfully() {
         // Given
         Supplier<Object> work = () -> "test-result";
 
@@ -71,15 +59,16 @@ class JobExecutorServiceTest {
         ResponseEntity<?> response = jobExecutorService.runJobGeneric(false, work);
 
         // Then
-        assertEquals(HttpStatus.OK, response.getStatusCode());
-        assertEquals("test-result", response.getBody());
+        Assertions.assertEquals(HttpStatus.OK, response.getStatusCode());
+        Assertions.assertEquals("test-result", response.getBody());
 
         // Verify request attribute was set with jobId
-        verify(request).setAttribute(eq("jobId"), anyString());
+        Mockito.verify(request)
+                .setAttribute(ArgumentMatchers.eq("jobId"), ArgumentMatchers.anyString());
     }
 
     @Test
-    void shouldRunAsyncJobSuccessfully() throws Exception {
+    void shouldRunAsyncJobSuccessfully() {
         // Given
         Supplier<Object> work = () -> "test-result";
 
@@ -87,14 +76,14 @@ class JobExecutorServiceTest {
         ResponseEntity<?> response = jobExecutorService.runJobGeneric(true, work);
 
         // Then
-        assertEquals(HttpStatus.OK, response.getStatusCode());
-        assertTrue(response.getBody() instanceof JobResponse);
+        Assertions.assertEquals(HttpStatus.OK, response.getStatusCode());
+        Assertions.assertInstanceOf(JobResponse.class, response.getBody());
         JobResponse<?> jobResponse = (JobResponse<?>) response.getBody();
-        assertTrue(jobResponse.isAsync());
-        assertNotNull(jobResponse.getJobId());
+        Assertions.assertTrue(jobResponse.isAsync());
+        Assertions.assertNotNull(jobResponse.getJobId());
 
         // Verify task manager was called
-        verify(taskManager).createTask(jobIdCaptor.capture());
+        Mockito.verify(taskManager).createTask(jobIdCaptor.capture());
     }
 
     @Test
@@ -109,11 +98,12 @@ class JobExecutorServiceTest {
         ResponseEntity<?> response = jobExecutorService.runJobGeneric(false, work);
 
         // Then
-        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
+        Assertions.assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
 
         @SuppressWarnings("unchecked")
         Map<String, String> errorMap = (Map<String, String>) response.getBody();
-        assertEquals("Job failed: Test error", errorMap.get("error"));
+        Assertions.assertNotNull(errorMap);
+        Assertions.assertEquals("Job failed: Test error", errorMap.get("error"));
     }
 
     @Test
@@ -123,21 +113,32 @@ class JobExecutorServiceTest {
         CompletableFuture<ResponseEntity<?>> future = new CompletableFuture<>();
 
         // Configure resourceMonitor to indicate job should be queued
-        when(resourceMonitor.shouldQueueJob(80)).thenReturn(true);
+        Mockito.when(resourceMonitor.shouldQueueJob(80)).thenReturn(true);
 
         // Configure jobQueue to return our future
-        when(jobQueue.queueJob(anyString(), eq(80), any(), anyLong())).thenReturn(future);
+        Mockito.when(
+                        jobQueue.queueJob(
+                                ArgumentMatchers.anyString(),
+                                ArgumentMatchers.eq(80),
+                                ArgumentMatchers.any(),
+                                ArgumentMatchers.anyLong()))
+                .thenReturn(future);
 
         // When
         ResponseEntity<?> response = jobExecutorService.runJobGeneric(true, work, 5000, true, 80);
 
         // Then
-        assertEquals(HttpStatus.OK, response.getStatusCode());
-        assertTrue(response.getBody() instanceof JobResponse);
+        Assertions.assertEquals(HttpStatus.OK, response.getStatusCode());
+        Assertions.assertInstanceOf(JobResponse.class, response.getBody());
 
         // Verify job was queued
-        verify(jobQueue).queueJob(anyString(), eq(80), any(), eq(5000L));
-        verify(taskManager).createTask(anyString());
+        Mockito.verify(jobQueue)
+                .queueJob(
+                        ArgumentMatchers.anyString(),
+                        ArgumentMatchers.eq(80),
+                        ArgumentMatchers.any(),
+                        ArgumentMatchers.eq(5000L));
+        Mockito.verify(taskManager).createTask(ArgumentMatchers.anyString());
     }
 
     @Test
@@ -159,7 +160,11 @@ class JobExecutorServiceTest {
         spy.runJobGeneric(false, work, customTimeout);
 
         // Then
-        verify(spy).runJobGeneric(eq(false), any(Supplier.class), eq(customTimeout));
+        Mockito.verify(spy)
+                .runJobGeneric(
+                        ArgumentMatchers.eq(false),
+                        ArgumentMatchers.any(Supplier.class),
+                        ArgumentMatchers.eq(customTimeout));
     }
 
     @Test
@@ -186,7 +191,7 @@ class JobExecutorServiceTest {
         try {
             executeMethod.invoke(jobExecutorService, work, 1L); // Very short timeout
         } catch (Exception e) {
-            assertTrue(e.getCause() instanceof TimeoutException);
+            Assertions.assertInstanceOf(TimeoutException.class, e.getCause());
         }
     }
 }

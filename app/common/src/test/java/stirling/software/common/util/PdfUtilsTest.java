@@ -1,10 +1,5 @@
 package stirling.software.common.util;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
 import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
@@ -20,6 +15,7 @@ import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDResources;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
@@ -31,9 +27,10 @@ public class PdfUtilsTest {
 
     @Test
     void testTextToPageSize() {
-        assertEquals(PDRectangle.A4, PdfUtils.textToPageSize("A4"));
-        assertEquals(PDRectangle.LETTER, PdfUtils.textToPageSize("LETTER"));
-        assertThrows(IllegalArgumentException.class, () -> PdfUtils.textToPageSize("INVALID"));
+        Assertions.assertEquals(PDRectangle.A4, PdfUtils.textToPageSize("A4"));
+        Assertions.assertEquals(PDRectangle.LETTER, PdfUtils.textToPageSize("LETTER"));
+        Assertions.assertThrows(
+                IllegalArgumentException.class, () -> PdfUtils.textToPageSize("INVALID"));
     }
 
     @Test
@@ -45,7 +42,7 @@ public class PdfUtilsTest {
 
         // Case 1: No images in resources
         Mockito.when(resources.getXObjectNames()).thenReturn(Collections.emptySet());
-        assertFalse(PdfUtils.hasImagesOnPage(page));
+        Assertions.assertFalse(PdfUtils.hasImagesOnPage(page));
 
         // Case 2: Resources with an image
         Set<COSName> xObjectNames = new HashSet<>();
@@ -56,7 +53,7 @@ public class PdfUtilsTest {
         Mockito.when(resources.getXObjectNames()).thenReturn(xObjectNames);
         Mockito.when(resources.getXObject(cosName)).thenReturn(imageXObject);
 
-        assertTrue(PdfUtils.hasImagesOnPage(page));
+        Assertions.assertTrue(PdfUtils.hasImagesOnPage(page));
     }
 
     @Test
@@ -65,22 +62,23 @@ public class PdfUtilsTest {
         doc1.addPage(new PDPage());
         doc1.addPage(new PDPage());
         doc1.addPage(new PDPage());
-        assertTrue(PdfUtils.pageCount(doc1, 2, "greater"));
+        Assertions.assertTrue(PdfUtils.pageCount(doc1, 2, "greater"));
 
         PDDocument doc2 = new PDDocument();
         doc2.addPage(new PDPage());
         doc2.addPage(new PDPage());
         doc2.addPage(new PDPage());
-        assertTrue(PdfUtils.pageCount(doc2, 3, "equal"));
+        Assertions.assertTrue(PdfUtils.pageCount(doc2, 3, "equal"));
 
         PDDocument doc3 = new PDDocument();
         doc3.addPage(new PDPage());
         doc3.addPage(new PDPage());
-        assertTrue(PdfUtils.pageCount(doc3, 5, "less"));
+        Assertions.assertTrue(PdfUtils.pageCount(doc3, 5, "less"));
 
         PDDocument doc4 = new PDDocument();
         doc4.addPage(new PDPage());
-        assertThrows(IllegalArgumentException.class, () -> PdfUtils.pageCount(doc4, 1, "bad"));
+        Assertions.assertThrows(
+                IllegalArgumentException.class, () -> PdfUtils.pageCount(doc4, 1, "bad"));
     }
 
     @Test
@@ -90,7 +88,7 @@ public class PdfUtilsTest {
         doc.addPage(page);
         PDRectangle rect = page.getMediaBox();
         String expected = rect.getWidth() + "x" + rect.getHeight();
-        assertTrue(PdfUtils.pageSize(doc, expected));
+        Assertions.assertTrue(PdfUtils.pageSize(doc, expected));
     }
 
     @Test
@@ -117,7 +115,7 @@ public class PdfUtilsTest {
                 PdfUtils.overlayImage(
                         factory, pdfOut.toByteArray(), imgOut.toByteArray(), 0, 0, false);
         try (PDDocument resultDoc = factory.load(result)) {
-            assertEquals(1, resultDoc.getNumberOfPages());
+            Assertions.assertEquals(1, resultDoc.getNumberOfPages());
         }
     }
 }

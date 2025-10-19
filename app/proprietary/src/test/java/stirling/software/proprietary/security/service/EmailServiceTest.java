@@ -1,15 +1,11 @@
 package stirling.software.proprietary.security.service;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.fail;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.web.multipart.MultipartFile;
@@ -36,8 +32,8 @@ public class EmailServiceTest {
     @Test
     void testSendEmailWithAttachment() throws MessagingException {
         // Mock the values returned by ApplicationProperties
-        when(applicationProperties.getMail()).thenReturn(mailProperties);
-        when(mailProperties.getFrom()).thenReturn("no-reply@stirling-software.com");
+        Mockito.when(applicationProperties.getMail()).thenReturn(mailProperties);
+        Mockito.when(mailProperties.getFrom()).thenReturn("no-reply@stirling-software.com");
 
         // Create a mock Email object
         Email email = new Email();
@@ -47,80 +43,79 @@ public class EmailServiceTest {
         email.setFileInput(fileInput);
 
         // Mock MultipartFile behavior
-        when(fileInput.getOriginalFilename()).thenReturn("testFile.txt");
+        Mockito.when(fileInput.getOriginalFilename()).thenReturn("testFile.txt");
 
         // Mock MimeMessage
-        MimeMessage mimeMessage = mock(MimeMessage.class);
+        MimeMessage mimeMessage = Mockito.mock(MimeMessage.class);
 
         // Configure mailSender to return the mocked MimeMessage
-        when(mailSender.createMimeMessage()).thenReturn(mimeMessage);
+        Mockito.when(mailSender.createMimeMessage()).thenReturn(mimeMessage);
 
         // Call the service method
         emailService.sendEmailWithAttachment(email);
 
         // Verify that the email was sent using mailSender
-        verify(mailSender).send(mimeMessage);
+        Mockito.verify(mailSender).send(mimeMessage);
     }
 
     @Test
-    void testSendEmailWithAttachmentThrowsExceptionForMissingFilename() throws MessagingException {
+    void testSendEmailWithAttachmentThrowsExceptionForMissingFilename() {
         Email email = new Email();
         email.setTo("test@example.com");
         email.setSubject("Test Email");
         email.setBody("This is a test email.");
         email.setFileInput(fileInput);
 
-        when(fileInput.isEmpty()).thenReturn(false);
-        when(fileInput.getOriginalFilename()).thenReturn("");
+        Mockito.when(fileInput.isEmpty()).thenReturn(false);
+        Mockito.when(fileInput.getOriginalFilename()).thenReturn("");
 
         try {
             emailService.sendEmailWithAttachment(email);
-            fail("Expected MessagingException to be thrown");
+            Assertions.fail("Expected MessagingException to be thrown");
         } catch (MessagingException e) {
-            assertEquals("An attachment is required to send the email.", e.getMessage());
+            Assertions.assertEquals("An attachment is required to send the email.", e.getMessage());
         }
     }
 
     @Test
-    void testSendEmailWithAttachmentThrowsExceptionForMissingFilenameNull()
-            throws MessagingException {
+    void testSendEmailWithAttachmentThrowsExceptionForMissingFilenameNull() {
         Email email = new Email();
         email.setTo("test@example.com");
         email.setSubject("Test Email");
         email.setBody("This is a test email.");
         email.setFileInput(fileInput);
 
-        when(fileInput.isEmpty()).thenReturn(false);
-        when(fileInput.getOriginalFilename()).thenReturn(null);
+        Mockito.when(fileInput.isEmpty()).thenReturn(false);
+        Mockito.when(fileInput.getOriginalFilename()).thenReturn(null);
 
         try {
             emailService.sendEmailWithAttachment(email);
-            fail("Expected MessagingException to be thrown");
+            Assertions.fail("Expected MessagingException to be thrown");
         } catch (MessagingException e) {
-            assertEquals("An attachment is required to send the email.", e.getMessage());
+            Assertions.assertEquals("An attachment is required to send the email.", e.getMessage());
         }
     }
 
     @Test
-    void testSendEmailWithAttachmentThrowsExceptionForMissingFile() throws MessagingException {
+    void testSendEmailWithAttachmentThrowsExceptionForMissingFile() {
         Email email = new Email();
         email.setTo("test@example.com");
         email.setSubject("Test Email");
         email.setBody("This is a test email.");
         email.setFileInput(fileInput);
 
-        when(fileInput.isEmpty()).thenReturn(true);
+        Mockito.when(fileInput.isEmpty()).thenReturn(true);
 
         try {
             emailService.sendEmailWithAttachment(email);
-            fail("Expected MessagingException to be thrown");
+            Assertions.fail("Expected MessagingException to be thrown");
         } catch (MessagingException e) {
-            assertEquals("An attachment is required to send the email.", e.getMessage());
+            Assertions.assertEquals("An attachment is required to send the email.", e.getMessage());
         }
     }
 
     @Test
-    void testSendEmailWithAttachmentThrowsExceptionForMissingFileNull() throws MessagingException {
+    void testSendEmailWithAttachmentThrowsExceptionForMissingFileNull() {
         Email email = new Email();
         email.setTo("test@example.com");
         email.setSubject("Test Email");
@@ -129,15 +124,14 @@ public class EmailServiceTest {
 
         try {
             emailService.sendEmailWithAttachment(email);
-            fail("Expected MessagingException to be thrown");
+            Assertions.fail("Expected MessagingException to be thrown");
         } catch (MessagingException e) {
-            assertEquals("An attachment is required to send the email.", e.getMessage());
+            Assertions.assertEquals("An attachment is required to send the email.", e.getMessage());
         }
     }
 
     @Test
-    void testSendEmailWithAttachmentThrowsExceptionForInvalidAddressNull()
-            throws MessagingException {
+    void testSendEmailWithAttachmentThrowsExceptionForInvalidAddressNull() {
         Email email = new Email();
         email.setTo(null); // Invalid address
         email.setSubject("Test Email");
@@ -146,15 +140,14 @@ public class EmailServiceTest {
 
         try {
             emailService.sendEmailWithAttachment(email);
-            fail("Expected MailSendException to be thrown");
+            Assertions.fail("Expected MailSendException to be thrown");
         } catch (MessagingException e) {
-            assertEquals("Invalid Addresses", e.getMessage());
+            Assertions.assertEquals("Invalid Addresses", e.getMessage());
         }
     }
 
     @Test
-    void testSendEmailWithAttachmentThrowsExceptionForInvalidAddressEmpty()
-            throws MessagingException {
+    void testSendEmailWithAttachmentThrowsExceptionForInvalidAddressEmpty() {
         Email email = new Email();
         email.setTo(""); // Invalid address
         email.setSubject("Test Email");
@@ -163,9 +156,9 @@ public class EmailServiceTest {
 
         try {
             emailService.sendEmailWithAttachment(email);
-            fail("Expected MailSendException to be thrown");
+            Assertions.fail("Expected MailSendException to be thrown");
         } catch (MessagingException e) {
-            assertEquals("Invalid Addresses", e.getMessage());
+            Assertions.assertEquals("Invalid Addresses", e.getMessage());
         }
     }
 }

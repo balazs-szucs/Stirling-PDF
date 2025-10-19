@@ -1,16 +1,16 @@
 package stirling.software.proprietary.security.service;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
-
 import java.sql.SQLException;
 import java.util.Optional;
 
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentMatchers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.MessageSource;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -67,16 +67,16 @@ class UserServiceTest {
         String username = "testuser";
         AuthenticationType authType = AuthenticationType.WEB;
 
-        when(teamRepository.findByName("Default")).thenReturn(Optional.of(mockTeam));
-        when(userRepository.save(any(User.class))).thenReturn(mockUser);
-        doNothing().when(databaseService).exportDatabase();
+        Mockito.when(teamRepository.findByName("Default")).thenReturn(Optional.of(mockTeam));
+        Mockito.when(userRepository.save(ArgumentMatchers.any(User.class))).thenReturn(mockUser);
+        Mockito.doNothing().when(databaseService).exportDatabase();
 
         // When
         userService.saveUser(username, authType);
 
         // Then
-        verify(userRepository).save(any(User.class));
-        verify(databaseService).exportDatabase();
+        Mockito.verify(userRepository).save(ArgumentMatchers.any(User.class));
+        Mockito.verify(databaseService).exportDatabase();
     }
 
     @Test
@@ -87,20 +87,20 @@ class UserServiceTest {
         Long teamId = 1L;
         String encodedPassword = "encodedPassword123";
 
-        when(passwordEncoder.encode(password)).thenReturn(encodedPassword);
-        when(teamRepository.findById(teamId)).thenReturn(Optional.of(mockTeam));
-        when(userRepository.save(any(User.class))).thenReturn(mockUser);
-        doNothing().when(databaseService).exportDatabase();
+        Mockito.when(passwordEncoder.encode(password)).thenReturn(encodedPassword);
+        Mockito.when(teamRepository.findById(teamId)).thenReturn(Optional.of(mockTeam));
+        Mockito.when(userRepository.save(ArgumentMatchers.any(User.class))).thenReturn(mockUser);
+        Mockito.doNothing().when(databaseService).exportDatabase();
 
         // When
         User result = userService.saveUser(username, password, teamId);
 
         // Then
-        assertNotNull(result);
-        verify(passwordEncoder).encode(password);
-        verify(teamRepository).findById(teamId);
-        verify(userRepository).save(any(User.class));
-        verify(databaseService).exportDatabase();
+        Assertions.assertNotNull(result);
+        Mockito.verify(passwordEncoder).encode(password);
+        Mockito.verify(teamRepository).findById(teamId);
+        Mockito.verify(userRepository).save(ArgumentMatchers.any(User.class));
+        Mockito.verify(databaseService).exportDatabase();
     }
 
     @Test
@@ -112,18 +112,18 @@ class UserServiceTest {
         boolean firstLogin = true;
         String encodedPassword = "encodedPassword123";
 
-        when(passwordEncoder.encode(password)).thenReturn(encodedPassword);
-        when(userRepository.save(any(User.class))).thenReturn(mockUser);
-        doNothing().when(databaseService).exportDatabase();
+        Mockito.when(passwordEncoder.encode(password)).thenReturn(encodedPassword);
+        Mockito.when(userRepository.save(ArgumentMatchers.any(User.class))).thenReturn(mockUser);
+        Mockito.doNothing().when(databaseService).exportDatabase();
 
         // When
         User result = userService.saveUser(username, password, mockTeam, role, firstLogin);
 
         // Then
-        assertNotNull(result);
-        verify(passwordEncoder).encode(password);
-        verify(userRepository).save(any(User.class));
-        verify(databaseService).exportDatabase();
+        Assertions.assertNotNull(result);
+        Mockito.verify(passwordEncoder).encode(password);
+        Mockito.verify(userRepository).save(ArgumentMatchers.any(User.class));
+        Mockito.verify(databaseService).exportDatabase();
     }
 
     @Test
@@ -134,12 +134,12 @@ class UserServiceTest {
 
         // When & Then
         IllegalArgumentException exception =
-                assertThrows(
+                Assertions.assertThrows(
                         IllegalArgumentException.class,
                         () -> userService.saveUser(invalidUsername, authType));
 
-        verify(userRepository, never()).save(any(User.class));
-        verify(databaseService, never()).exportDatabase();
+        Mockito.verify(userRepository, Mockito.never()).save(ArgumentMatchers.any(User.class));
+        Mockito.verify(databaseService, Mockito.never()).exportDatabase();
     }
 
     @Test
@@ -148,18 +148,18 @@ class UserServiceTest {
         String username = "testuser";
         Long teamId = 1L;
 
-        when(teamRepository.findById(teamId)).thenReturn(Optional.of(mockTeam));
-        when(userRepository.save(any(User.class))).thenReturn(mockUser);
-        doNothing().when(databaseService).exportDatabase();
+        Mockito.when(teamRepository.findById(teamId)).thenReturn(Optional.of(mockTeam));
+        Mockito.when(userRepository.save(ArgumentMatchers.any(User.class))).thenReturn(mockUser);
+        Mockito.doNothing().when(databaseService).exportDatabase();
 
         // When
         User result = userService.saveUser(username, null, teamId);
 
         // Then
-        assertNotNull(result);
-        verify(passwordEncoder, never()).encode(anyString());
-        verify(userRepository).save(any(User.class));
-        verify(databaseService).exportDatabase();
+        Assertions.assertNotNull(result);
+        Mockito.verify(passwordEncoder, Mockito.never()).encode(ArgumentMatchers.anyString());
+        Mockito.verify(userRepository).save(ArgumentMatchers.any(User.class));
+        Mockito.verify(databaseService).exportDatabase();
     }
 
     @Test
@@ -169,18 +169,18 @@ class UserServiceTest {
         String emptyPassword = "";
         Long teamId = 1L;
 
-        when(teamRepository.findById(teamId)).thenReturn(Optional.of(mockTeam));
-        when(userRepository.save(any(User.class))).thenReturn(mockUser);
-        doNothing().when(databaseService).exportDatabase();
+        Mockito.when(teamRepository.findById(teamId)).thenReturn(Optional.of(mockTeam));
+        Mockito.when(userRepository.save(ArgumentMatchers.any(User.class))).thenReturn(mockUser);
+        Mockito.doNothing().when(databaseService).exportDatabase();
 
         // When
         User result = userService.saveUser(username, emptyPassword, teamId);
 
         // Then
-        assertNotNull(result);
-        verify(passwordEncoder, never()).encode(anyString());
-        verify(userRepository).save(any(User.class));
-        verify(databaseService).exportDatabase();
+        Assertions.assertNotNull(result);
+        Mockito.verify(passwordEncoder, Mockito.never()).encode(ArgumentMatchers.anyString());
+        Mockito.verify(userRepository).save(ArgumentMatchers.any(User.class));
+        Mockito.verify(databaseService).exportDatabase();
     }
 
     @Test
@@ -189,16 +189,16 @@ class UserServiceTest {
         String emailUsername = "test@example.com";
         AuthenticationType authType = AuthenticationType.OAUTH2;
 
-        when(teamRepository.findByName("Default")).thenReturn(Optional.of(mockTeam));
-        when(userRepository.save(any(User.class))).thenReturn(mockUser);
-        doNothing().when(databaseService).exportDatabase();
+        Mockito.when(teamRepository.findByName("Default")).thenReturn(Optional.of(mockTeam));
+        Mockito.when(userRepository.save(ArgumentMatchers.any(User.class))).thenReturn(mockUser);
+        Mockito.doNothing().when(databaseService).exportDatabase();
 
         // When
         userService.saveUser(emailUsername, authType);
 
         // Then
-        verify(userRepository).save(any(User.class));
-        verify(databaseService).exportDatabase();
+        Mockito.verify(userRepository).save(ArgumentMatchers.any(User.class));
+        Mockito.verify(databaseService).exportDatabase();
     }
 
     @Test
@@ -209,12 +209,12 @@ class UserServiceTest {
 
         // When & Then
         IllegalArgumentException exception =
-                assertThrows(
+                Assertions.assertThrows(
                         IllegalArgumentException.class,
                         () -> userService.saveUser(reservedUsername, authType));
 
-        verify(userRepository, never()).save(any(User.class));
-        verify(databaseService, never()).exportDatabase();
+        Mockito.verify(userRepository, Mockito.never()).save(ArgumentMatchers.any(User.class));
+        Mockito.verify(databaseService, Mockito.never()).exportDatabase();
     }
 
     @Test
@@ -225,12 +225,12 @@ class UserServiceTest {
 
         // When & Then
         IllegalArgumentException exception =
-                assertThrows(
+                Assertions.assertThrows(
                         IllegalArgumentException.class,
                         () -> userService.saveUser(anonymousUsername, authType));
 
-        verify(userRepository, never()).save(any(User.class));
-        verify(databaseService, never()).exportDatabase();
+        Mockito.verify(userRepository, Mockito.never()).save(ArgumentMatchers.any(User.class));
+        Mockito.verify(databaseService, Mockito.never()).exportDatabase();
     }
 
     @Test
@@ -241,17 +241,20 @@ class UserServiceTest {
         Long teamId = 1L;
         String encodedPassword = "encodedPassword123";
 
-        when(passwordEncoder.encode(password)).thenReturn(encodedPassword);
-        when(teamRepository.findById(teamId)).thenReturn(Optional.of(mockTeam));
-        when(userRepository.save(any(User.class))).thenReturn(mockUser);
-        doThrow(new SQLException("Database export failed")).when(databaseService).exportDatabase();
+        Mockito.when(passwordEncoder.encode(password)).thenReturn(encodedPassword);
+        Mockito.when(teamRepository.findById(teamId)).thenReturn(Optional.of(mockTeam));
+        Mockito.when(userRepository.save(ArgumentMatchers.any(User.class))).thenReturn(mockUser);
+        Mockito.doThrow(new SQLException("Database export failed"))
+                .when(databaseService)
+                .exportDatabase();
 
         // When & Then
-        assertThrows(SQLException.class, () -> userService.saveUser(username, password, teamId));
+        Assertions.assertThrows(
+                SQLException.class, () -> userService.saveUser(username, password, teamId));
 
         // Verify user was still saved before the exception
-        verify(userRepository).save(any(User.class));
-        verify(databaseService).exportDatabase();
+        Mockito.verify(userRepository).save(ArgumentMatchers.any(User.class));
+        Mockito.verify(databaseService).exportDatabase();
     }
 
     @Test
@@ -264,18 +267,18 @@ class UserServiceTest {
         boolean enabled = false;
         String encodedPassword = "encodedPassword123";
 
-        when(passwordEncoder.encode(password)).thenReturn(encodedPassword);
-        when(teamRepository.findById(teamId)).thenReturn(Optional.of(mockTeam));
-        when(userRepository.save(any(User.class))).thenReturn(mockUser);
-        doNothing().when(databaseService).exportDatabase();
+        Mockito.when(passwordEncoder.encode(password)).thenReturn(encodedPassword);
+        Mockito.when(teamRepository.findById(teamId)).thenReturn(Optional.of(mockTeam));
+        Mockito.when(userRepository.save(ArgumentMatchers.any(User.class))).thenReturn(mockUser);
+        Mockito.doNothing().when(databaseService).exportDatabase();
 
         // When
         userService.saveUser(username, password, teamId, firstLogin, enabled);
 
         // Then
-        verify(passwordEncoder).encode(password);
-        verify(userRepository).save(any(User.class));
-        verify(databaseService).exportDatabase();
+        Mockito.verify(passwordEncoder).encode(password);
+        Mockito.verify(userRepository).save(ArgumentMatchers.any(User.class));
+        Mockito.verify(databaseService).exportDatabase();
     }
 
     @Test
@@ -287,17 +290,17 @@ class UserServiceTest {
         String customRole = Role.LIMITED_API_USER.getRoleId();
         String encodedPassword = "encodedPassword123";
 
-        when(passwordEncoder.encode(password)).thenReturn(encodedPassword);
-        when(teamRepository.findById(teamId)).thenReturn(Optional.of(mockTeam));
-        when(userRepository.save(any(User.class))).thenReturn(mockUser);
-        doNothing().when(databaseService).exportDatabase();
+        Mockito.when(passwordEncoder.encode(password)).thenReturn(encodedPassword);
+        Mockito.when(teamRepository.findById(teamId)).thenReturn(Optional.of(mockTeam));
+        Mockito.when(userRepository.save(ArgumentMatchers.any(User.class))).thenReturn(mockUser);
+        Mockito.doNothing().when(databaseService).exportDatabase();
 
         // When
         userService.saveUser(username, password, teamId, customRole);
 
         // Then
-        verify(passwordEncoder).encode(password);
-        verify(userRepository).save(any(User.class));
-        verify(databaseService).exportDatabase();
+        Mockito.verify(passwordEncoder).encode(password);
+        Mockito.verify(userRepository).save(ArgumentMatchers.any(User.class));
+        Mockito.verify(databaseService).exportDatabase();
     }
 }

@@ -1,17 +1,13 @@
 package stirling.software.common.util;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
-
 import java.io.IOException;
 import java.nio.file.Files;
 
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
+import org.mockito.Mockito;
 
 import stirling.software.common.model.api.converters.HTMLToPdfRequest;
 import stirling.software.common.service.SsrfProtectionService;
@@ -22,16 +18,18 @@ public class FileToPdfTest {
 
     @BeforeEach
     void setUp() {
-        SsrfProtectionService mockSsrfProtectionService = mock(SsrfProtectionService.class);
+        SsrfProtectionService mockSsrfProtectionService = Mockito.mock(SsrfProtectionService.class);
         stirling.software.common.model.ApplicationProperties mockApplicationProperties =
-                mock(stirling.software.common.model.ApplicationProperties.class);
+                Mockito.mock(stirling.software.common.model.ApplicationProperties.class);
         stirling.software.common.model.ApplicationProperties.System mockSystem =
-                mock(stirling.software.common.model.ApplicationProperties.System.class);
+                Mockito.mock(stirling.software.common.model.ApplicationProperties.System.class);
 
-        when(mockSsrfProtectionService.isUrlAllowed(org.mockito.ArgumentMatchers.anyString()))
+        Mockito.when(
+                        mockSsrfProtectionService.isUrlAllowed(
+                                org.mockito.ArgumentMatchers.anyString()))
                 .thenReturn(true);
-        when(mockApplicationProperties.getSystem()).thenReturn(mockSystem);
-        when(mockSystem.getDisableSanitize()).thenReturn(false);
+        Mockito.when(mockApplicationProperties.getSystem()).thenReturn(mockSystem);
+        Mockito.when(mockSystem.getDisableSanitize()).thenReturn(false);
 
         customHtmlSanitizer =
                 new CustomHtmlSanitizer(mockSsrfProtectionService, mockApplicationProperties);
@@ -46,11 +44,12 @@ public class FileToPdfTest {
         HTMLToPdfRequest request = new HTMLToPdfRequest();
         byte[] fileBytes = new byte[0]; // Sample file bytes (empty input)
         String fileName = "test.html"; // Sample file name indicating an HTML file
-        TempFileManager tempFileManager = mock(TempFileManager.class); // Mock TempFileManager
+        TempFileManager tempFileManager =
+                Mockito.mock(TempFileManager.class); // Mock TempFileManager
 
         // Mock the temp file creation to return real temp files
         try {
-            when(tempFileManager.createTempFile(anyString()))
+            Mockito.when(tempFileManager.createTempFile(ArgumentMatchers.anyString()))
                     .thenReturn(Files.createTempFile("test", ".pdf").toFile())
                     .thenReturn(Files.createTempFile("test", ".html").toFile());
         } catch (IOException e) {
@@ -59,7 +58,7 @@ public class FileToPdfTest {
 
         // Expect an IOException to be thrown due to empty input or invalid weasyprint path
         Throwable thrown =
-                assertThrows(
+                Assertions.assertThrows(
                         Exception.class,
                         () ->
                                 FileToPdf.convertHtmlToPdf(
@@ -69,7 +68,7 @@ public class FileToPdfTest {
                                         fileName,
                                         tempFileManager,
                                         customHtmlSanitizer));
-        assertNotNull(thrown);
+        Assertions.assertNotNull(thrown);
     }
 
     /**
@@ -78,8 +77,8 @@ public class FileToPdfTest {
      */
     @Test
     public void testSanitizeZipFilename_NullOrEmpty() {
-        assertEquals("", FileToPdf.sanitizeZipFilename(null));
-        assertEquals("", FileToPdf.sanitizeZipFilename("   "));
+        Assertions.assertEquals("", FileToPdf.sanitizeZipFilename(null));
+        Assertions.assertEquals("", FileToPdf.sanitizeZipFilename("   "));
     }
 
     /**
@@ -93,7 +92,7 @@ public class FileToPdfTest {
 
         // Expect that the method replaces backslashes with forward slashes
         // and removes path traversal sequences
-        assertEquals(expected, FileToPdf.sanitizeZipFilename(input));
+        Assertions.assertEquals(expected, FileToPdf.sanitizeZipFilename(input));
     }
 
     /** Test sanitizeZipFilename to ensure that it removes leading drive letters and slashes. */
@@ -101,17 +100,17 @@ public class FileToPdfTest {
     public void testSanitizeZipFilename_RemovesLeadingDriveAndSlashes() {
         String input = "C:\\folder\\file.txt";
         String expected = "folder/file.txt";
-        assertEquals(expected, FileToPdf.sanitizeZipFilename(input));
+        Assertions.assertEquals(expected, FileToPdf.sanitizeZipFilename(input));
 
         input = "/folder/file.txt";
         expected = "folder/file.txt";
-        assertEquals(expected, FileToPdf.sanitizeZipFilename(input));
+        Assertions.assertEquals(expected, FileToPdf.sanitizeZipFilename(input));
     }
 
     /** Test sanitizeZipFilename to verify that safe filenames remain unchanged. */
     @Test
     public void testSanitizeZipFilename_NoChangeForSafeNames() {
         String input = "folder/subfolder/file.txt";
-        assertEquals(input, FileToPdf.sanitizeZipFilename(input));
+        Assertions.assertEquals(input, FileToPdf.sanitizeZipFilename(input));
     }
 }

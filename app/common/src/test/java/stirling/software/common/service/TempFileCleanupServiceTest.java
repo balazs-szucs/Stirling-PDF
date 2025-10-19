@@ -1,8 +1,5 @@
 package stirling.software.common.service;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
-
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -14,13 +11,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.MockedStatic;
-import org.mockito.MockitoAnnotations;
+import org.mockito.*;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import stirling.software.common.model.ApplicationProperties;
@@ -48,6 +43,11 @@ public class TempFileCleanupServiceTest {
     private Path customTempDir;
     private Path libreOfficeTempDir;
 
+    // Matcher for exact path equality
+    private static Path eq(Path path) {
+        return ArgumentMatchers.argThat(arg -> arg != null && arg.equals(path));
+    }
+
     @BeforeEach
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
@@ -62,35 +62,37 @@ public class TempFileCleanupServiceTest {
         Files.createDirectories(libreOfficeTempDir);
 
         // Configure ApplicationProperties mocks
-        when(applicationProperties.getSystem()).thenReturn(system);
-        when(system.getTempFileManagement()).thenReturn(tempFileManagement);
-        when(tempFileManagement.getBaseTmpDir()).thenReturn(customTempDir.toString());
-        when(tempFileManagement.getLibreofficeDir()).thenReturn(libreOfficeTempDir.toString());
-        when(tempFileManagement.getSystemTempDir()).thenReturn(systemTempDir.toString());
-        when(tempFileManagement.isStartupCleanup()).thenReturn(false);
-        when(tempFileManagement.isCleanupSystemTemp()).thenReturn(false);
-        when(tempFileManagement.getCleanupIntervalMinutes()).thenReturn(30L);
+        Mockito.when(applicationProperties.getSystem()).thenReturn(system);
+        Mockito.when(system.getTempFileManagement()).thenReturn(tempFileManagement);
+        Mockito.when(tempFileManagement.getBaseTmpDir()).thenReturn(customTempDir.toString());
+        Mockito.when(tempFileManagement.getLibreofficeDir())
+                .thenReturn(libreOfficeTempDir.toString());
+        Mockito.when(tempFileManagement.getSystemTempDir()).thenReturn(systemTempDir.toString());
+        Mockito.when(tempFileManagement.isStartupCleanup()).thenReturn(false);
+        Mockito.when(tempFileManagement.isCleanupSystemTemp()).thenReturn(false);
+        Mockito.when(tempFileManagement.getCleanupIntervalMinutes()).thenReturn(30L);
 
         // Set machineType using reflection (still needed for this field)
         ReflectionTestUtils.setField(cleanupService, "machineType", "Standard");
 
-        when(tempFileManager.getMaxAgeMillis()).thenReturn(3600000L); // 1 hour
+        Mockito.when(tempFileManager.getMaxAgeMillis()).thenReturn(3600000L); // 1 hour
     }
 
     @Test
     public void testScheduledCleanup_RegisteredFiles() {
         // Arrange
-        when(tempFileManager.cleanupOldTempFiles(anyLong())).thenReturn(5); // 5 files deleted
+        Mockito.when(tempFileManager.cleanupOldTempFiles(ArgumentMatchers.anyLong()))
+                .thenReturn(5); // 5 files deleted
         Set<Path> registeredDirs = new HashSet<>();
         registeredDirs.add(tempDir.resolve("registeredDir"));
-        when(registry.getTempDirectories()).thenReturn(registeredDirs);
+        Mockito.when(registry.getTempDirectories()).thenReturn(registeredDirs);
 
         // Act
         cleanupService.scheduledCleanup();
 
         // Assert
-        verify(tempFileManager).cleanupOldTempFiles(anyLong());
-        verify(registry, times(1)).getTempDirectories();
+        Mockito.verify(tempFileManager).cleanupOldTempFiles(ArgumentMatchers.anyLong());
+        Mockito.verify(registry, Mockito.times(1)).getTempDirectories();
     }
 
     @Test
@@ -124,13 +126,13 @@ public class TempFileCleanupServiceTest {
         Path emptyFile = Files.createFile(systemTempDir.resolve("empty.tmp"));
 
         // Configure mock registry to say these files aren't registered
-        when(registry.contains(any(File.class))).thenReturn(false);
+        Mockito.when(registry.contains(ArgumentMatchers.any(File.class))).thenReturn(false);
 
         // The set of files that will be deleted in our test
         Set<Path> deletedFiles = new HashSet<>();
 
         // Use MockedStatic to mock Files operations
-        try (MockedStatic<Files> mockedFiles = mockStatic(Files.class)) {
+        try (MockedStatic<Files> mockedFiles = Mockito.mockStatic(Files.class)) {
             // Mock Files.list for each directory we'll process
             mockedFiles
                     .when(() -> Files.list(eq(systemTempDir)))
@@ -158,14 +160,16 @@ public class TempFileCleanupServiceTest {
 
             // Configure Files.isDirectory for each path
             mockedFiles.when(() -> Files.isDirectory(eq(nestedDir))).thenReturn(true);
-            mockedFiles.when(() -> Files.isDirectory(any(Path.class))).thenReturn(false);
+            mockedFiles
+                    .when(() -> Files.isDirectory(ArgumentMatchers.any(Path.class)))
+                    .thenReturn(false);
 
             // Configure Files.exists to return true for all paths
-            mockedFiles.when(() -> Files.exists(any(Path.class))).thenReturn(true);
+            mockedFiles.when(() -> Files.exists(ArgumentMatchers.any(Path.class))).thenReturn(true);
 
             // Configure Files.getLastModifiedTime to return different times based on file names
             mockedFiles
-                    .when(() -> Files.getLastModifiedTime(any(Path.class)))
+                    .when(() -> Files.getLastModifiedTime(ArgumentMatchers.any(Path.class)))
                     .thenAnswer(
                             invocation -> {
                                 Path path = invocation.getArgument(0);
@@ -192,7 +196,7 @@ public class TempFileCleanupServiceTest {
 
             // Configure Files.size to return different sizes based on file names
             mockedFiles
-                    .when(() -> Files.size(any(Path.class)))
+                    .when(() -> Files.size(ArgumentMatchers.any(Path.class)))
                     .thenAnswer(
                             invocation -> {
                                 Path path = invocation.getArgument(0);
@@ -210,7 +214,7 @@ public class TempFileCleanupServiceTest {
 
             // For deleteIfExists, track which files would be deleted
             mockedFiles
-                    .when(() -> Files.deleteIfExists(any(Path.class)))
+                    .when(() -> Files.deleteIfExists(ArgumentMatchers.any(Path.class)))
                     .thenAnswer(
                             invocation -> {
                                 Path path = invocation.getArgument(0);
@@ -219,43 +223,46 @@ public class TempFileCleanupServiceTest {
                             });
 
             // Act - set containerMode to false for this test
-            invokeCleanupDirectoryStreaming(systemTempDir, false, 0, 3600000);
-            invokeCleanupDirectoryStreaming(customTempDir, false, 0, 3600000);
-            invokeCleanupDirectoryStreaming(libreOfficeTempDir, false, 0, 3600000);
+            invokeCleanupDirectoryStreaming(systemTempDir, false, 3600000);
+            invokeCleanupDirectoryStreaming(customTempDir, false, 3600000);
+            invokeCleanupDirectoryStreaming(libreOfficeTempDir, false, 3600000);
 
             // Assert - Only old temp files and empty files should be deleted
-            assertTrue(deletedFiles.contains(oldTempFile), "Old temp file should be deleted");
-            assertTrue(deletedFiles.contains(emptyFile), "Empty file should be deleted");
+            Assertions.assertTrue(
+                    deletedFiles.contains(oldTempFile), "Old temp file should be deleted");
+            Assertions.assertTrue(deletedFiles.contains(emptyFile), "Empty file should be deleted");
 
             // Regular temp files should not be deleted because they're too new
-            assertFalse(
+            Assertions.assertFalse(
                     deletedFiles.contains(ourTempFile1), "Recent temp file should be preserved");
-            assertFalse(
+            Assertions.assertFalse(
                     deletedFiles.contains(ourTempFile2), "Recent temp file should be preserved");
-            assertFalse(
+            Assertions.assertFalse(
                     deletedFiles.contains(ourTempFile3), "Recent temp file should be preserved");
-            assertFalse(
+            Assertions.assertFalse(
                     deletedFiles.contains(ourTempFile4), "Recent temp file should be preserved");
-            assertFalse(
+            Assertions.assertFalse(
                     deletedFiles.contains(ourTempFile5), "Recent temp file should be preserved");
 
             // System temp files should not be deleted in non-container mode
-            assertFalse(
+            Assertions.assertFalse(
                     deletedFiles.contains(sysTempFile1),
                     "System temp file should be preserved in non-container mode");
-            assertFalse(
+            Assertions.assertFalse(
                     deletedFiles.contains(sysTempFile2),
                     "System temp file should be preserved in non-container mode");
-            assertFalse(
+            Assertions.assertFalse(
                     deletedFiles.contains(sysTempFile3),
                     "System temp file should be preserved in non-container mode");
 
             // Jetty files and regular files should never be deleted
-            assertFalse(deletedFiles.contains(jettyFile1), "Jetty file should be preserved");
-            assertFalse(
+            Assertions.assertFalse(
+                    deletedFiles.contains(jettyFile1), "Jetty file should be preserved");
+            Assertions.assertFalse(
                     deletedFiles.contains(jettyFile2),
                     "File with jetty in name should be preserved");
-            assertFalse(deletedFiles.contains(regularFile), "Regular file should be preserved");
+            Assertions.assertFalse(
+                    deletedFiles.contains(regularFile), "Regular file should be preserved");
         }
     }
 
@@ -267,37 +274,41 @@ public class TempFileCleanupServiceTest {
         Path regularFile = Files.createFile(systemTempDir.resolve("important.txt"));
 
         // Configure mock registry to say these files aren't registered
-        when(registry.contains(any(File.class))).thenReturn(false);
+        Mockito.when(registry.contains(ArgumentMatchers.any(File.class))).thenReturn(false);
 
         // The set of files that will be deleted in our test
         Set<Path> deletedFiles = new HashSet<>();
 
         // Use MockedStatic to mock Files operations
-        try (MockedStatic<Files> mockedFiles = mockStatic(Files.class)) {
+        try (MockedStatic<Files> mockedFiles = Mockito.mockStatic(Files.class)) {
             // Mock Files.list for systemTempDir
             mockedFiles
                     .when(() -> Files.list(eq(systemTempDir)))
                     .thenReturn(Stream.of(ourTempFile, sysTempFile, regularFile));
 
             // Configure Files.isDirectory
-            mockedFiles.when(() -> Files.isDirectory(any(Path.class))).thenReturn(false);
+            mockedFiles
+                    .when(() -> Files.isDirectory(ArgumentMatchers.any(Path.class)))
+                    .thenReturn(false);
 
             // Configure Files.exists
-            mockedFiles.when(() -> Files.exists(any(Path.class))).thenReturn(true);
+            mockedFiles.when(() -> Files.exists(ArgumentMatchers.any(Path.class))).thenReturn(true);
 
             // Configure Files.getLastModifiedTime to return recent timestamps
             mockedFiles
-                    .when(() -> Files.getLastModifiedTime(any(Path.class)))
+                    .when(() -> Files.getLastModifiedTime(ArgumentMatchers.any(Path.class)))
                     .thenReturn(
                             FileTime.fromMillis(
                                     System.currentTimeMillis() - 60000)); // 1 minute ago
 
             // Configure Files.size to return normal size
-            mockedFiles.when(() -> Files.size(any(Path.class))).thenReturn(1024L); // 1 KB
+            mockedFiles
+                    .when(() -> Files.size(ArgumentMatchers.any(Path.class)))
+                    .thenReturn(1024L); // 1 KB
 
             // For deleteIfExists, track which files would be deleted
             mockedFiles
-                    .when(() -> Files.deleteIfExists(any(Path.class)))
+                    .when(() -> Files.deleteIfExists(ArgumentMatchers.any(Path.class)))
                     .thenAnswer(
                             invocation -> {
                                 Path path = invocation.getArgument(0);
@@ -306,18 +317,19 @@ public class TempFileCleanupServiceTest {
                             });
 
             // Act - set containerMode to true and maxAgeMillis to 0 for container startup cleanup
-            invokeCleanupDirectoryStreaming(systemTempDir, true, 0, 0);
+            invokeCleanupDirectoryStreaming(systemTempDir, true, 0);
 
             // Assert - In container mode, both our temp files and system temp files should be
             // deleted
             // regardless of age (when maxAgeMillis is 0)
-            assertTrue(
+            Assertions.assertTrue(
                     deletedFiles.contains(ourTempFile),
                     "Our temp file should be deleted in container mode");
-            assertTrue(
+            Assertions.assertTrue(
                     deletedFiles.contains(sysTempFile),
                     "System temp file should be deleted in container mode");
-            assertFalse(deletedFiles.contains(regularFile), "Regular file should be preserved");
+            Assertions.assertFalse(
+                    deletedFiles.contains(regularFile), "Regular file should be preserved");
         }
     }
 
@@ -328,27 +340,29 @@ public class TempFileCleanupServiceTest {
         Path recentEmptyFile = Files.createFile(systemTempDir.resolve("recent_empty.tmp"));
 
         // Configure mock registry to say these files aren't registered
-        when(registry.contains(any(File.class))).thenReturn(false);
+        Mockito.when(registry.contains(ArgumentMatchers.any(File.class))).thenReturn(false);
 
         // The set of files that will be deleted in our test
         Set<Path> deletedFiles = new HashSet<>();
 
         // Use MockedStatic to mock Files operations
-        try (MockedStatic<Files> mockedFiles = mockStatic(Files.class)) {
+        try (MockedStatic<Files> mockedFiles = Mockito.mockStatic(Files.class)) {
             // Mock Files.list for systemTempDir
             mockedFiles
                     .when(() -> Files.list(eq(systemTempDir)))
                     .thenReturn(Stream.of(emptyFile, recentEmptyFile));
 
             // Configure Files.isDirectory
-            mockedFiles.when(() -> Files.isDirectory(any(Path.class))).thenReturn(false);
+            mockedFiles
+                    .when(() -> Files.isDirectory(ArgumentMatchers.any(Path.class)))
+                    .thenReturn(false);
 
             // Configure Files.exists
-            mockedFiles.when(() -> Files.exists(any(Path.class))).thenReturn(true);
+            mockedFiles.when(() -> Files.exists(ArgumentMatchers.any(Path.class))).thenReturn(true);
 
             // Configure Files.getLastModifiedTime to return different times based on file names
             mockedFiles
-                    .when(() -> Files.getLastModifiedTime(any(Path.class)))
+                    .when(() -> Files.getLastModifiedTime(ArgumentMatchers.any(Path.class)))
                     .thenAnswer(
                             invocation -> {
                                 Path path = invocation.getArgument(0);
@@ -366,11 +380,11 @@ public class TempFileCleanupServiceTest {
                             });
 
             // Configure Files.size to return 0 for empty files
-            mockedFiles.when(() -> Files.size(any(Path.class))).thenReturn(0L);
+            mockedFiles.when(() -> Files.size(ArgumentMatchers.any(Path.class))).thenReturn(0L);
 
             // For deleteIfExists, track which files would be deleted
             mockedFiles
-                    .when(() -> Files.deleteIfExists(any(Path.class)))
+                    .when(() -> Files.deleteIfExists(ArgumentMatchers.any(Path.class)))
                     .thenAnswer(
                             invocation -> {
                                 Path path = invocation.getArgument(0);
@@ -379,13 +393,13 @@ public class TempFileCleanupServiceTest {
                             });
 
             // Act
-            invokeCleanupDirectoryStreaming(systemTempDir, false, 0, 3600000);
+            invokeCleanupDirectoryStreaming(systemTempDir, false, 3600000);
 
             // Assert
-            assertTrue(
+            Assertions.assertTrue(
                     deletedFiles.contains(emptyFile),
                     "Empty file older than 5 minutes should be deleted");
-            assertFalse(
+            Assertions.assertFalse(
                     deletedFiles.contains(recentEmptyFile),
                     "Empty file newer than 5 minutes should not be deleted");
         }
@@ -403,13 +417,13 @@ public class TempFileCleanupServiceTest {
         Path tempFile3 = Files.createFile(dir3.resolve("output_old_3.pdf"));
 
         // Configure mock registry to say these files aren't registered
-        when(registry.contains(any(File.class))).thenReturn(false);
+        Mockito.when(registry.contains(ArgumentMatchers.any(File.class))).thenReturn(false);
 
         // The set of files that will be deleted in our test
         Set<Path> deletedFiles = new HashSet<>();
 
         // Use MockedStatic to mock Files operations
-        try (MockedStatic<Files> mockedFiles = mockStatic(Files.class)) {
+        try (MockedStatic<Files> mockedFiles = Mockito.mockStatic(Files.class)) {
             // Mock Files.list for each directory
             mockedFiles.when(() -> Files.list(eq(systemTempDir))).thenReturn(Stream.of(dir1));
 
@@ -428,11 +442,11 @@ public class TempFileCleanupServiceTest {
             mockedFiles.when(() -> Files.isDirectory(eq(tempFile3))).thenReturn(false);
 
             // Configure Files.exists to return true for all paths
-            mockedFiles.when(() -> Files.exists(any(Path.class))).thenReturn(true);
+            mockedFiles.when(() -> Files.exists(ArgumentMatchers.any(Path.class))).thenReturn(true);
 
             // Configure Files.getLastModifiedTime to return different times based on file names
             mockedFiles
-                    .when(() -> Files.getLastModifiedTime(any(Path.class)))
+                    .when(() -> Files.getLastModifiedTime(ArgumentMatchers.any(Path.class)))
                     .thenAnswer(
                             invocation -> {
                                 Path path = invocation.getArgument(0);
@@ -449,11 +463,11 @@ public class TempFileCleanupServiceTest {
                             });
 
             // Configure Files.size to return normal size
-            mockedFiles.when(() -> Files.size(any(Path.class))).thenReturn(1024L);
+            mockedFiles.when(() -> Files.size(ArgumentMatchers.any(Path.class))).thenReturn(1024L);
 
             // For deleteIfExists, track which files would be deleted
             mockedFiles
-                    .when(() -> Files.deleteIfExists(any(Path.class)))
+                    .when(() -> Files.deleteIfExists(ArgumentMatchers.any(Path.class)))
                     .thenAnswer(
                             invocation -> {
                                 Path path = invocation.getArgument(0);
@@ -462,16 +476,18 @@ public class TempFileCleanupServiceTest {
                             });
 
             // Act
-            invokeCleanupDirectoryStreaming(systemTempDir, false, 0, 3600000);
+            invokeCleanupDirectoryStreaming(systemTempDir, false, 3600000);
 
             // Debug - print what was deleted
             System.out.println("Deleted files: " + deletedFiles);
             System.out.println("Looking for: " + tempFile3);
 
             // Assert
-            assertFalse(deletedFiles.contains(tempFile1), "Recent temp file should be preserved");
-            assertFalse(deletedFiles.contains(tempFile2), "Recent temp file should be preserved");
-            assertTrue(
+            Assertions.assertFalse(
+                    deletedFiles.contains(tempFile1), "Recent temp file should be preserved");
+            Assertions.assertFalse(
+                    deletedFiles.contains(tempFile2), "Recent temp file should be preserved");
+            Assertions.assertTrue(
                     deletedFiles.contains(tempFile3),
                     "Old temp file in nested directory should be deleted");
         }
@@ -479,8 +495,7 @@ public class TempFileCleanupServiceTest {
 
     /** Helper method to invoke the private cleanupDirectoryStreaming method using reflection */
     private void invokeCleanupDirectoryStreaming(
-            Path directory, boolean containerMode, int depth, long maxAgeMillis)
-            throws IOException {
+            Path directory, boolean containerMode, long maxAgeMillis) {
         try {
             // Create a consumer that tracks deleted files
             AtomicInteger deleteCount = new AtomicInteger(0);
@@ -503,17 +518,12 @@ public class TempFileCleanupServiceTest {
                     cleanupService,
                     directory,
                     containerMode,
-                    depth,
+                    0,
                     maxAgeMillis,
                     false,
                     deleteCallback);
         } catch (Exception e) {
             throw new RuntimeException("Error invoking cleanupDirectoryStreaming", e);
         }
-    }
-
-    // Matcher for exact path equality
-    private static Path eq(Path path) {
-        return argThat(arg -> arg != null && arg.equals(path));
     }
 }

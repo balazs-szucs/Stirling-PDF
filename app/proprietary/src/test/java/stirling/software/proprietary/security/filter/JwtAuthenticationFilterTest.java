@@ -1,27 +1,14 @@
 package stirling.software.proprietary.security.filter;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.argThat;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mockStatic;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-
 import java.io.IOException;
 import java.util.Collections;
 import java.util.Map;
 
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.MockedStatic;
+import org.mockito.*;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContext;
@@ -69,23 +56,23 @@ class JwtAuthenticationFilterTest {
 
     @Test
     void shouldNotAuthenticateWhenJwtDisabled() throws ServletException, IOException {
-        when(jwtService.isJwtEnabled()).thenReturn(false);
+        Mockito.when(jwtService.isJwtEnabled()).thenReturn(false);
 
         jwtAuthenticationFilter.doFilterInternal(request, response, filterChain);
 
-        verify(filterChain).doFilter(request, response);
-        verify(jwtService, never()).extractToken(any());
+        Mockito.verify(filterChain).doFilter(request, response);
+        Mockito.verify(jwtService, Mockito.never()).extractToken(ArgumentMatchers.any());
     }
 
     @Test
     void shouldNotFilterWhenPageIsLogin() throws ServletException, IOException {
-        when(jwtService.isJwtEnabled()).thenReturn(true);
-        when(request.getRequestURI()).thenReturn("/login");
-        when(request.getContextPath()).thenReturn("/login");
+        Mockito.when(jwtService.isJwtEnabled()).thenReturn(true);
+        Mockito.when(request.getRequestURI()).thenReturn("/login");
+        Mockito.when(request.getContextPath()).thenReturn("/login");
 
         jwtAuthenticationFilter.doFilterInternal(request, response, filterChain);
 
-        verify(filterChain, never()).doFilter(request, response);
+        Mockito.verify(filterChain, Mockito.never()).doFilter(request, response);
     }
 
     @Test
@@ -95,93 +82,107 @@ class JwtAuthenticationFilterTest {
         String username = "testuser";
         Map<String, Object> claims = Map.of("sub", username, "authType", "WEB");
 
-        when(jwtService.isJwtEnabled()).thenReturn(true);
-        when(request.getContextPath()).thenReturn("/");
-        when(request.getRequestURI()).thenReturn("/protected");
-        when(jwtService.extractToken(request)).thenReturn(token);
-        doNothing().when(jwtService).validateToken(token);
-        when(jwtService.extractClaims(token)).thenReturn(claims);
-        when(userDetails.getAuthorities()).thenReturn(Collections.emptyList());
-        when(userDetailsService.loadUserByUsername(username)).thenReturn(userDetails);
+        Mockito.when(jwtService.isJwtEnabled()).thenReturn(true);
+        Mockito.when(request.getContextPath()).thenReturn("/");
+        Mockito.when(request.getRequestURI()).thenReturn("/protected");
+        Mockito.when(jwtService.extractToken(request)).thenReturn(token);
+        Mockito.doNothing().when(jwtService).validateToken(token);
+        Mockito.when(jwtService.extractClaims(token)).thenReturn(claims);
+        Mockito.when(userDetails.getAuthorities()).thenReturn(Collections.emptyList());
+        Mockito.when(userDetailsService.loadUserByUsername(username)).thenReturn(userDetails);
 
         try (MockedStatic<SecurityContextHolder> mockedSecurityContextHolder =
-                mockStatic(SecurityContextHolder.class)) {
+                Mockito.mockStatic(SecurityContextHolder.class)) {
             UsernamePasswordAuthenticationToken authToken =
                     new UsernamePasswordAuthenticationToken(
                             userDetails, null, userDetails.getAuthorities());
 
-            when(securityContext.getAuthentication()).thenReturn(null).thenReturn(authToken);
+            Mockito.when(securityContext.getAuthentication())
+                    .thenReturn(null)
+                    .thenReturn(authToken);
             mockedSecurityContextHolder
                     .when(SecurityContextHolder::getContext)
                     .thenReturn(securityContext);
-            when(jwtService.generateToken(
-                            any(UsernamePasswordAuthenticationToken.class), eq(claims)))
+            Mockito.when(
+                            jwtService.generateToken(
+                                    ArgumentMatchers.any(UsernamePasswordAuthenticationToken.class),
+                                    ArgumentMatchers.eq(claims)))
                     .thenReturn(newToken);
 
             jwtAuthenticationFilter.doFilterInternal(request, response, filterChain);
 
-            verify(jwtService).validateToken(token);
-            verify(jwtService).extractClaims(token);
-            verify(userDetailsService).loadUserByUsername(username);
-            verify(securityContext)
-                    .setAuthentication(any(UsernamePasswordAuthenticationToken.class));
-            verify(jwtService)
-                    .generateToken(any(UsernamePasswordAuthenticationToken.class), eq(claims));
-            verify(jwtService).addToken(response, newToken);
-            verify(filterChain).doFilter(request, response);
+            Mockito.verify(jwtService).validateToken(token);
+            Mockito.verify(jwtService).extractClaims(token);
+            Mockito.verify(userDetailsService).loadUserByUsername(username);
+            Mockito.verify(securityContext)
+                    .setAuthentication(
+                            ArgumentMatchers.any(UsernamePasswordAuthenticationToken.class));
+            Mockito.verify(jwtService)
+                    .generateToken(
+                            ArgumentMatchers.any(UsernamePasswordAuthenticationToken.class),
+                            ArgumentMatchers.eq(claims));
+            Mockito.verify(jwtService).addToken(response, newToken);
+            Mockito.verify(filterChain).doFilter(request, response);
         }
     }
 
     @Test
     void testDoFilterInternalWithMissingTokenForRootPath() throws ServletException, IOException {
-        when(jwtService.isJwtEnabled()).thenReturn(true);
-        when(request.getRequestURI()).thenReturn("/");
-        when(request.getMethod()).thenReturn("GET");
-        when(jwtService.extractToken(request)).thenReturn(null);
+        Mockito.when(jwtService.isJwtEnabled()).thenReturn(true);
+        Mockito.when(request.getRequestURI()).thenReturn("/");
+        Mockito.when(request.getMethod()).thenReturn("GET");
+        Mockito.when(jwtService.extractToken(request)).thenReturn(null);
 
         jwtAuthenticationFilter.doFilterInternal(request, response, filterChain);
 
-        verify(response).sendRedirect("/login");
-        verify(filterChain, never()).doFilter(request, response);
+        Mockito.verify(response).sendRedirect("/login");
+        Mockito.verify(filterChain, Mockito.never()).doFilter(request, response);
     }
 
     @Test
     void validationFailsWithInvalidToken() throws ServletException, IOException {
         String token = "invalid-jwt-token";
 
-        when(jwtService.isJwtEnabled()).thenReturn(true);
-        when(request.getRequestURI()).thenReturn("/protected");
-        when(request.getContextPath()).thenReturn("/");
-        when(jwtService.extractToken(request)).thenReturn(token);
-        doThrow(new AuthenticationFailureException("Invalid token"))
+        Mockito.when(jwtService.isJwtEnabled()).thenReturn(true);
+        Mockito.when(request.getRequestURI()).thenReturn("/protected");
+        Mockito.when(request.getContextPath()).thenReturn("/");
+        Mockito.when(jwtService.extractToken(request)).thenReturn(token);
+        Mockito.doThrow(new AuthenticationFailureException("Invalid token"))
                 .when(jwtService)
                 .validateToken(token);
 
         jwtAuthenticationFilter.doFilterInternal(request, response, filterChain);
 
-        verify(jwtService).validateToken(token);
-        verify(authenticationEntryPoint)
-                .commence(eq(request), eq(response), any(AuthenticationFailureException.class));
-        verify(filterChain, never()).doFilter(request, response);
+        Mockito.verify(jwtService).validateToken(token);
+        Mockito.verify(authenticationEntryPoint)
+                .commence(
+                        ArgumentMatchers.eq(request),
+                        ArgumentMatchers.eq(response),
+                        ArgumentMatchers.any(AuthenticationFailureException.class));
+        Mockito.verify(filterChain, Mockito.never()).doFilter(request, response);
     }
 
     @Test
     void validationFailsWithExpiredToken() throws ServletException, IOException {
         String token = "expired-jwt-token";
 
-        when(jwtService.isJwtEnabled()).thenReturn(true);
-        when(request.getRequestURI()).thenReturn("/protected");
-        when(request.getContextPath()).thenReturn("/");
-        when(jwtService.extractToken(request)).thenReturn(token);
-        doThrow(new AuthenticationFailureException("The token has expired"))
+        Mockito.when(jwtService.isJwtEnabled()).thenReturn(true);
+        Mockito.when(request.getRequestURI()).thenReturn("/protected");
+        Mockito.when(request.getContextPath()).thenReturn("/");
+        Mockito.when(jwtService.extractToken(request)).thenReturn(token);
+        Mockito.doThrow(new AuthenticationFailureException("The token has expired"))
                 .when(jwtService)
                 .validateToken(token);
 
         jwtAuthenticationFilter.doFilterInternal(request, response, filterChain);
 
-        verify(jwtService).validateToken(token);
-        verify(authenticationEntryPoint).commence(eq(request), eq(response), any());
-        verify(filterChain, never()).doFilter(request, response);
+        Mockito.verify(jwtService).validateToken(token);
+        Mockito.verify(authenticationEntryPoint)
+                .commence(
+                        ArgumentMatchers.eq(request),
+                        ArgumentMatchers.eq(response),
+                        ArgumentMatchers.any());
+        Mockito.verify(filterChain, Mockito.never()).doFilter(request, response);
     }
 
     @Test
@@ -190,53 +191,53 @@ class JwtAuthenticationFilterTest {
         String username = "nonexistentuser";
         Map<String, Object> claims = Map.of("sub", username, "authType", "WEB");
 
-        when(jwtService.isJwtEnabled()).thenReturn(true);
-        when(request.getRequestURI()).thenReturn("/protected");
-        when(request.getContextPath()).thenReturn("/");
-        when(jwtService.extractToken(request)).thenReturn(token);
-        doNothing().when(jwtService).validateToken(token);
-        when(jwtService.extractClaims(token)).thenReturn(claims);
-        when(userDetailsService.loadUserByUsername(username)).thenReturn(null);
+        Mockito.when(jwtService.isJwtEnabled()).thenReturn(true);
+        Mockito.when(request.getRequestURI()).thenReturn("/protected");
+        Mockito.when(request.getContextPath()).thenReturn("/");
+        Mockito.when(jwtService.extractToken(request)).thenReturn(token);
+        Mockito.doNothing().when(jwtService).validateToken(token);
+        Mockito.when(jwtService.extractClaims(token)).thenReturn(claims);
+        Mockito.when(userDetailsService.loadUserByUsername(username)).thenReturn(null);
 
         try (MockedStatic<SecurityContextHolder> mockedSecurityContextHolder =
-                mockStatic(SecurityContextHolder.class)) {
-            when(securityContext.getAuthentication()).thenReturn(null);
+                Mockito.mockStatic(SecurityContextHolder.class)) {
+            Mockito.when(securityContext.getAuthentication()).thenReturn(null);
             mockedSecurityContextHolder
                     .when(SecurityContextHolder::getContext)
                     .thenReturn(securityContext);
 
             UsernameNotFoundException result =
-                    assertThrows(
+                    Assertions.assertThrows(
                             UsernameNotFoundException.class,
                             () ->
                                     jwtAuthenticationFilter.doFilterInternal(
                                             request, response, filterChain));
 
-            assertEquals("User not found: " + username, result.getMessage());
-            verify(userDetailsService).loadUserByUsername(username);
-            verify(filterChain, never()).doFilter(request, response);
+            Assertions.assertEquals("User not found: " + username, result.getMessage());
+            Mockito.verify(userDetailsService).loadUserByUsername(username);
+            Mockito.verify(filterChain, Mockito.never()).doFilter(request, response);
         }
     }
 
     @Test
     void testAuthenticationEntryPointCalledWithCorrectException()
             throws ServletException, IOException {
-        when(jwtService.isJwtEnabled()).thenReturn(true);
-        when(request.getRequestURI()).thenReturn("/protected");
-        when(request.getContextPath()).thenReturn("/");
-        when(jwtService.extractToken(request)).thenReturn(null);
+        Mockito.when(jwtService.isJwtEnabled()).thenReturn(true);
+        Mockito.when(request.getRequestURI()).thenReturn("/protected");
+        Mockito.when(request.getContextPath()).thenReturn("/");
+        Mockito.when(jwtService.extractToken(request)).thenReturn(null);
 
         jwtAuthenticationFilter.doFilterInternal(request, response, filterChain);
 
-        verify(authenticationEntryPoint)
+        Mockito.verify(authenticationEntryPoint)
                 .commence(
-                        eq(request),
-                        eq(response),
-                        argThat(
+                        ArgumentMatchers.eq(request),
+                        ArgumentMatchers.eq(response),
+                        ArgumentMatchers.argThat(
                                 exception ->
                                         exception
                                                 .getMessage()
                                                 .equals("JWT is missing from the request")));
-        verify(filterChain, never()).doFilter(request, response);
+        Mockito.verify(filterChain, Mockito.never()).doFilter(request, response);
     }
 }

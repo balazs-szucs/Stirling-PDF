@@ -1,20 +1,17 @@
 package stirling.software.SPDF.service;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.Calendar;
+import java.util.GregorianCalendar;
 
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDDocumentInformation;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
+import org.mockito.Mockito;
 
 import stirling.software.common.model.ApplicationProperties;
 import stirling.software.common.model.ApplicationProperties.Premium;
@@ -26,23 +23,21 @@ import stirling.software.common.service.UserServiceInterface;
 
 class PdfMetadataServiceBasicTest {
 
-    private ApplicationProperties applicationProperties;
-    private UserServiceInterface userService;
     private PdfMetadataService pdfMetadataService;
-    private final String STIRLING_PDF_LABEL = "Stirling PDF";
+    private static final String STIRLING_PDF_LABEL = "Stirling PDF";
 
     @BeforeEach
     void setUp() {
         // Set up mocks for application properties' nested objects
-        applicationProperties = mock(ApplicationProperties.class);
-        Premium premium = mock(Premium.class);
-        ProFeatures proFeatures = mock(ProFeatures.class);
-        CustomMetadata customMetadata = mock(CustomMetadata.class);
-        userService = mock(UserServiceInterface.class);
+        ApplicationProperties applicationProperties = Mockito.mock(ApplicationProperties.class);
+        Premium premium = Mockito.mock(Premium.class);
+        ProFeatures proFeatures = Mockito.mock(ProFeatures.class);
+        CustomMetadata customMetadata = Mockito.mock(CustomMetadata.class);
+        UserServiceInterface userService = Mockito.mock(UserServiceInterface.class);
 
-        when(applicationProperties.getPremium()).thenReturn(premium);
-        when(premium.getProFeatures()).thenReturn(proFeatures);
-        when(proFeatures.getCustomMetadata()).thenReturn(customMetadata);
+        Mockito.when(applicationProperties.getPremium()).thenReturn(premium);
+        Mockito.when(premium.getProFeatures()).thenReturn(proFeatures);
+        Mockito.when(proFeatures.getCustomMetadata()).thenReturn(customMetadata);
 
         // Set up the service under test
         pdfMetadataService =
@@ -56,9 +51,9 @@ class PdfMetadataServiceBasicTest {
     @Test
     void testExtractMetadataFromPdf() {
         // Create test document
-        PDDocument testDocument = mock(PDDocument.class);
-        PDDocumentInformation testInfo = mock(PDDocumentInformation.class);
-        when(testDocument.getDocumentInformation()).thenReturn(testInfo);
+        PDDocument testDocument = Mockito.mock(PDDocument.class);
+        PDDocumentInformation testInfo = Mockito.mock(PDDocumentInformation.class);
+        Mockito.when(testDocument.getDocumentInformation()).thenReturn(testInfo);
 
         // Set up expected metadata values
         String testAuthor = "Test Author";
@@ -67,18 +62,22 @@ class PdfMetadataServiceBasicTest {
         String testCreator = "Test Creator";
         String testSubject = "Test Subject";
         String testKeywords = "Test Keywords";
-        Calendar creationDate = Calendar.getInstance();
-        Calendar modificationDate = Calendar.getInstance();
+        // Use deterministic ZonedDateTime values and convert to GregorianCalendar
+        ZonedDateTime fixedCreation = ZonedDateTime.of(2020, 1, 2, 3, 4, 5, 0, ZoneId.of("UTC"));
+        ZonedDateTime fixedModification =
+                ZonedDateTime.of(2021, 6, 7, 8, 9, 10, 0, ZoneId.of("UTC"));
+        Calendar creationDate = GregorianCalendar.from(fixedCreation);
+        Calendar modificationDate = GregorianCalendar.from(fixedModification);
 
         // Configure mock returns
-        when(testInfo.getAuthor()).thenReturn(testAuthor);
-        when(testInfo.getProducer()).thenReturn(testProducer);
-        when(testInfo.getTitle()).thenReturn(testTitle);
-        when(testInfo.getCreator()).thenReturn(testCreator);
-        when(testInfo.getSubject()).thenReturn(testSubject);
-        when(testInfo.getKeywords()).thenReturn(testKeywords);
-        when(testInfo.getCreationDate()).thenReturn(creationDate);
-        when(testInfo.getModificationDate()).thenReturn(modificationDate);
+        Mockito.when(testInfo.getAuthor()).thenReturn(testAuthor);
+        Mockito.when(testInfo.getProducer()).thenReturn(testProducer);
+        Mockito.when(testInfo.getTitle()).thenReturn(testTitle);
+        Mockito.when(testInfo.getCreator()).thenReturn(testCreator);
+        Mockito.when(testInfo.getSubject()).thenReturn(testSubject);
+        Mockito.when(testInfo.getKeywords()).thenReturn(testKeywords);
+        Mockito.when(testInfo.getCreationDate()).thenReturn(creationDate);
+        Mockito.when(testInfo.getModificationDate()).thenReturn(modificationDate);
 
         // Act
         PdfMetadata metadata = pdfMetadataService.extractMetadataFromPdf(testDocument);
@@ -90,15 +89,15 @@ class PdfMetadataServiceBasicTest {
                 ZonedDateTime.ofInstant(modificationDate.toInstant(), ZoneId.systemDefault());
 
         // Assert
-        assertEquals(testAuthor, metadata.getAuthor(), "Author should match");
-        assertEquals(testProducer, metadata.getProducer(), "Producer should match");
-        assertEquals(testTitle, metadata.getTitle(), "Title should match");
-        assertEquals(testCreator, metadata.getCreator(), "Creator should match");
-        assertEquals(testSubject, metadata.getSubject(), "Subject should match");
-        assertEquals(testKeywords, metadata.getKeywords(), "Keywords should match");
-        assertEquals(
+        Assertions.assertEquals(testAuthor, metadata.getAuthor(), "Author should match");
+        Assertions.assertEquals(testProducer, metadata.getProducer(), "Producer should match");
+        Assertions.assertEquals(testTitle, metadata.getTitle(), "Title should match");
+        Assertions.assertEquals(testCreator, metadata.getCreator(), "Creator should match");
+        Assertions.assertEquals(testSubject, metadata.getSubject(), "Subject should match");
+        Assertions.assertEquals(testKeywords, metadata.getKeywords(), "Keywords should match");
+        Assertions.assertEquals(
                 expectedCreationDate, metadata.getCreationDate(), "Creation date should match");
-        assertEquals(
+        Assertions.assertEquals(
                 expectedModificationDate,
                 metadata.getModificationDate(),
                 "Modification date should match");
@@ -107,15 +106,16 @@ class PdfMetadataServiceBasicTest {
     @Test
     void testSetDefaultMetadata() {
         // Create test document
-        PDDocument testDocument = mock(PDDocument.class);
-        PDDocumentInformation testInfo = mock(PDDocumentInformation.class);
-        when(testDocument.getDocumentInformation()).thenReturn(testInfo);
+        PDDocument testDocument = Mockito.mock(PDDocument.class);
+        PDDocumentInformation testInfo = Mockito.mock(PDDocumentInformation.class);
+        Mockito.when(testDocument.getDocumentInformation()).thenReturn(testInfo);
 
         // Act
         pdfMetadataService.setDefaultMetadata(testDocument);
 
         // Verify basic calls
-        verify(testInfo, times(1)).setModificationDate(any(Calendar.class));
-        verify(testInfo, times(1)).setProducer(STIRLING_PDF_LABEL);
+        Mockito.verify(testInfo, Mockito.times(1))
+                .setModificationDate(ArgumentMatchers.any(Calendar.class));
+        Mockito.verify(testInfo, Mockito.times(1)).setProducer(STIRLING_PDF_LABEL);
     }
 }

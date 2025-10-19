@@ -1,9 +1,8 @@
 package stirling.software.SPDF.model.api.converters;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
 import java.util.Set;
 
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -30,7 +29,7 @@ public class PdfVectorExportRequestTest {
 
         Set<ConstraintViolation<PdfVectorExportRequest>> violations = validator.validate(request);
 
-        assertThat(violations).isEmpty();
+        Assertions.assertThat(violations).isEmpty();
     }
 
     @Test
@@ -40,8 +39,8 @@ public class PdfVectorExportRequestTest {
 
         Set<ConstraintViolation<PdfVectorExportRequest>> violations = validator.validate(request);
 
-        assertThat(violations).hasSize(1);
-        assertThat(violations.iterator().next().getPropertyPath().toString())
+        Assertions.assertThat(violations).hasSize(1);
+        Assertions.assertThat(violations.iterator().next().getPropertyPath().toString())
                 .isEqualTo("outputFormat");
     }
 }

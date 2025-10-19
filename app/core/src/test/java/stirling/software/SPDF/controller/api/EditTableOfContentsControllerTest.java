@@ -1,8 +1,5 @@
 package stirling.software.SPDF.controller.api;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
-
 import java.io.ByteArrayOutputStream;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -15,13 +12,11 @@ import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageTree;
 import org.apache.pdfbox.pdmodel.interactive.documentnavigation.outline.PDDocumentOutline;
 import org.apache.pdfbox.pdmodel.interactive.documentnavigation.outline.PDOutlineItem;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.ArgumentMatchers;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
+import org.mockito.*;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -60,134 +55,135 @@ class EditTableOfContentsControllerTest {
                         "test.pdf",
                         MediaType.APPLICATION_PDF_VALUE,
                         "PDF content".getBytes());
-        mockDocument = mock(PDDocument.class);
-        mockCatalog = mock(PDDocumentCatalog.class);
-        mockPages = mock(PDPageTree.class);
-        mockPage1 = mock(PDPage.class);
-        mockPage2 = mock(PDPage.class);
-        mockOutline = mock(PDDocumentOutline.class);
-        mockOutlineItem = mock(PDOutlineItem.class);
+        mockDocument = Mockito.mock(PDDocument.class);
+        mockCatalog = Mockito.mock(PDDocumentCatalog.class);
+        mockPages = Mockito.mock(PDPageTree.class);
+        mockPage1 = Mockito.mock(PDPage.class);
+        mockPage2 = Mockito.mock(PDPage.class);
+        mockOutline = Mockito.mock(PDDocumentOutline.class);
+        mockOutlineItem = Mockito.mock(PDOutlineItem.class);
     }
 
     @Test
     void testExtractBookmarks_WithExistingBookmarks_Success() throws Exception {
         // Given
-        when(pdfDocumentFactory.load(mockFile)).thenReturn(mockDocument);
-        when(mockDocument.getDocumentCatalog()).thenReturn(mockCatalog);
-        when(mockCatalog.getDocumentOutline()).thenReturn(mockOutline);
-        when(mockOutline.getFirstChild()).thenReturn(mockOutlineItem);
+        Mockito.when(pdfDocumentFactory.load(mockFile)).thenReturn(mockDocument);
+        Mockito.when(mockDocument.getDocumentCatalog()).thenReturn(mockCatalog);
+        Mockito.when(mockCatalog.getDocumentOutline()).thenReturn(mockOutline);
+        Mockito.when(mockOutline.getFirstChild()).thenReturn(mockOutlineItem);
 
-        when(mockOutlineItem.getTitle()).thenReturn("Chapter 1");
-        when(mockOutlineItem.findDestinationPage(mockDocument)).thenReturn(mockPage1);
-        when(mockDocument.getPages()).thenReturn(mockPages);
-        when(mockPages.indexOf(mockPage1)).thenReturn(0);
-        when(mockOutlineItem.getFirstChild()).thenReturn(null);
-        when(mockOutlineItem.getNextSibling()).thenReturn(null);
+        Mockito.when(mockOutlineItem.getTitle()).thenReturn("Chapter 1");
+        Mockito.when(mockOutlineItem.findDestinationPage(mockDocument)).thenReturn(mockPage1);
+        Mockito.when(mockDocument.getPages()).thenReturn(mockPages);
+        Mockito.when(mockPages.indexOf(mockPage1)).thenReturn(0);
+        Mockito.when(mockOutlineItem.getFirstChild()).thenReturn(null);
+        Mockito.when(mockOutlineItem.getNextSibling()).thenReturn(null);
 
         // When
         List<Map<String, Object>> result = editTableOfContentsController.extractBookmarks(mockFile);
 
         // Then
-        assertNotNull(result);
-        assertEquals(1, result.size());
+        Assertions.assertNotNull(result);
+        Assertions.assertEquals(1, result.size());
 
         Map<String, Object> bookmark = result.get(0);
-        assertEquals("Chapter 1", bookmark.get("title"));
-        assertEquals(1, bookmark.get("pageNumber")); // 1-based
-        assertInstanceOf(List.class, bookmark.get("children"));
+        Assertions.assertEquals("Chapter 1", bookmark.get("title"));
+        Assertions.assertEquals(1, bookmark.get("pageNumber")); // 1-based
+        Assertions.assertInstanceOf(List.class, bookmark.get("children"));
 
-        verify(mockDocument).close();
+        Mockito.verify(mockDocument).close();
     }
 
     @Test
     void testExtractBookmarks_NoOutline_ReturnsEmptyList() throws Exception {
         // Given
-        when(pdfDocumentFactory.load(mockFile)).thenReturn(mockDocument);
-        when(mockDocument.getDocumentCatalog()).thenReturn(mockCatalog);
-        when(mockCatalog.getDocumentOutline()).thenReturn(null);
+        Mockito.when(pdfDocumentFactory.load(mockFile)).thenReturn(mockDocument);
+        Mockito.when(mockDocument.getDocumentCatalog()).thenReturn(mockCatalog);
+        Mockito.when(mockCatalog.getDocumentOutline()).thenReturn(null);
 
         // When
         List<Map<String, Object>> result = editTableOfContentsController.extractBookmarks(mockFile);
 
         // Then
-        assertNotNull(result);
-        assertTrue(result.isEmpty());
-        verify(mockDocument).close();
+        Assertions.assertNotNull(result);
+        Assertions.assertTrue(result.isEmpty());
+        Mockito.verify(mockDocument).close();
     }
 
     @Test
     void testExtractBookmarks_WithNestedBookmarks_Success() throws Exception {
         // Given
-        PDOutlineItem childItem = mock(PDOutlineItem.class);
+        PDOutlineItem childItem = Mockito.mock(PDOutlineItem.class);
 
-        when(pdfDocumentFactory.load(mockFile)).thenReturn(mockDocument);
-        when(mockDocument.getDocumentCatalog()).thenReturn(mockCatalog);
-        when(mockCatalog.getDocumentOutline()).thenReturn(mockOutline);
-        when(mockOutline.getFirstChild()).thenReturn(mockOutlineItem);
+        Mockito.when(pdfDocumentFactory.load(mockFile)).thenReturn(mockDocument);
+        Mockito.when(mockDocument.getDocumentCatalog()).thenReturn(mockCatalog);
+        Mockito.when(mockCatalog.getDocumentOutline()).thenReturn(mockOutline);
+        Mockito.when(mockOutline.getFirstChild()).thenReturn(mockOutlineItem);
 
         // Parent bookmark
-        when(mockOutlineItem.getTitle()).thenReturn("Chapter 1");
-        when(mockOutlineItem.findDestinationPage(mockDocument)).thenReturn(mockPage1);
-        when(mockDocument.getPages()).thenReturn(mockPages);
-        when(mockPages.indexOf(mockPage1)).thenReturn(0);
-        when(mockOutlineItem.getFirstChild()).thenReturn(childItem);
-        when(mockOutlineItem.getNextSibling()).thenReturn(null);
+        Mockito.when(mockOutlineItem.getTitle()).thenReturn("Chapter 1");
+        Mockito.when(mockOutlineItem.findDestinationPage(mockDocument)).thenReturn(mockPage1);
+        Mockito.when(mockDocument.getPages()).thenReturn(mockPages);
+        Mockito.when(mockPages.indexOf(mockPage1)).thenReturn(0);
+        Mockito.when(mockOutlineItem.getFirstChild()).thenReturn(childItem);
+        Mockito.when(mockOutlineItem.getNextSibling()).thenReturn(null);
 
         // Child bookmark
-        when(childItem.getTitle()).thenReturn("Section 1.1");
-        when(childItem.findDestinationPage(mockDocument)).thenReturn(mockPage2);
-        when(mockPages.indexOf(mockPage2)).thenReturn(1);
-        when(childItem.getFirstChild()).thenReturn(null);
-        when(childItem.getNextSibling()).thenReturn(null);
+        Mockito.when(childItem.getTitle()).thenReturn("Section 1.1");
+        Mockito.when(childItem.findDestinationPage(mockDocument)).thenReturn(mockPage2);
+        Mockito.when(mockPages.indexOf(mockPage2)).thenReturn(1);
+        Mockito.when(childItem.getFirstChild()).thenReturn(null);
+        Mockito.when(childItem.getNextSibling()).thenReturn(null);
 
         // When
         List<Map<String, Object>> result = editTableOfContentsController.extractBookmarks(mockFile);
 
         // Then
-        assertNotNull(result);
-        assertEquals(1, result.size());
+        Assertions.assertNotNull(result);
+        Assertions.assertEquals(1, result.size());
 
         Map<String, Object> parentBookmark = result.get(0);
-        assertEquals("Chapter 1", parentBookmark.get("title"));
-        assertEquals(1, parentBookmark.get("pageNumber"));
+        Assertions.assertEquals("Chapter 1", parentBookmark.get("title"));
+        Assertions.assertEquals(1, parentBookmark.get("pageNumber"));
 
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> children =
                 (List<Map<String, Object>>) parentBookmark.get("children");
-        assertEquals(1, children.size());
+        Assertions.assertEquals(1, children.size());
 
         Map<String, Object> childBookmark = children.get(0);
-        assertEquals("Section 1.1", childBookmark.get("title"));
-        assertEquals(2, childBookmark.get("pageNumber"));
+        Assertions.assertEquals("Section 1.1", childBookmark.get("title"));
+        Assertions.assertEquals(2, childBookmark.get("pageNumber"));
 
-        verify(mockDocument).close();
+        Mockito.verify(mockDocument).close();
     }
 
     @Test
     void testExtractBookmarks_PageNotFound_UsesPageOne() throws Exception {
         // Given
-        when(pdfDocumentFactory.load(mockFile)).thenReturn(mockDocument);
-        when(mockDocument.getDocumentCatalog()).thenReturn(mockCatalog);
-        when(mockCatalog.getDocumentOutline()).thenReturn(mockOutline);
-        when(mockOutline.getFirstChild()).thenReturn(mockOutlineItem);
+        Mockito.when(pdfDocumentFactory.load(mockFile)).thenReturn(mockDocument);
+        Mockito.when(mockDocument.getDocumentCatalog()).thenReturn(mockCatalog);
+        Mockito.when(mockCatalog.getDocumentOutline()).thenReturn(mockOutline);
+        Mockito.when(mockOutline.getFirstChild()).thenReturn(mockOutlineItem);
 
-        when(mockOutlineItem.getTitle()).thenReturn("Chapter 1");
-        when(mockOutlineItem.findDestinationPage(mockDocument)).thenReturn(null); // Page not found
-        when(mockOutlineItem.getFirstChild()).thenReturn(null);
-        when(mockOutlineItem.getNextSibling()).thenReturn(null);
+        Mockito.when(mockOutlineItem.getTitle()).thenReturn("Chapter 1");
+        Mockito.when(mockOutlineItem.findDestinationPage(mockDocument))
+                .thenReturn(null); // Page not found
+        Mockito.when(mockOutlineItem.getFirstChild()).thenReturn(null);
+        Mockito.when(mockOutlineItem.getNextSibling()).thenReturn(null);
 
         // When
         List<Map<String, Object>> result = editTableOfContentsController.extractBookmarks(mockFile);
 
         // Then
-        assertNotNull(result);
-        assertEquals(1, result.size());
+        Assertions.assertNotNull(result);
+        Assertions.assertEquals(1, result.size());
 
         Map<String, Object> bookmark = result.get(0);
-        assertEquals("Chapter 1", bookmark.get("title"));
-        assertEquals(1, bookmark.get("pageNumber")); // Default to page 1
+        Assertions.assertEquals("Chapter 1", bookmark.get("title"));
+        Assertions.assertEquals(1, bookmark.get("pageNumber")); // Default to page 1
 
-        verify(mockDocument).close();
+        Mockito.verify(mockDocument).close();
     }
 
     @Test
@@ -205,40 +201,41 @@ class EditTableOfContentsControllerTest {
         bookmark.setChildren(new ArrayList<>());
         bookmarks.add(bookmark);
 
-        when(pdfDocumentFactory.load(mockFile)).thenReturn(mockDocument);
-        when(objectMapper.readValue(
-                        eq(request.getBookmarkData()),
-                        ArgumentMatchers.<TypeReference<List<BookmarkItem>>>any()))
+        Mockito.when(pdfDocumentFactory.load(mockFile)).thenReturn(mockDocument);
+        Mockito.when(
+                        objectMapper.readValue(
+                                ArgumentMatchers.eq(request.getBookmarkData()),
+                                ArgumentMatchers.<TypeReference<List<BookmarkItem>>>any()))
                 .thenReturn(bookmarks);
-        when(mockDocument.getDocumentCatalog()).thenReturn(mockCatalog);
-        when(mockDocument.getNumberOfPages()).thenReturn(5);
-        when(mockDocument.getPage(0)).thenReturn(mockPage1);
+        Mockito.when(mockDocument.getDocumentCatalog()).thenReturn(mockCatalog);
+        Mockito.when(mockDocument.getNumberOfPages()).thenReturn(5);
+        Mockito.when(mockDocument.getPage(0)).thenReturn(mockPage1);
 
         // Mock saving behavior
-        doAnswer(
+        Mockito.doAnswer(
                         invocation -> {
                             ByteArrayOutputStream baos = invocation.getArgument(0);
                             baos.write("mocked pdf content".getBytes());
                             return null;
                         })
                 .when(mockDocument)
-                .save(any(ByteArrayOutputStream.class));
+                .save(ArgumentMatchers.any(ByteArrayOutputStream.class));
 
         // When
         ResponseEntity<byte[]> result = editTableOfContentsController.editTableOfContents(request);
 
         // Then
-        assertNotNull(result);
-        assertNotNull(result.getBody());
+        Assertions.assertNotNull(result);
+        Assertions.assertNotNull(result.getBody());
 
         ArgumentCaptor<PDDocumentOutline> outlineCaptor =
                 ArgumentCaptor.forClass(PDDocumentOutline.class);
-        verify(mockCatalog).setDocumentOutline(outlineCaptor.capture());
+        Mockito.verify(mockCatalog).setDocumentOutline(outlineCaptor.capture());
 
         PDDocumentOutline capturedOutline = outlineCaptor.getValue();
-        assertNotNull(capturedOutline);
+        Assertions.assertNotNull(capturedOutline);
 
-        verify(mockDocument).close();
+        Mockito.verify(mockDocument).close();
     }
 
     @Test
@@ -267,32 +264,34 @@ class EditTableOfContentsControllerTest {
         parentBookmark.setChildren(children);
         bookmarks.add(parentBookmark);
 
-        when(pdfDocumentFactory.load(mockFile)).thenReturn(mockDocument);
-        when(objectMapper.readValue(
-                        eq(bookmarkJson),
-                        ArgumentMatchers.<TypeReference<List<BookmarkItem>>>any()))
+        Mockito.when(pdfDocumentFactory.load(mockFile)).thenReturn(mockDocument);
+        Mockito.when(
+                        objectMapper.readValue(
+                                ArgumentMatchers.eq(bookmarkJson),
+                                ArgumentMatchers.<TypeReference<List<BookmarkItem>>>any()))
                 .thenReturn(bookmarks);
-        when(mockDocument.getDocumentCatalog()).thenReturn(mockCatalog);
-        when(mockDocument.getNumberOfPages()).thenReturn(5);
-        when(mockDocument.getPage(0)).thenReturn(mockPage1);
-        when(mockDocument.getPage(1)).thenReturn(mockPage2);
+        Mockito.when(mockDocument.getDocumentCatalog()).thenReturn(mockCatalog);
+        Mockito.when(mockDocument.getNumberOfPages()).thenReturn(5);
+        Mockito.when(mockDocument.getPage(0)).thenReturn(mockPage1);
+        Mockito.when(mockDocument.getPage(1)).thenReturn(mockPage2);
 
-        doAnswer(
+        Mockito.doAnswer(
                         invocation -> {
                             ByteArrayOutputStream baos = invocation.getArgument(0);
                             baos.write("mocked pdf content".getBytes());
                             return null;
                         })
                 .when(mockDocument)
-                .save(any(ByteArrayOutputStream.class));
+                .save(ArgumentMatchers.any(ByteArrayOutputStream.class));
 
         // When
         ResponseEntity<byte[]> result = editTableOfContentsController.editTableOfContents(request);
 
         // Then
-        assertNotNull(result);
-        verify(mockCatalog).setDocumentOutline(any(PDDocumentOutline.class));
-        verify(mockDocument).close();
+        Assertions.assertNotNull(result);
+        Mockito.verify(mockCatalog)
+                .setDocumentOutline(ArgumentMatchers.any(PDDocumentOutline.class));
+        Mockito.verify(mockDocument).close();
     }
 
     @Test
@@ -319,33 +318,35 @@ class EditTableOfContentsControllerTest {
         bookmarks.add(bookmark1);
         bookmarks.add(bookmark2);
 
-        when(pdfDocumentFactory.load(mockFile)).thenReturn(mockDocument);
-        when(objectMapper.readValue(
-                        eq(request.getBookmarkData()),
-                        ArgumentMatchers.<TypeReference<List<BookmarkItem>>>any()))
+        Mockito.when(pdfDocumentFactory.load(mockFile)).thenReturn(mockDocument);
+        Mockito.when(
+                        objectMapper.readValue(
+                                ArgumentMatchers.eq(request.getBookmarkData()),
+                                ArgumentMatchers.<TypeReference<List<BookmarkItem>>>any()))
                 .thenReturn(bookmarks);
-        when(mockDocument.getDocumentCatalog()).thenReturn(mockCatalog);
-        when(mockDocument.getNumberOfPages()).thenReturn(5);
-        when(mockDocument.getPage(0)).thenReturn(mockPage1); // For negative page number
-        when(mockDocument.getPage(4)).thenReturn(mockPage2); // For page number exceeding bounds
+        Mockito.when(mockDocument.getDocumentCatalog()).thenReturn(mockCatalog);
+        Mockito.when(mockDocument.getNumberOfPages()).thenReturn(5);
+        Mockito.when(mockDocument.getPage(0)).thenReturn(mockPage1); // For negative page number
+        Mockito.when(mockDocument.getPage(4))
+                .thenReturn(mockPage2); // For page number exceeding bounds
 
-        doAnswer(
+        Mockito.doAnswer(
                         invocation -> {
                             ByteArrayOutputStream baos = invocation.getArgument(0);
                             baos.write("mocked pdf content".getBytes());
                             return null;
                         })
                 .when(mockDocument)
-                .save(any(ByteArrayOutputStream.class));
+                .save(ArgumentMatchers.any(ByteArrayOutputStream.class));
 
         // When
         ResponseEntity<byte[]> result = editTableOfContentsController.editTableOfContents(request);
 
         // Then
-        assertNotNull(result);
-        verify(mockDocument).getPage(0); // Clamped to first page
-        verify(mockDocument).getPage(4); // Clamped to last page
-        verify(mockDocument).close();
+        Assertions.assertNotNull(result);
+        Mockito.verify(mockDocument).getPage(0); // Clamped to first page
+        Mockito.verify(mockDocument).getPage(4); // Clamped to last page
+        Mockito.verify(mockDocument).close();
     }
 
     @Test
@@ -355,8 +356,8 @@ class EditTableOfContentsControllerTest {
         bookmark.setTitle("Test Chapter");
         bookmark.setPageNumber(3);
 
-        when(mockDocument.getNumberOfPages()).thenReturn(5);
-        when(mockDocument.getPage(2)).thenReturn(mockPage1); // 0-indexed
+        Mockito.when(mockDocument.getNumberOfPages()).thenReturn(5);
+        Mockito.when(mockDocument.getPage(2)).thenReturn(mockPage1); // 0-indexed
 
         // When
         Method createOutlineItemMethod =
@@ -369,8 +370,8 @@ class EditTableOfContentsControllerTest {
                                 editTableOfContentsController, mockDocument, bookmark);
 
         // Then
-        assertNotNull(result);
-        verify(mockDocument).getPage(2);
+        Assertions.assertNotNull(result);
+        Mockito.verify(mockDocument).getPage(2);
     }
 
     @Test
@@ -385,9 +386,9 @@ class EditTableOfContentsControllerTest {
         bookmark.setChildren(children);
 
         // Then
-        assertEquals("Test Title", bookmark.getTitle());
-        assertEquals(5, bookmark.getPageNumber());
-        assertEquals(children, bookmark.getChildren());
+        Assertions.assertEquals("Test Title", bookmark.getTitle());
+        Assertions.assertEquals(5, bookmark.getPageNumber());
+        Assertions.assertEquals(children, bookmark.getChildren());
     }
 
     @Test
@@ -396,11 +397,11 @@ class EditTableOfContentsControllerTest {
         EditTableOfContentsRequest request = new EditTableOfContentsRequest();
         request.setFileInput(mockFile);
 
-        when(pdfDocumentFactory.load(mockFile))
+        Mockito.when(pdfDocumentFactory.load(mockFile))
                 .thenThrow(new RuntimeException("Failed to load PDF"));
 
         // When & Then
-        assertThrows(
+        Assertions.assertThrows(
                 RuntimeException.class,
                 () -> editTableOfContentsController.editTableOfContents(request));
     }
@@ -408,11 +409,11 @@ class EditTableOfContentsControllerTest {
     @Test
     void testExtractBookmarks_IOExceptionDuringLoad_ThrowsException() throws Exception {
         // Given
-        when(pdfDocumentFactory.load(mockFile))
+        Mockito.when(pdfDocumentFactory.load(mockFile))
                 .thenThrow(new RuntimeException("Failed to load PDF"));
 
         // When & Then
-        assertThrows(
+        Assertions.assertThrows(
                 RuntimeException.class,
                 () -> editTableOfContentsController.extractBookmarks(mockFile));
     }

@@ -1,16 +1,15 @@
 package stirling.software.SPDF.controller.api.pipeline;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.*;
-
 import java.util.List;
 import java.util.Map;
 
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
@@ -38,7 +37,8 @@ class PipelineProcessorTest {
 
     @BeforeEach
     void setUp() {
-        pipelineProcessor = spy(new PipelineProcessor(apiDocService, userService, servletContext));
+        pipelineProcessor =
+                Mockito.spy(new PipelineProcessor(apiDocService, userService, servletContext));
     }
 
     @Test
@@ -49,32 +49,42 @@ class PipelineProcessorTest {
         PipelineConfig config = new PipelineConfig();
         config.setOperations(List.of(op));
 
-        Resource file =
-                new ByteArrayResource("data".getBytes()) {
-                    @Override
-                    public String getFilename() {
-                        return "test.pdf";
-                    }
-                };
+        Resource file = new MyByteArrayResource();
 
         List<Resource> files = List.of(file);
 
-        when(apiDocService.isMultiInput("/api/v1/filter/filter-page-count")).thenReturn(false);
-        when(apiDocService.getExtensionTypes(false, "/api/v1/filter/filter-page-count"))
+        Mockito.when(apiDocService.isMultiInput("/api/v1/filter/filter-page-count"))
+                .thenReturn(false);
+        Mockito.when(apiDocService.getExtensionTypes(false, "/api/v1/filter/filter-page-count"))
                 .thenReturn(List.of("pdf"));
-        when(apiDocService.isValidOperation(eq("/api/v1/filter/filter-page-count"), anyMap()))
+        Mockito.when(
+                        apiDocService.isValidOperation(
+                                ArgumentMatchers.eq("/api/v1/filter/filter-page-count"),
+                                ArgumentMatchers.anyMap()))
                 .thenReturn(true);
 
-        doReturn(new ResponseEntity<>(new byte[0], HttpStatus.OK))
+        Mockito.doReturn(new ResponseEntity<>(new byte[0], HttpStatus.OK))
                 .when(pipelineProcessor)
-                .sendWebRequest(anyString(), any());
+                .sendWebRequest(ArgumentMatchers.anyString(), ArgumentMatchers.any());
 
         PipelineResult result = pipelineProcessor.runPipelineAgainstFiles(files, config);
 
-        assertTrue(
+        Assertions.assertTrue(
                 result.isFiltersApplied(),
                 "Filter flag should be true when operation filters file");
-        assertFalse(result.isHasErrors(), "No errors should occur");
-        assertTrue(result.getOutputFiles().isEmpty(), "Filtered file list should be empty");
+        Assertions.assertFalse(result.isHasErrors(), "No errors should occur");
+        Assertions.assertTrue(
+                result.getOutputFiles().isEmpty(), "Filtered file list should be empty");
+    }
+
+    private static class MyByteArrayResource extends ByteArrayResource {
+        public MyByteArrayResource() {
+            super("data".getBytes());
+        }
+
+        @Override
+        public String getFilename() {
+            return "test.pdf";
+        }
     }
 }

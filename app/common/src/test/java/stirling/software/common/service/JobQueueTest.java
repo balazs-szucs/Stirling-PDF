@@ -1,18 +1,16 @@
 package stirling.software.common.service;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.when;
-
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import stirling.software.common.service.ResourceMonitor.ResourceStatus;
@@ -30,10 +28,12 @@ class JobQueueTest {
     @BeforeEach
     void setUp() {
         // Mark stubbing as lenient to avoid UnnecessaryStubbingException
-        lenient()
-                .when(resourceMonitor.calculateDynamicQueueCapacity(anyInt(), anyInt()))
+        Mockito.lenient()
+                .when(
+                        resourceMonitor.calculateDynamicQueueCapacity(
+                                ArgumentMatchers.anyInt(), ArgumentMatchers.anyInt()))
                 .thenReturn(10);
-        lenient().when(resourceMonitor.getCurrentStatus()).thenReturn(statusRef);
+        Mockito.lenient().when(resourceMonitor.getCurrentStatus()).thenReturn(statusRef);
 
         // Initialize JobQueue with mocked ResourceMonitor
         jobQueue = new JobQueue(resourceMonitor);
@@ -48,8 +48,8 @@ class JobQueueTest {
 
         jobQueue.queueJob(jobId, resourceWeight, work, timeoutMs);
 
-        assertTrue(jobQueue.isJobQueued(jobId));
-        assertEquals(1, jobQueue.getTotalQueuedJobs());
+        Assertions.assertTrue(jobQueue.isJobQueued(jobId));
+        Assertions.assertEquals(1, jobQueue.getTotalQueuedJobs());
     }
 
     @Test
@@ -60,13 +60,13 @@ class JobQueueTest {
         jobQueue.queueJob(jobId, 50, work, 1000);
         boolean cancelled = jobQueue.cancelJob(jobId);
 
-        assertTrue(cancelled);
-        assertFalse(jobQueue.isJobQueued(jobId));
+        Assertions.assertTrue(cancelled);
+        Assertions.assertFalse(jobQueue.isJobQueued(jobId));
     }
 
     @Test
     void shouldGetQueueStats() {
-        when(resourceMonitor.getCurrentStatus()).thenReturn(statusRef);
+        Mockito.when(resourceMonitor.getCurrentStatus()).thenReturn(statusRef);
 
         jobQueue.queueJob("job1", 50, () -> "ok", 1000);
         jobQueue.queueJob("job2", 50, () -> "ok", 1000);
@@ -74,16 +74,16 @@ class JobQueueTest {
 
         Map<String, Object> stats = jobQueue.getQueueStats();
 
-        assertEquals(2, stats.get("totalQueuedJobs"));
-        assertTrue(stats.containsKey("queuedJobs"));
-        assertTrue(stats.containsKey("resourceStatus"));
+        Assertions.assertEquals(2, stats.get("totalQueuedJobs"));
+        Assertions.assertTrue(stats.containsKey("queuedJobs"));
+        Assertions.assertTrue(stats.containsKey("resourceStatus"));
     }
 
     @Test
     void shouldCalculateQueueCapacity() {
-        when(resourceMonitor.calculateDynamicQueueCapacity(5, 2)).thenReturn(8);
+        Mockito.when(resourceMonitor.calculateDynamicQueueCapacity(5, 2)).thenReturn(8);
         int capacity = resourceMonitor.calculateDynamicQueueCapacity(5, 2);
-        assertEquals(8, capacity);
+        Assertions.assertEquals(8, capacity);
     }
 
     @Test
@@ -93,7 +93,7 @@ class JobQueueTest {
 
         jobQueue.queueJob(jobId, 40, work, 500);
 
-        assertTrue(jobQueue.isJobQueued(jobId));
-        assertFalse(jobQueue.isJobQueued("nonexistent"));
+        Assertions.assertTrue(jobQueue.isJobQueued(jobId));
+        Assertions.assertFalse(jobQueue.isJobQueued("nonexistent"));
     }
 }

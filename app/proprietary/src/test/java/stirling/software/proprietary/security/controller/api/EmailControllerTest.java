@@ -1,12 +1,5 @@
 package stirling.software.proprietary.security.controller.api;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.doThrow;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-
 import java.util.stream.Stream;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -14,11 +7,15 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.mockito.ArgumentMatchers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mail.MailSendException;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import jakarta.mail.MessagingException;
@@ -49,13 +46,17 @@ class EmailControllerTest {
             String expectedContent)
             throws Exception {
         if (serviceException == null) {
-            doNothing().when(emailService).sendEmailWithAttachment(any(Email.class));
+            Mockito.doNothing()
+                    .when(emailService)
+                    .sendEmailWithAttachment(ArgumentMatchers.any(Email.class));
         } else {
-            doThrow(serviceException).when(emailService).sendEmailWithAttachment(any(Email.class));
+            Mockito.doThrow(serviceException)
+                    .when(emailService)
+                    .sendEmailWithAttachment(ArgumentMatchers.any(Email.class));
         }
 
         var request =
-                multipart("/api/v1/general/send-email")
+                MockMvcRequestBuilders.multipart("/api/v1/general/send-email")
                         .file("fileInput", "dummy-content".getBytes())
                         .param("subject", "Test Email")
                         .param("body", "This is a test email.");
@@ -65,8 +66,8 @@ class EmailControllerTest {
         }
 
         mockMvc.perform(request)
-                .andExpect(status().is(expectedStatus))
-                .andExpect(content().string(expectedContent));
+                .andExpect(MockMvcResultMatchers.status().is(expectedStatus))
+                .andExpect(MockMvcResultMatchers.content().string(expectedContent));
     }
 
     static Stream<Arguments> emailParams() {

@@ -1,11 +1,5 @@
 package stirling.software.SPDF.controller.api.converters;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.when;
-
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Method;
@@ -17,16 +11,14 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
+import java.util.regex.Pattern;
 
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
-import org.mockito.MockedStatic;
-import org.mockito.Mockito;
-import org.mockito.MockitoAnnotations;
+import org.mockito.*;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -45,12 +37,42 @@ import stirling.software.common.util.WebResponseUtils;
 
 public class ConvertWebsiteToPdfTest {
 
+    private static final Pattern PATTERN = Pattern.compile("[A-Za-z0-9_]+\\.pdf");
     @Mock private CustomPDFDocumentFactory pdfDocumentFactory;
     @Mock private RuntimePathConfig runtimePathConfig;
 
     private ApplicationProperties applicationProperties;
     private ConvertWebsiteToPDF sut;
     private AutoCloseable mocks;
+
+    private static MockedStatic<HttpClient> mockHttpClientReturning(String body) throws Exception {
+        MockedStatic<HttpClient> httpClientStatic = Mockito.mockStatic(HttpClient.class);
+        HttpClient.Builder builder = Mockito.mock(HttpClient.Builder.class);
+        HttpClient client = Mockito.mock(HttpClient.class);
+        HttpResponse response = Mockito.mock(HttpResponse.class);
+
+        httpClientStatic.when(HttpClient::newBuilder).thenReturn(builder);
+        Mockito.when(builder.followRedirects(HttpClient.Redirect.NORMAL)).thenReturn(builder);
+        Mockito.when(builder.connectTimeout(ArgumentMatchers.any(Duration.class)))
+                .thenReturn(builder);
+        Mockito.when(builder.build()).thenReturn(client);
+
+        Mockito.when(
+                        client.send(
+                                ArgumentMatchers.any(HttpRequest.class),
+                                ArgumentMatchers.any(HttpResponse.BodyHandler.class)))
+                .thenReturn(response);
+        Mockito.when(response.statusCode()).thenReturn(200);
+        Mockito.when(response.body()).thenReturn(body);
+
+        return httpClientStatic;
+    }
+
+    @AfterEach
+    void tearDown() throws Exception {
+        RequestContextHolder.resetRequestAttributes();
+        if (mocks != null) mocks.close();
+    }
 
     @BeforeEach
     void setUp() throws Exception {
@@ -61,8 +83,9 @@ public class ConvertWebsiteToPdfTest {
         applicationProperties.getSystem().setEnableUrlToPDF(true);
 
         // Stubs in case the code continues to run
-        when(runtimePathConfig.getWeasyPrintPath()).thenReturn("/usr/bin/weasyprint");
-        when(pdfDocumentFactory.load(any(File.class))).thenReturn(new PDDocument());
+        Mockito.when(runtimePathConfig.getWeasyPrintPath()).thenReturn("/usr/bin/weasyprint");
+        Mockito.when(pdfDocumentFactory.load(ArgumentMatchers.any(File.class)))
+                .thenReturn(new PDDocument());
 
         // Build SUT
         sut = new ConvertWebsiteToPDF(pdfDocumentFactory, runtimePathConfig, applicationProperties);
@@ -75,12 +98,6 @@ public class ConvertWebsiteToPdfTest {
         RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(req));
     }
 
-    @AfterEach
-    void tearDown() throws Exception {
-        RequestContextHolder.resetRequestAttributes();
-        if (mocks != null) mocks.close();
-    }
-
     @Test
     void redirect_with_error_when_invalid_url_format_provided() throws Exception {
         UrlToPdfRequest request = new UrlToPdfRequest();
@@ -88,10 +105,10 @@ public class ConvertWebsiteToPdfTest {
 
         ResponseEntity<?> resp = sut.urlToPdf(request);
 
-        assertEquals(HttpStatus.SEE_OTHER, resp.getStatusCode());
+        Assertions.assertEquals(HttpStatus.SEE_OTHER, resp.getStatusCode());
         URI location = resp.getHeaders().getLocation();
-        assertNotNull(location, "Location header expected");
-        assertTrue(
+        Assertions.assertNotNull(location, "Location header expected");
+        Assertions.assertTrue(
                 location.getQuery() != null
                         && location.getQuery().contains("error=error.invalidUrlFormat"));
     }
@@ -104,10 +121,10 @@ public class ConvertWebsiteToPdfTest {
 
         ResponseEntity<?> resp = sut.urlToPdf(request);
 
-        assertEquals(HttpStatus.SEE_OTHER, resp.getStatusCode());
+        Assertions.assertEquals(HttpStatus.SEE_OTHER, resp.getStatusCode());
         URI location = resp.getHeaders().getLocation();
-        assertNotNull(location, "Location header expected");
-        assertTrue(
+        Assertions.assertNotNull(location, "Location header expected");
+        Assertions.assertTrue(
                 location.getQuery() != null
                         && location.getQuery().contains("error=error.urlNotReachable"));
     }
@@ -122,10 +139,10 @@ public class ConvertWebsiteToPdfTest {
 
         ResponseEntity<?> resp = sut.urlToPdf(request);
 
-        assertEquals(HttpStatus.SEE_OTHER, resp.getStatusCode());
+        Assertions.assertEquals(HttpStatus.SEE_OTHER, resp.getStatusCode());
         URI location = resp.getHeaders().getLocation();
-        assertNotNull(location, "Location header expected");
-        assertTrue(
+        Assertions.assertNotNull(location, "Location header expected");
+        Assertions.assertTrue(
                 location.getQuery() != null
                         && location.getQuery().contains("error=error.endpointDisabled"));
     }
@@ -139,11 +156,11 @@ public class ConvertWebsiteToPdfTest {
         String in = "https://ex-ample.com/path?q=1&x=y#frag";
         String out = (String) m.invoke(sut, in);
 
-        assertTrue(out.endsWith(".pdf"));
+        Assertions.assertTrue(out.endsWith(".pdf"));
         // Only A–Z, a–z, 0–9, underscore and dot allowed
-        assertTrue(out.matches("[A-Za-z0-9_]+\\.pdf"));
+        Assertions.assertTrue(PATTERN.matcher(out).matches());
         // no truncation here (source not that long)
-        assertTrue(out.length() <= 54);
+        Assertions.assertTrue(out.length() <= 54);
     }
 
     @Test
@@ -157,10 +174,10 @@ public class ConvertWebsiteToPdfTest {
                 "https://very-very-long-domain.example.com/some/really/long/path/with?many=params&and=chars";
         String out = (String) m.invoke(sut, longUrl);
 
-        assertTrue(out.endsWith(".pdf"));
-        assertTrue(out.matches("[A-Za-z0-9_]+\\.pdf"));
+        Assertions.assertTrue(out.endsWith(".pdf"));
+        Assertions.assertTrue(PATTERN.matcher(out).matches());
         // safeName limited to 50 -> total max 54 including '.pdf'
-        assertTrue(out.length() <= 54, "Filename should be truncated to 50 + '.pdf'");
+        Assertions.assertTrue(out.length() <= 54, "Filename should be truncated to 50 + '.pdf'");
     }
 
     @Test
@@ -186,35 +203,40 @@ public class ConvertWebsiteToPdfTest {
 
             // Return value of correct type
             ProcessExecutorResult dummyResult = Mockito.mock(ProcessExecutorResult.class);
-            when(mockExec.runCommandWithOutputHandling(cmdCaptor.capture()))
+            Mockito.when(mockExec.runCommandWithOutputHandling(cmdCaptor.capture()))
                     .thenReturn(dummyResult);
 
             // Mock WebResponseUtils
             ResponseEntity<byte[]> fakeResponse = ResponseEntity.ok(new byte[0]);
-            wr.when(() -> WebResponseUtils.pdfDocToWebResponse(any(PDDocument.class), anyString()))
+            wr.when(
+                            () ->
+                                    WebResponseUtils.pdfDocToWebResponse(
+                                            ArgumentMatchers.any(PDDocument.class),
+                                            ArgumentMatchers.anyString()))
                     .thenReturn(fakeResponse);
 
             // Act
             ResponseEntity<?> resp = sut.urlToPdf(request);
 
             // Assert – Response OK
-            assertEquals(HttpStatus.OK, resp.getStatusCode());
+            Assertions.assertEquals(HttpStatus.OK, resp.getStatusCode());
 
             // Assert – WeasyPrint command correct
             List<String> cmd = cmdCaptor.getValue();
-            assertNotNull(cmd);
-            assertEquals("/usr/bin/weasyprint", cmd.get(0));
-            assertTrue(cmd.size() >= 6, "WeasyPrint should receive HTML input and output path");
+            Assertions.assertNotNull(cmd);
+            Assertions.assertEquals("/usr/bin/weasyprint", cmd.get(0));
+            Assertions.assertTrue(
+                    cmd.size() >= 6, "WeasyPrint should receive HTML input and output path");
             String htmlPathStr = cmd.get(1);
-            assertEquals("--base-url", cmd.get(2));
-            assertEquals("https://example.com", cmd.get(3));
-            assertEquals("--pdf-forms", cmd.get(4));
+            Assertions.assertEquals("--base-url", cmd.get(2));
+            Assertions.assertEquals("https://example.com", cmd.get(3));
+            Assertions.assertEquals("--pdf-forms", cmd.get(4));
             String outPathStr = cmd.get(5);
-            assertNotNull(outPathStr);
+            Assertions.assertNotNull(outPathStr);
 
             // Temp file must be deleted in finally
             Path outPath = Path.of(outPathStr);
-            assertFalse(
+            Assertions.assertFalse(
                     Files.exists(Path.of(htmlPathStr)),
                     "Temp HTML file should be deleted after the call");
         }
@@ -245,9 +267,10 @@ public class ConvertWebsiteToPdfTest {
             files.when(
                             () ->
                                     Files.writeString(
-                                            eq(htmlTemp),
-                                            anyString(),
-                                            eq(java.nio.charset.StandardCharsets.UTF_8)))
+                                            ArgumentMatchers.eq(htmlTemp),
+                                            ArgumentMatchers.anyString(),
+                                            ArgumentMatchers.eq(
+                                                    java.nio.charset.StandardCharsets.UTF_8)))
                     .thenReturn(htmlTemp);
             files.when(() -> Files.deleteIfExists(htmlTemp)).thenReturn(true);
             files.when(() -> Files.deleteIfExists(preCreatedTemp))
@@ -258,20 +281,25 @@ public class ConvertWebsiteToPdfTest {
             ProcessExecutor mockExec = Mockito.mock(ProcessExecutor.class);
             pe.when(() -> ProcessExecutor.getInstance(Processes.WEASYPRINT)).thenReturn(mockExec);
             ProcessExecutorResult dummy = Mockito.mock(ProcessExecutorResult.class);
-            when(mockExec.runCommandWithOutputHandling(Mockito.<List>any())).thenReturn(dummy);
+            Mockito.when(mockExec.runCommandWithOutputHandling(Mockito.<List>any()))
+                    .thenReturn(dummy);
 
             // WebResponseUtils
             ResponseEntity<byte[]> fakeResponse = ResponseEntity.ok(new byte[0]);
-            wr.when(() -> WebResponseUtils.pdfDocToWebResponse(any(PDDocument.class), anyString()))
+            wr.when(
+                            () ->
+                                    WebResponseUtils.pdfDocToWebResponse(
+                                            ArgumentMatchers.any(PDDocument.class),
+                                            ArgumentMatchers.anyString()))
                     .thenReturn(fakeResponse);
 
             // Act: should not throw and should return a Response
-            ResponseEntity<?> resp = assertDoesNotThrow(() -> sut.urlToPdf(request));
+            ResponseEntity<?> resp = Assertions.assertDoesNotThrow(() -> sut.urlToPdf(request));
 
             // Assert
-            assertNotNull(resp, "Response should not be null");
-            assertEquals(HttpStatus.OK, resp.getStatusCode());
-            assertTrue(
+            Assertions.assertNotNull(resp, "Response should not be null");
+            Assertions.assertEquals(HttpStatus.OK, resp.getStatusCode());
+            Assertions.assertTrue(
                     java.nio.file.Files.exists(preCreatedTemp),
                     "Temp file should still exist despite delete IOException");
         } finally {
@@ -298,31 +326,12 @@ public class ConvertWebsiteToPdfTest {
 
             ResponseEntity<?> resp = sut.urlToPdf(request);
 
-            assertEquals(HttpStatus.SEE_OTHER, resp.getStatusCode());
+            Assertions.assertEquals(HttpStatus.SEE_OTHER, resp.getStatusCode());
             URI location = resp.getHeaders().getLocation();
-            assertNotNull(location, "Location header expected");
-            assertTrue(
+            Assertions.assertNotNull(location, "Location header expected");
+            Assertions.assertTrue(
                     location.getQuery() != null
                             && location.getQuery().contains("error=error.disallowedUrlContent"));
         }
-    }
-
-    private MockedStatic<HttpClient> mockHttpClientReturning(String body) throws Exception {
-        MockedStatic<HttpClient> httpClientStatic = Mockito.mockStatic(HttpClient.class);
-        HttpClient.Builder builder = Mockito.mock(HttpClient.Builder.class);
-        HttpClient client = Mockito.mock(HttpClient.class);
-        HttpResponse<String> response = Mockito.mock(HttpResponse.class);
-
-        httpClientStatic.when(HttpClient::newBuilder).thenReturn(builder);
-        when(builder.followRedirects(HttpClient.Redirect.NORMAL)).thenReturn(builder);
-        when(builder.connectTimeout(any(Duration.class))).thenReturn(builder);
-        when(builder.build()).thenReturn(client);
-
-        when(client.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
-                .thenReturn(response);
-        when(response.statusCode()).thenReturn(200);
-        when(response.body()).thenReturn(body);
-
-        return httpClientStatic;
     }
 }

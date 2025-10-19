@@ -1,10 +1,8 @@
 package stirling.software.common.util.misc;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-
 import java.io.IOException;
 
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.MediaType;
@@ -47,9 +45,10 @@ class ReplaceAndInvertColorStrategyTest {
                 new ConcreteReplaceAndInvertColorStrategy(mockFile, replaceAndInvert);
 
         // Assert
-        assertNotNull(strategy, "Strategy should be initialized");
-        assertEquals(mockFile, strategy.getFileInput(), "File input should be set correctly");
-        assertEquals(
+        Assertions.assertNotNull(strategy, "Strategy should be initialized");
+        Assertions.assertEquals(
+                mockFile, strategy.getFileInput(), "File input should be set correctly");
+        Assertions.assertEquals(
                 replaceAndInvert,
                 strategy.getReplaceAndInvert(),
                 "ReplaceAndInvert option should be set correctly");
@@ -70,7 +69,7 @@ class ReplaceAndInvertColorStrategyTest {
         InputStreamResource result = strategy.replace();
 
         // Assert
-        assertNotNull(result, "Result should not be null");
+        Assertions.assertNotNull(result, "Result should not be null");
     }
 
     @Test
@@ -94,15 +93,15 @@ class ReplaceAndInvertColorStrategyTest {
                 new ConcreteReplaceAndInvertColorStrategy(mockFile1, ReplaceAndInvert.CUSTOM_COLOR);
 
         // Test initial values
-        assertEquals(mockFile1, strategy.getFileInput());
-        assertEquals(ReplaceAndInvert.CUSTOM_COLOR, strategy.getReplaceAndInvert());
+        Assertions.assertEquals(mockFile1, strategy.getFileInput());
+        Assertions.assertEquals(ReplaceAndInvert.CUSTOM_COLOR, strategy.getReplaceAndInvert());
 
         // Test setters
         strategy.setFileInput(mockFile2);
         strategy.setReplaceAndInvert(ReplaceAndInvert.FULL_INVERSION);
 
         // Assert new values
-        assertEquals(mockFile2, strategy.getFileInput());
-        assertEquals(ReplaceAndInvert.FULL_INVERSION, strategy.getReplaceAndInvert());
+        Assertions.assertEquals(mockFile2, strategy.getFileInput());
+        Assertions.assertEquals(ReplaceAndInvert.FULL_INVERSION, strategy.getReplaceAndInvert());
     }
 }

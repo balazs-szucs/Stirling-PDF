@@ -1,8 +1,6 @@
 package stirling.software.common.util;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.ui.Model;
 import org.springframework.web.servlet.ModelAndView;
@@ -21,9 +19,9 @@ public class ErrorUtilsTest {
         Model resultModel = ErrorUtils.exceptionToModel(model, ex);
 
         // Verify the result
-        assertNotNull(resultModel);
-        assertEquals("Test Exception", resultModel.getAttribute("errorMessage"));
-        assertNotNull(resultModel.getAttribute("stackTrace"));
+        Assertions.assertNotNull(resultModel);
+        Assertions.assertEquals("Test Exception", resultModel.getAttribute("errorMessage"));
+        Assertions.assertNotNull(resultModel.getAttribute("stackTrace"));
     }
 
     @Test
@@ -38,8 +36,8 @@ public class ErrorUtilsTest {
         ModelAndView modelAndView = ErrorUtils.exceptionToModelView(model, ex);
 
         // Verify the result
-        assertNotNull(modelAndView);
-        assertEquals("Test Exception", modelAndView.getModel().get("errorMessage"));
-        assertNotNull(modelAndView.getModel().get("stackTrace"));
+        Assertions.assertNotNull(modelAndView);
+        Assertions.assertEquals("Test Exception", modelAndView.getModel().get("errorMessage"));
+        Assertions.assertNotNull(modelAndView.getModel().get("stackTrace"));
     }
 }

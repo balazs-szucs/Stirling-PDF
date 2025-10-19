@@ -1,19 +1,15 @@
 package stirling.software.common.service;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.UUID;
 
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
+import org.mockito.*;
 import org.springframework.http.MediaType;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.multipart.MultipartFile;
@@ -34,34 +30,34 @@ class FileStorageTest {
         ReflectionTestUtils.setField(fileStorage, "tempDirPath", tempDir.toString());
 
         // Create a mock MultipartFile
-        mockFile = mock(MultipartFile.class);
-        when(mockFile.getOriginalFilename()).thenReturn("test.pdf");
-        when(mockFile.getContentType()).thenReturn(MediaType.APPLICATION_PDF_VALUE);
+        mockFile = Mockito.mock(MultipartFile.class);
+        Mockito.when(mockFile.getOriginalFilename()).thenReturn("test.pdf");
+        Mockito.when(mockFile.getContentType()).thenReturn(MediaType.APPLICATION_PDF_VALUE);
     }
 
     @Test
     void testStoreFile() throws IOException {
         // Arrange
         byte[] fileContent = "Test PDF content".getBytes();
-        when(mockFile.getBytes()).thenReturn(fileContent);
+        Mockito.when(mockFile.getBytes()).thenReturn(fileContent);
 
         // Set up mock to handle transferTo by writing the file
-        doAnswer(
+        Mockito.doAnswer(
                         invocation -> {
                             java.io.File file = invocation.getArgument(0);
                             Files.write(file.toPath(), fileContent);
                             return null;
                         })
                 .when(mockFile)
-                .transferTo(any(java.io.File.class));
+                .transferTo(ArgumentMatchers.any(java.io.File.class));
 
         // Act
         String fileId = fileStorage.storeFile(mockFile);
 
         // Assert
-        assertNotNull(fileId);
-        assertTrue(Files.exists(tempDir.resolve(fileId)));
-        verify(mockFile).transferTo(any(java.io.File.class));
+        Assertions.assertNotNull(fileId);
+        Assertions.assertTrue(Files.exists(tempDir.resolve(fileId)));
+        Mockito.verify(mockFile).transferTo(ArgumentMatchers.any(java.io.File.class));
     }
 
     @Test
@@ -74,9 +70,9 @@ class FileStorageTest {
         String fileId = fileStorage.storeBytes(fileContent, originalName);
 
         // Assert
-        assertNotNull(fileId);
-        assertTrue(Files.exists(tempDir.resolve(fileId)));
-        assertArrayEquals(fileContent, Files.readAllBytes(tempDir.resolve(fileId)));
+        Assertions.assertNotNull(fileId);
+        Assertions.assertTrue(Files.exists(tempDir.resolve(fileId)));
+        Assertions.assertArrayEquals(fileContent, Files.readAllBytes(tempDir.resolve(fileId)));
     }
 
     @Test
@@ -87,16 +83,19 @@ class FileStorageTest {
         Path filePath = tempDir.resolve(fileId);
         Files.write(filePath, fileContent);
 
-        MultipartFile expectedFile = mock(MultipartFile.class);
-        when(fileOrUploadService.toMockMultipartFile(eq(fileId), eq(fileContent)))
+        MultipartFile expectedFile = Mockito.mock(MultipartFile.class);
+        Mockito.when(
+                        fileOrUploadService.toMockMultipartFile(
+                                ArgumentMatchers.eq(fileId), ArgumentMatchers.eq(fileContent)))
                 .thenReturn(expectedFile);
 
         // Act
         MultipartFile result = fileStorage.retrieveFile(fileId);
 
         // Assert
-        assertSame(expectedFile, result);
-        verify(fileOrUploadService).toMockMultipartFile(eq(fileId), eq(fileContent));
+        Assertions.assertSame(expectedFile, result);
+        Mockito.verify(fileOrUploadService)
+                .toMockMultipartFile(ArgumentMatchers.eq(fileId), ArgumentMatchers.eq(fileContent));
     }
 
     @Test
@@ -111,7 +110,7 @@ class FileStorageTest {
         byte[] result = fileStorage.retrieveBytes(fileId);
 
         // Assert
-        assertArrayEquals(fileContent, result);
+        Assertions.assertArrayEquals(fileContent, result);
     }
 
     @Test
@@ -120,7 +119,8 @@ class FileStorageTest {
         String nonExistentFileId = "non-existent-file";
 
         // Act & Assert
-        assertThrows(IOException.class, () -> fileStorage.retrieveFile(nonExistentFileId));
+        Assertions.assertThrows(
+                IOException.class, () -> fileStorage.retrieveFile(nonExistentFileId));
     }
 
     @Test
@@ -129,7 +129,8 @@ class FileStorageTest {
         String nonExistentFileId = "non-existent-file";
 
         // Act & Assert
-        assertThrows(IOException.class, () -> fileStorage.retrieveBytes(nonExistentFileId));
+        Assertions.assertThrows(
+                IOException.class, () -> fileStorage.retrieveBytes(nonExistentFileId));
     }
 
     @Test
@@ -144,8 +145,8 @@ class FileStorageTest {
         boolean result = fileStorage.deleteFile(fileId);
 
         // Assert
-        assertTrue(result);
-        assertFalse(Files.exists(filePath));
+        Assertions.assertTrue(result);
+        Assertions.assertFalse(Files.exists(filePath));
     }
 
     @Test
@@ -157,7 +158,7 @@ class FileStorageTest {
         boolean result = fileStorage.deleteFile(nonExistentFileId);
 
         // Assert
-        assertFalse(result);
+        Assertions.assertFalse(result);
     }
 
     @Test
@@ -172,7 +173,7 @@ class FileStorageTest {
         boolean result = fileStorage.fileExists(fileId);
 
         // Assert
-        assertTrue(result);
+        Assertions.assertTrue(result);
     }
 
     @Test
@@ -184,6 +185,6 @@ class FileStorageTest {
         boolean result = fileStorage.fileExists(nonExistentFileId);
 
         // Assert
-        assertFalse(result);
+        Assertions.assertFalse(result);
     }
 }

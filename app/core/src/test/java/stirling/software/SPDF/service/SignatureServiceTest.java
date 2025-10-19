@@ -1,21 +1,17 @@
 package stirling.software.SPDF.service;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.mockStatic;
-
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.MockedStatic;
+import org.mockito.Mockito;
 
 import stirling.software.SPDF.model.SignatureFile;
 import stirling.software.common.configuration.InstallationPathConfig;
@@ -24,16 +20,14 @@ class SignatureServiceTest {
 
     @TempDir Path tempDir;
     private SignatureService signatureService;
-    private Path personalSignatureFolder;
-    private Path sharedSignatureFolder;
-    private final String ALL_USERS_FOLDER = "ALL_USERS";
-    private final String TEST_USER = "testUser";
+    private static final String TEST_USER = "testUser";
 
     @BeforeEach
     void setUp() throws IOException {
         // Set up our test directory structure
-        personalSignatureFolder = tempDir.resolve(TEST_USER);
-        sharedSignatureFolder = tempDir.resolve(ALL_USERS_FOLDER);
+        Path personalSignatureFolder = tempDir.resolve(TEST_USER);
+        String ALL_USERS_FOLDER = "ALL_USERS";
+        Path sharedSignatureFolder = tempDir.resolve(ALL_USERS_FOLDER);
 
         Files.createDirectories(personalSignatureFolder);
         Files.createDirectories(sharedSignatureFolder);
@@ -47,7 +41,7 @@ class SignatureServiceTest {
 
         // Use try-with-resources for mockStatic
         try (MockedStatic<InstallationPathConfig> mockedConfig =
-                mockStatic(InstallationPathConfig.class)) {
+                Mockito.mockStatic(InstallationPathConfig.class)) {
             mockedConfig
                     .when(InstallationPathConfig::getSignaturesPath)
                     .thenReturn(tempDir.toString());
@@ -61,7 +55,7 @@ class SignatureServiceTest {
     void testHasAccessToFile_PersonalFileExists() throws IOException {
         // Mock static method for each test
         try (MockedStatic<InstallationPathConfig> mockedConfig =
-                mockStatic(InstallationPathConfig.class)) {
+                Mockito.mockStatic(InstallationPathConfig.class)) {
             mockedConfig
                     .when(InstallationPathConfig::getSignaturesPath)
                     .thenReturn(tempDir.toString());
@@ -70,7 +64,7 @@ class SignatureServiceTest {
             boolean hasAccess = signatureService.hasAccessToFile(TEST_USER, "personal.png");
 
             // Verify
-            assertTrue(hasAccess, "User should have access to their personal file");
+            Assertions.assertTrue(hasAccess, "User should have access to their personal file");
         }
     }
 
@@ -78,7 +72,7 @@ class SignatureServiceTest {
     void testHasAccessToFile_SharedFileExists() throws IOException {
         // Mock static method for each test
         try (MockedStatic<InstallationPathConfig> mockedConfig =
-                mockStatic(InstallationPathConfig.class)) {
+                Mockito.mockStatic(InstallationPathConfig.class)) {
             mockedConfig
                     .when(InstallationPathConfig::getSignaturesPath)
                     .thenReturn(tempDir.toString());
@@ -87,7 +81,7 @@ class SignatureServiceTest {
             boolean hasAccess = signatureService.hasAccessToFile(TEST_USER, "shared.jpg");
 
             // Verify
-            assertTrue(hasAccess, "User should have access to shared files");
+            Assertions.assertTrue(hasAccess, "User should have access to shared files");
         }
     }
 
@@ -95,7 +89,7 @@ class SignatureServiceTest {
     void testHasAccessToFile_FileDoesNotExist() throws IOException {
         // Mock static method for each test
         try (MockedStatic<InstallationPathConfig> mockedConfig =
-                mockStatic(InstallationPathConfig.class)) {
+                Mockito.mockStatic(InstallationPathConfig.class)) {
             mockedConfig
                     .when(InstallationPathConfig::getSignaturesPath)
                     .thenReturn(tempDir.toString());
@@ -104,7 +98,7 @@ class SignatureServiceTest {
             boolean hasAccess = signatureService.hasAccessToFile(TEST_USER, "nonexistent.png");
 
             // Verify
-            assertFalse(hasAccess, "User should not have access to non-existent files");
+            Assertions.assertFalse(hasAccess, "User should not have access to non-existent files");
         }
     }
 
@@ -112,18 +106,18 @@ class SignatureServiceTest {
     void testHasAccessToFile_InvalidFileName() {
         // Mock static method for each test
         try (MockedStatic<InstallationPathConfig> mockedConfig =
-                mockStatic(InstallationPathConfig.class)) {
+                Mockito.mockStatic(InstallationPathConfig.class)) {
             mockedConfig
                     .when(InstallationPathConfig::getSignaturesPath)
                     .thenReturn(tempDir.toString());
 
             // Test and verify
-            assertThrows(
+            Assertions.assertThrows(
                     IllegalArgumentException.class,
                     () -> signatureService.hasAccessToFile(TEST_USER, "../invalid.png"),
                     "Should throw exception for file names with directory traversal");
 
-            assertThrows(
+            Assertions.assertThrows(
                     IllegalArgumentException.class,
                     () -> signatureService.hasAccessToFile(TEST_USER, "invalid/file.png"),
                     "Should throw exception for file names with paths");
@@ -134,7 +128,7 @@ class SignatureServiceTest {
     void testGetAvailableSignatures() {
         // Mock static method for each test
         try (MockedStatic<InstallationPathConfig> mockedConfig =
-                mockStatic(InstallationPathConfig.class)) {
+                Mockito.mockStatic(InstallationPathConfig.class)) {
             mockedConfig
                     .when(InstallationPathConfig::getSignaturesPath)
                     .thenReturn(tempDir.toString());
@@ -143,7 +137,8 @@ class SignatureServiceTest {
             List<SignatureFile> signatures = signatureService.getAvailableSignatures(TEST_USER);
 
             // Verify
-            assertEquals(2, signatures.size(), "Should return both personal and shared signatures");
+            Assertions.assertEquals(
+                    2, signatures.size(), "Should return both personal and shared signatures");
 
             // Check that we have one of each type
             boolean hasPersonal =
@@ -159,8 +154,8 @@ class SignatureServiceTest {
                                             "shared.jpg".equals(sig.getFileName())
                                                     && "Shared".equals(sig.getCategory()));
 
-            assertTrue(hasPersonal, "Should include personal signature");
-            assertTrue(hasShared, "Should include shared signature");
+            Assertions.assertTrue(hasPersonal, "Should include personal signature");
+            Assertions.assertTrue(hasShared, "Should include shared signature");
         }
     }
 
@@ -168,7 +163,7 @@ class SignatureServiceTest {
     void testGetSignatureBytes_PersonalFile() throws IOException {
         // Mock static method for each test
         try (MockedStatic<InstallationPathConfig> mockedConfig =
-                mockStatic(InstallationPathConfig.class)) {
+                Mockito.mockStatic(InstallationPathConfig.class)) {
             mockedConfig
                     .when(InstallationPathConfig::getSignaturesPath)
                     .thenReturn(tempDir.toString());
@@ -177,7 +172,7 @@ class SignatureServiceTest {
             byte[] bytes = signatureService.getSignatureBytes(TEST_USER, "personal.png");
 
             // Verify
-            assertEquals(
+            Assertions.assertEquals(
                     "personal signature content",
                     new String(bytes),
                     "Should return the correct content for personal file");
@@ -188,7 +183,7 @@ class SignatureServiceTest {
     void testGetSignatureBytes_SharedFile() throws IOException {
         // Mock static method for each test
         try (MockedStatic<InstallationPathConfig> mockedConfig =
-                mockStatic(InstallationPathConfig.class)) {
+                Mockito.mockStatic(InstallationPathConfig.class)) {
             mockedConfig
                     .when(InstallationPathConfig::getSignaturesPath)
                     .thenReturn(tempDir.toString());
@@ -197,7 +192,7 @@ class SignatureServiceTest {
             byte[] bytes = signatureService.getSignatureBytes(TEST_USER, "shared.jpg");
 
             // Verify
-            assertEquals(
+            Assertions.assertEquals(
                     "shared signature content",
                     new String(bytes),
                     "Should return the correct content for shared file");
@@ -208,13 +203,13 @@ class SignatureServiceTest {
     void testGetSignatureBytes_FileNotFound() {
         // Mock static method for each test
         try (MockedStatic<InstallationPathConfig> mockedConfig =
-                mockStatic(InstallationPathConfig.class)) {
+                Mockito.mockStatic(InstallationPathConfig.class)) {
             mockedConfig
                     .when(InstallationPathConfig::getSignaturesPath)
                     .thenReturn(tempDir.toString());
 
             // Test and verify
-            assertThrows(
+            Assertions.assertThrows(
                     FileNotFoundException.class,
                     () -> signatureService.getSignatureBytes(TEST_USER, "nonexistent.png"),
                     "Should throw exception for non-existent files");
@@ -225,13 +220,13 @@ class SignatureServiceTest {
     void testGetSignatureBytes_InvalidFileName() {
         // Mock static method for each test
         try (MockedStatic<InstallationPathConfig> mockedConfig =
-                mockStatic(InstallationPathConfig.class)) {
+                Mockito.mockStatic(InstallationPathConfig.class)) {
             mockedConfig
                     .when(InstallationPathConfig::getSignaturesPath)
                     .thenReturn(tempDir.toString());
 
             // Test and verify
-            assertThrows(
+            Assertions.assertThrows(
                     IllegalArgumentException.class,
                     () -> signatureService.getSignatureBytes(TEST_USER, "../invalid.png"),
                     "Should throw exception for file names with directory traversal");
@@ -239,10 +234,10 @@ class SignatureServiceTest {
     }
 
     @Test
-    void testGetAvailableSignatures_EmptyUsername() throws IOException {
+    void testGetAvailableSignatures_EmptyUsername() {
         // Mock static method for each test
         try (MockedStatic<InstallationPathConfig> mockedConfig =
-                mockStatic(InstallationPathConfig.class)) {
+                Mockito.mockStatic(InstallationPathConfig.class)) {
             mockedConfig
                     .when(InstallationPathConfig::getSignaturesPath)
                     .thenReturn(tempDir.toString());
@@ -251,24 +246,24 @@ class SignatureServiceTest {
             List<SignatureFile> signatures = signatureService.getAvailableSignatures("");
 
             // Verify - should only have shared signatures
-            assertEquals(
+            Assertions.assertEquals(
                     1,
                     signatures.size(),
                     "Should return only shared signatures for empty username");
-            assertEquals(
+            Assertions.assertEquals(
                     "shared.jpg",
                     signatures.get(0).getFileName(),
                     "Should have the shared signature");
-            assertEquals(
+            Assertions.assertEquals(
                     "Shared", signatures.get(0).getCategory(), "Should be categorized as shared");
         }
     }
 
     @Test
-    void testGetAvailableSignatures_NonExistentUser() throws IOException {
+    void testGetAvailableSignatures_NonExistentUser() {
         // Mock static method for each test
         try (MockedStatic<InstallationPathConfig> mockedConfig =
-                mockStatic(InstallationPathConfig.class)) {
+                Mockito.mockStatic(InstallationPathConfig.class)) {
             mockedConfig
                     .when(InstallationPathConfig::getSignaturesPath)
                     .thenReturn(tempDir.toString());
@@ -278,15 +273,15 @@ class SignatureServiceTest {
                     signatureService.getAvailableSignatures("nonExistentUser");
 
             // Verify - should only have shared signatures
-            assertEquals(
+            Assertions.assertEquals(
                     1,
                     signatures.size(),
                     "Should return only shared signatures for non-existent user");
-            assertEquals(
+            Assertions.assertEquals(
                     "shared.jpg",
                     signatures.get(0).getFileName(),
                     "Should have the shared signature");
-            assertEquals(
+            Assertions.assertEquals(
                     "Shared", signatures.get(0).getCategory(), "Should be categorized as shared");
         }
     }

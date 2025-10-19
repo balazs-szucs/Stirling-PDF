@@ -1,21 +1,19 @@
 package stirling.software.SPDF.controller.api.security;
 
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.when;
-
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentMatchers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.http.MediaType;
@@ -107,7 +105,7 @@ class CertSignControllerTest {
             derCertBytes = baos.toByteArray();
         }
 
-        when(pdfDocumentFactory.load(any(MultipartFile.class)))
+        Mockito.when(pdfDocumentFactory.load(ArgumentMatchers.any(MultipartFile.class)))
                 .thenAnswer(
                         invocation -> {
                             MultipartFile file = invocation.getArgument(0);
@@ -137,8 +135,8 @@ class CertSignControllerTest {
 
         ResponseEntity<byte[]> response = certSignController.signPDFWithCert(request);
 
-        assertNotNull(response.getBody());
-        assertTrue(response.getBody().length > 0);
+        Assertions.assertNotNull(response.getBody());
+        Assertions.assertTrue(response.getBody().length > 0);
     }
 
     @Test
@@ -163,8 +161,8 @@ class CertSignControllerTest {
 
         ResponseEntity<byte[]> response = certSignController.signPDFWithCert(request);
 
-        assertNotNull(response.getBody());
-        assertTrue(response.getBody().length > 0);
+        Assertions.assertNotNull(response.getBody());
+        Assertions.assertTrue(response.getBody().length > 0);
     }
 
     @Test
@@ -190,8 +188,8 @@ class CertSignControllerTest {
 
         ResponseEntity<byte[]> response = certSignController.signPDFWithCert(request);
 
-        assertNotNull(response.getBody());
-        assertTrue(response.getBody().length > 0);
+        Assertions.assertNotNull(response.getBody());
+        Assertions.assertTrue(response.getBody().length > 0);
     }
 
     @Test
@@ -221,8 +219,8 @@ class CertSignControllerTest {
 
         ResponseEntity<byte[]> response = certSignController.signPDFWithCert(request);
 
-        assertNotNull(response.getBody());
-        assertTrue(response.getBody().length > 0);
+        Assertions.assertNotNull(response.getBody());
+        Assertions.assertTrue(response.getBody().length > 0);
     }
 
     @Test
@@ -252,8 +250,8 @@ class CertSignControllerTest {
 
         ResponseEntity<byte[]> response = certSignController.signPDFWithCert(request);
 
-        assertNotNull(response.getBody());
-        assertTrue(response.getBody().length > 0);
+        Assertions.assertNotNull(response.getBody());
+        Assertions.assertTrue(response.getBody().length > 0);
     }
 
     @Test
@@ -283,8 +281,8 @@ class CertSignControllerTest {
 
         ResponseEntity<byte[]> response = certSignController.signPDFWithCert(request);
 
-        assertNotNull(response.getBody());
-        assertTrue(response.getBody().length > 0);
+        Assertions.assertNotNull(response.getBody());
+        Assertions.assertTrue(response.getBody().length > 0);
     }
 
     @Test
@@ -314,7 +312,7 @@ class CertSignControllerTest {
 
         ResponseEntity<byte[]> response = certSignController.signPDFWithCert(request);
 
-        assertNotNull(response.getBody());
-        assertTrue(response.getBody().length > 0);
+        Assertions.assertNotNull(response.getBody());
+        Assertions.assertTrue(response.getBody().length > 0);
     }
 }

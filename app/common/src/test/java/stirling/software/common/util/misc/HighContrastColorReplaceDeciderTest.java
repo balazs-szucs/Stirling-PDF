@@ -1,8 +1,6 @@
 package stirling.software.common.util.misc;
 
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
-
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import stirling.software.common.model.api.misc.HighContrastColorCombination;
@@ -20,7 +18,7 @@ class HighContrastColorReplaceDeciderTest {
         String[] colors = HighContrastColorReplaceDecider.getColors(replaceAndInvert, combination);
 
         // Assert
-        assertArrayEquals(
+        Assertions.assertArrayEquals(
                 new String[] {"0", "16777215"},
                 colors,
                 "Should return black (0) for text and white (16777215) for background");
@@ -36,7 +34,7 @@ class HighContrastColorReplaceDeciderTest {
         String[] colors = HighContrastColorReplaceDecider.getColors(replaceAndInvert, combination);
 
         // Assert
-        assertArrayEquals(
+        Assertions.assertArrayEquals(
                 new String[] {"65280", "0"},
                 colors,
                 "Should return green (65280) for text and black (0) for background");
@@ -52,7 +50,7 @@ class HighContrastColorReplaceDeciderTest {
         String[] colors = HighContrastColorReplaceDecider.getColors(replaceAndInvert, combination);
 
         // Assert
-        assertArrayEquals(
+        Assertions.assertArrayEquals(
                 new String[] {"16777215", "0"},
                 colors,
                 "Should return white (16777215) for text and black (0) for background");
@@ -69,7 +67,7 @@ class HighContrastColorReplaceDeciderTest {
         String[] colors = HighContrastColorReplaceDecider.getColors(replaceAndInvert, combination);
 
         // Assert
-        assertArrayEquals(
+        Assertions.assertArrayEquals(
                 new String[] {"16776960", "0"},
                 colors,
                 "Should return yellow (16776960) for text and black (0) for background");
@@ -84,7 +82,7 @@ class HighContrastColorReplaceDeciderTest {
         String[] colors = HighContrastColorReplaceDecider.getColors(replaceAndInvert, null);
 
         // Assert
-        assertNull(colors, "Should return null for invalid combination");
+        Assertions.assertNull(colors, "Should return null for invalid combination");
     }
 
     @Test
@@ -105,7 +103,9 @@ class HighContrastColorReplaceDeciderTest {
 
         // Assert - all should return the same colors, showing that the ReplaceAndInvert parameter
         // isn't used
-        assertArrayEquals(colors1, colors2, "ReplaceAndInvert parameter should be ignored");
-        assertArrayEquals(colors1, colors3, "ReplaceAndInvert parameter should be ignored");
+        Assertions.assertArrayEquals(
+                colors1, colors2, "ReplaceAndInvert parameter should be ignored");
+        Assertions.assertArrayEquals(
+                colors1, colors3, "ReplaceAndInvert parameter should be ignored");
     }
 }

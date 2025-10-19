@@ -1,17 +1,13 @@
 package stirling.software.common.util;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.when;
-
 import java.io.IOException;
 import java.net.ServerSocket;
 
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -24,32 +20,32 @@ class UrlUtilsTest {
     @Test
     void testGetOrigin() {
         // Arrange
-        when(request.getScheme()).thenReturn("http");
-        when(request.getServerName()).thenReturn("localhost");
-        when(request.getServerPort()).thenReturn(8080);
-        when(request.getContextPath()).thenReturn("/myapp");
+        Mockito.when(request.getScheme()).thenReturn("http");
+        Mockito.when(request.getServerName()).thenReturn("localhost");
+        Mockito.when(request.getServerPort()).thenReturn(8080);
+        Mockito.when(request.getContextPath()).thenReturn("/myapp");
 
         // Act
         String origin = UrlUtils.getOrigin(request);
 
         // Assert
-        assertEquals(
+        Assertions.assertEquals(
                 "http://localhost:8080/myapp", origin, "Origin URL should be correctly formatted");
     }
 
     @Test
     void testGetOriginWithHttps() {
         // Arrange
-        when(request.getScheme()).thenReturn("https");
-        when(request.getServerName()).thenReturn("example.com");
-        when(request.getServerPort()).thenReturn(443);
-        when(request.getContextPath()).thenReturn("");
+        Mockito.when(request.getScheme()).thenReturn("https");
+        Mockito.when(request.getServerName()).thenReturn("example.com");
+        Mockito.when(request.getServerPort()).thenReturn(443);
+        Mockito.when(request.getContextPath()).thenReturn("");
 
         // Act
         String origin = UrlUtils.getOrigin(request);
 
         // Assert
-        assertEquals(
+        Assertions.assertEquals(
                 "https://example.com:443",
                 origin,
                 "HTTPS origin URL should be correctly formatted");
@@ -58,16 +54,16 @@ class UrlUtilsTest {
     @Test
     void testGetOriginWithEmptyContextPath() {
         // Arrange
-        when(request.getScheme()).thenReturn("http");
-        when(request.getServerName()).thenReturn("localhost");
-        when(request.getServerPort()).thenReturn(8080);
-        when(request.getContextPath()).thenReturn("");
+        Mockito.when(request.getScheme()).thenReturn("http");
+        Mockito.when(request.getServerName()).thenReturn("localhost");
+        Mockito.when(request.getServerPort()).thenReturn(8080);
+        Mockito.when(request.getContextPath()).thenReturn("");
 
         // Act
         String origin = UrlUtils.getOrigin(request);
 
         // Assert
-        assertEquals(
+        Assertions.assertEquals(
                 "http://localhost:8080",
                 origin,
                 "Origin URL with empty context path should be correct");
@@ -76,16 +72,16 @@ class UrlUtilsTest {
     @Test
     void testGetOriginWithSpecialCharacters() {
         // Arrange - Test with server name containing special characters
-        when(request.getScheme()).thenReturn("https");
-        when(request.getServerName()).thenReturn("internal-server.example-domain.com");
-        when(request.getServerPort()).thenReturn(8443);
-        when(request.getContextPath()).thenReturn("/app-v1.2");
+        Mockito.when(request.getScheme()).thenReturn("https");
+        Mockito.when(request.getServerName()).thenReturn("internal-server.example-domain.com");
+        Mockito.when(request.getServerPort()).thenReturn(8443);
+        Mockito.when(request.getContextPath()).thenReturn("/app-v1.2");
 
         // Act
         String origin = UrlUtils.getOrigin(request);
 
         // Assert
-        assertEquals(
+        Assertions.assertEquals(
                 "https://internal-server.example-domain.com:8443/app-v1.2",
                 origin,
                 "Origin URL with special characters should be correctly formatted");
@@ -94,16 +90,16 @@ class UrlUtilsTest {
     @Test
     void testGetOriginWithIPv4Address() {
         // Arrange
-        when(request.getScheme()).thenReturn("http");
-        when(request.getServerName()).thenReturn("192.168.1.100");
-        when(request.getServerPort()).thenReturn(8080);
-        when(request.getContextPath()).thenReturn("/app");
+        Mockito.when(request.getScheme()).thenReturn("http");
+        Mockito.when(request.getServerName()).thenReturn("192.168.1.100");
+        Mockito.when(request.getServerPort()).thenReturn(8080);
+        Mockito.when(request.getContextPath()).thenReturn("/app");
 
         // Act
         String origin = UrlUtils.getOrigin(request);
 
         // Assert
-        assertEquals(
+        Assertions.assertEquals(
                 "http://192.168.1.100:8080/app",
                 origin,
                 "Origin URL with IPv4 address should be correctly formatted");
@@ -112,16 +108,16 @@ class UrlUtilsTest {
     @Test
     void testGetOriginWithNonStandardPort() {
         // Arrange
-        when(request.getScheme()).thenReturn("https");
-        when(request.getServerName()).thenReturn("example.org");
-        when(request.getServerPort()).thenReturn(8443);
-        when(request.getContextPath()).thenReturn("/api");
+        Mockito.when(request.getScheme()).thenReturn("https");
+        Mockito.when(request.getServerName()).thenReturn("example.org");
+        Mockito.when(request.getServerPort()).thenReturn(8443);
+        Mockito.when(request.getContextPath()).thenReturn("/api");
 
         // Act
         String origin = UrlUtils.getOrigin(request);
 
         // Assert
-        assertEquals(
+        Assertions.assertEquals(
                 "https://example.org:8443/api",
                 origin,
                 "Origin URL with non-standard port should be correctly formatted");
@@ -144,14 +140,14 @@ class UrlUtilsTest {
             boolean afterSocketCreation = UrlUtils.isPortAvailable(port);
 
             // Assert
-            assertTrue(initialAvailability, "Port should be available initially");
-            assertFalse(
+            Assertions.assertTrue(initialAvailability, "Port should be available initially");
+            Assertions.assertFalse(
                     afterSocketCreation, "Port should not be available after socket is created");
 
         } catch (IOException e) {
             // This might happen if the port is already in use by another process
             // We'll just verify the behavior of isPortAvailable matches what we expect
-            assertFalse(
+            Assertions.assertFalse(
                     UrlUtils.isPortAvailable(port),
                     "Port should not be available if exception is thrown");
         } finally {
@@ -179,7 +175,7 @@ class UrlUtilsTest {
             String availablePort = UrlUtils.findAvailablePort(startPort);
 
             // Assert the returned port is not the occupied one
-            assertNotEquals(
+            Assertions.assertNotEquals(
                     String.valueOf(startPort),
                     availablePort,
                     "findAvailablePort should not return an occupied port");
@@ -192,7 +188,7 @@ class UrlUtilsTest {
             socket = null;
 
             // The port should now be available
-            assertTrue(
+            Assertions.assertTrue(
                     UrlUtils.isPortAvailable(portNumber),
                     "The port returned by findAvailablePort should be available");
 
@@ -220,7 +216,7 @@ class UrlUtilsTest {
             String availablePort = UrlUtils.findAvailablePort(startPort);
 
             // Assert the returned port is the start port since it's available
-            assertEquals(
+            Assertions.assertEquals(
                     String.valueOf(startPort),
                     availablePort,
                     "findAvailablePort should return the start port if it's available");
@@ -249,13 +245,13 @@ class UrlUtilsTest {
             int foundPort = Integer.parseInt(availablePort);
 
             // Should have skipped the two occupied ports
-            assertTrue(
+            Assertions.assertTrue(
                     foundPort >= startPort + 2,
                     "findAvailablePort should skip sequential occupied ports");
 
             // Verify the found port is actually available
             try (ServerSocket testSocket = new ServerSocket(foundPort)) {
-                assertTrue(testSocket.isBound(), "The found port should be bindable");
+                Assertions.assertTrue(testSocket.isBound(), "The found port should be bindable");
             }
 
         } catch (IOException e) {

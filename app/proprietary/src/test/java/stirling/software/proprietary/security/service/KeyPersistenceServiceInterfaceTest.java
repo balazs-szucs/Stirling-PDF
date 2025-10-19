@@ -1,13 +1,5 @@
 package stirling.software.proprietary.security.service;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.mockStatic;
-import static org.mockito.Mockito.when;
-
-import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.KeyPair;
@@ -16,12 +8,14 @@ import java.security.NoSuchAlgorithmException;
 import java.util.Base64;
 import java.util.Optional;
 
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.concurrent.ConcurrentMapCacheManager;
@@ -53,15 +47,15 @@ class KeyPersistenceServiceInterfaceTest {
 
         cacheManager = new ConcurrentMapCacheManager("verifyingKeys");
 
-        lenient().when(applicationProperties.getSecurity()).thenReturn(security);
-        lenient().when(security.getJwt()).thenReturn(jwtConfig);
-        lenient().when(jwtConfig.isEnabled()).thenReturn(true);
+        Mockito.lenient().when(applicationProperties.getSecurity()).thenReturn(security);
+        Mockito.lenient().when(security.getJwt()).thenReturn(jwtConfig);
+        Mockito.lenient().when(jwtConfig.isEnabled()).thenReturn(true);
     }
 
     @Test
     void testGetActiveKeypairWhenNoActiveKeyExists() {
         try (MockedStatic<InstallationPathConfig> mockedStatic =
-                mockStatic(InstallationPathConfig.class)) {
+                Mockito.mockStatic(InstallationPathConfig.class)) {
             mockedStatic
                     .when(InstallationPathConfig::getPrivateKeyPath)
                     .thenReturn(tempDir.toString());
@@ -70,9 +64,9 @@ class KeyPersistenceServiceInterfaceTest {
 
             JwtVerificationKey result = keyPersistenceService.getActiveKey();
 
-            assertNotNull(result);
-            assertNotNull(result.getKeyId());
-            assertNotNull(result.getVerifyingKey());
+            Assertions.assertNotNull(result);
+            Assertions.assertNotNull(result.getKeyId());
+            Assertions.assertNotNull(result.getVerifyingKey());
         }
     }
 
@@ -90,7 +84,7 @@ class KeyPersistenceServiceInterfaceTest {
         Files.writeString(keyFile, privateKeyBase64);
 
         try (MockedStatic<InstallationPathConfig> mockedStatic =
-                mockStatic(InstallationPathConfig.class)) {
+                Mockito.mockStatic(InstallationPathConfig.class)) {
             mockedStatic
                     .when(InstallationPathConfig::getPrivateKeyPath)
                     .thenReturn(tempDir.toString());
@@ -99,8 +93,8 @@ class KeyPersistenceServiceInterfaceTest {
 
             JwtVerificationKey result = keyPersistenceService.getActiveKey();
 
-            assertNotNull(result);
-            assertNotNull(result.getKeyId());
+            Assertions.assertNotNull(result);
+            Assertions.assertNotNull(result.getKeyId());
         }
     }
 
@@ -118,7 +112,7 @@ class KeyPersistenceServiceInterfaceTest {
         Files.writeString(keyFile, privateKeyBase64);
 
         try (MockedStatic<InstallationPathConfig> mockedStatic =
-                mockStatic(InstallationPathConfig.class)) {
+                Mockito.mockStatic(InstallationPathConfig.class)) {
             mockedStatic
                     .when(InstallationPathConfig::getPrivateKeyPath)
                     .thenReturn(tempDir.toString());
@@ -129,13 +123,14 @@ class KeyPersistenceServiceInterfaceTest {
                     .getDeclaredField("verifyingKeyCache")
                     .setAccessible(true);
             var cache = cacheManager.getCache("verifyingKeys");
+            Assertions.assertNotNull(cache);
             cache.put(keyId, signingKey);
 
             Optional<KeyPair> result = keyPersistenceService.getKeyPair(keyId);
 
-            assertTrue(result.isPresent());
-            assertNotNull(result.get().getPublic());
-            assertNotNull(result.get().getPrivate());
+            Assertions.assertTrue(result.isPresent());
+            Assertions.assertNotNull(result.get().getPublic());
+            Assertions.assertNotNull(result.get().getPrivate());
         }
     }
 
@@ -144,7 +139,7 @@ class KeyPersistenceServiceInterfaceTest {
         String keyId = "non-existent-key";
 
         try (MockedStatic<InstallationPathConfig> mockedStatic =
-                mockStatic(InstallationPathConfig.class)) {
+                Mockito.mockStatic(InstallationPathConfig.class)) {
             mockedStatic
                     .when(InstallationPathConfig::getPrivateKeyPath)
                     .thenReturn(tempDir.toString());
@@ -152,16 +147,16 @@ class KeyPersistenceServiceInterfaceTest {
 
             Optional<KeyPair> result = keyPersistenceService.getKeyPair(keyId);
 
-            assertFalse(result.isPresent());
+            Assertions.assertFalse(result.isPresent());
         }
     }
 
     @Test
     void testGetKeyPairWhenKeystoreDisabled() {
-        when(jwtConfig.isEnabled()).thenReturn(false);
+        Mockito.when(jwtConfig.isEnabled()).thenReturn(false);
 
         try (MockedStatic<InstallationPathConfig> mockedStatic =
-                mockStatic(InstallationPathConfig.class)) {
+                Mockito.mockStatic(InstallationPathConfig.class)) {
             mockedStatic
                     .when(InstallationPathConfig::getPrivateKeyPath)
                     .thenReturn(tempDir.toString());
@@ -169,27 +164,27 @@ class KeyPersistenceServiceInterfaceTest {
 
             Optional<KeyPair> result = keyPersistenceService.getKeyPair("any-key");
 
-            assertFalse(result.isPresent());
+            Assertions.assertFalse(result.isPresent());
         }
     }
 
     @Test
-    void testInitializeKeystoreCreatesDirectory() throws IOException {
+    void testInitializeKeystoreCreatesDirectory() {
         try (MockedStatic<InstallationPathConfig> mockedStatic =
-                mockStatic(InstallationPathConfig.class)) {
+                Mockito.mockStatic(InstallationPathConfig.class)) {
             mockedStatic
                     .when(InstallationPathConfig::getPrivateKeyPath)
                     .thenReturn(tempDir.toString());
             keyPersistenceService = new KeyPersistenceService(applicationProperties, cacheManager);
             keyPersistenceService.initializeKeystore();
 
-            assertTrue(Files.exists(tempDir));
-            assertTrue(Files.isDirectory(tempDir));
+            Assertions.assertTrue(Files.exists(tempDir));
+            Assertions.assertTrue(Files.isDirectory(tempDir));
         }
     }
 
     @Test
-    void testLoadExistingKeypairWithMissingPrivateKeyFile() throws Exception {
+    void testLoadExistingKeypairWithMissingPrivateKeyFile() {
         String keyId = "test-key-missing-file";
         String publicKeyBase64 =
                 Base64.getEncoder().encodeToString(testKeyPair.getPublic().getEncoded());
@@ -197,7 +192,7 @@ class KeyPersistenceServiceInterfaceTest {
         JwtVerificationKey existingKey = new JwtVerificationKey(keyId, publicKeyBase64);
 
         try (MockedStatic<InstallationPathConfig> mockedStatic =
-                mockStatic(InstallationPathConfig.class)) {
+                Mockito.mockStatic(InstallationPathConfig.class)) {
             mockedStatic
                     .when(InstallationPathConfig::getPrivateKeyPath)
                     .thenReturn(tempDir.toString());
@@ -205,9 +200,9 @@ class KeyPersistenceServiceInterfaceTest {
             keyPersistenceService.initializeKeystore();
 
             JwtVerificationKey result = keyPersistenceService.getActiveKey();
-            assertNotNull(result);
-            assertNotNull(result.getKeyId());
-            assertNotNull(result.getVerifyingKey());
+            Assertions.assertNotNull(result);
+            Assertions.assertNotNull(result.getKeyId());
+            Assertions.assertNotNull(result.getVerifyingKey());
         }
     }
 }

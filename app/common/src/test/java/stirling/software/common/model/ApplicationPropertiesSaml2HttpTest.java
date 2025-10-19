@@ -1,13 +1,12 @@
 package stirling.software.common.model;
 
-import static org.junit.jupiter.api.Assertions.*;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
@@ -35,7 +34,7 @@ class ApplicationPropertiesSaml2HttpTest {
 
             try (InputStream in = s.getIdpMetadataUri()) {
                 String body = new String(in.readAllBytes(), StandardCharsets.UTF_8);
-                assertTrue(body.contains("EntityDescriptor"));
+                Assertions.assertTrue(body.contains("EntityDescriptor"));
             }
         }
     }
@@ -46,7 +45,7 @@ class ApplicationPropertiesSaml2HttpTest {
         var s = new ApplicationProperties.Security.SAML2();
         s.setIdpMetadataUri("http:##invalid uri"); // absichtlich kaputt (Leerzeichen + ##)
 
-        assertThrows(IOException.class, s::getIdpMetadataUri);
+        Assertions.assertThrows(IOException.class, s::getIdpMetadataUri);
     }
 
     @Test
@@ -60,9 +59,10 @@ class ApplicationPropertiesSaml2HttpTest {
         s.setSpCert(tmp.toString());
         Resource r = s.getSpCert();
 
-        assertNotNull(r);
-        assertTrue(r instanceof FileSystemResource, "Expected FileSystemResource for FS path");
-        assertTrue(r.exists(), "Temp file should exist");
+        Assertions.assertNotNull(r);
+        Assertions.assertInstanceOf(
+                FileSystemResource.class, r, "Expected FileSystemResource for FS path");
+        Assertions.assertTrue(r.exists(), "Temp file should exist");
     }
 
     @Test
@@ -74,8 +74,9 @@ class ApplicationPropertiesSaml2HttpTest {
         s.setIdpCert(missing);
         Resource r = s.getIdpCert();
 
-        assertNotNull(r);
-        assertTrue(r instanceof FileSystemResource, "Expected FileSystemResource for FS path");
-        assertFalse(r.exists(), "Resource should not exist for missing file");
+        Assertions.assertNotNull(r);
+        Assertions.assertInstanceOf(
+                FileSystemResource.class, r, "Expected FileSystemResource for FS path");
+        Assertions.assertFalse(r.exists(), "Resource should not exist for missing file");
     }
 }

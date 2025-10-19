@@ -1,17 +1,15 @@
 package stirling.software.common.util;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
-
 import java.util.List;
 import java.util.stream.Stream;
 
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import stirling.software.common.model.enumeration.UsernameAttribute;
@@ -24,19 +22,19 @@ class ProviderUtilsTest {
 
     @Test
     void testSuccessfulValidation() {
-        var provider = mock(GitHubProvider.class);
+        var provider = Mockito.mock(GitHubProvider.class);
 
-        when(provider.getClientId()).thenReturn("clientId");
-        when(provider.getClientSecret()).thenReturn("clientSecret");
-        when(provider.getScopes()).thenReturn(List.of("read:user"));
+        Mockito.when(provider.getClientId()).thenReturn("clientId");
+        Mockito.when(provider.getClientSecret()).thenReturn("clientSecret");
+        Mockito.when(provider.getScopes()).thenReturn(List.of("read:user"));
 
-        assertTrue(ProviderUtils.validateProvider(provider));
+        Assertions.assertTrue(ProviderUtils.validateProvider(provider));
     }
 
     @ParameterizedTest
     @MethodSource("providerParams")
     void testUnsuccessfulValidation(Provider provider) {
-        assertFalse(ProviderUtils.validateProvider(provider));
+        Assertions.assertFalse(ProviderUtils.validateProvider(provider));
     }
 
     public static Stream<Arguments> providerParams() {

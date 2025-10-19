@@ -1,20 +1,5 @@
 package stirling.software.proprietary.security.service;
 
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.atLeast;
-import static org.mockito.Mockito.contains;
-import static org.mockito.Mockito.eq;
-import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.NoSuchAlgorithmException;
@@ -24,12 +9,15 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.core.Authentication;
 
@@ -77,18 +65,19 @@ class JwtServiceTest {
     void testGenerateTokenWithAuthentication() throws Exception {
         String username = "testuser";
 
-        when(keystoreService.getActiveKey()).thenReturn(testVerificationKey);
-        when(keystoreService.getKeyPair("test-key-id")).thenReturn(Optional.of(testKeyPair));
-        when(keystoreService.decodePublicKey(testVerificationKey.getVerifyingKey()))
+        Mockito.when(keystoreService.getActiveKey()).thenReturn(testVerificationKey);
+        Mockito.when(keystoreService.getKeyPair("test-key-id"))
+                .thenReturn(Optional.of(testKeyPair));
+        Mockito.when(keystoreService.decodePublicKey(testVerificationKey.getVerifyingKey()))
                 .thenReturn(testKeyPair.getPublic());
-        when(authentication.getPrincipal()).thenReturn(userDetails);
-        when(userDetails.getUsername()).thenReturn(username);
+        Mockito.when(authentication.getPrincipal()).thenReturn(userDetails);
+        Mockito.when(userDetails.getUsername()).thenReturn(username);
 
         String token = jwtService.generateToken(authentication, Collections.emptyMap());
 
-        assertNotNull(token);
-        assertFalse(token.isEmpty());
-        assertEquals(username, jwtService.extractUsername(token));
+        Assertions.assertNotNull(token);
+        Assertions.assertFalse(token.isEmpty());
+        Assertions.assertEquals(username, jwtService.extractUsername(token));
     }
 
     @Test
@@ -98,81 +87,76 @@ class JwtServiceTest {
         claims.put("role", "admin");
         claims.put("department", "IT");
 
-        when(keystoreService.getActiveKey()).thenReturn(testVerificationKey);
-        when(keystoreService.getKeyPair("test-key-id")).thenReturn(Optional.of(testKeyPair));
-        when(keystoreService.decodePublicKey(testVerificationKey.getVerifyingKey()))
+        Mockito.when(keystoreService.getActiveKey()).thenReturn(testVerificationKey);
+        Mockito.when(keystoreService.getKeyPair("test-key-id"))
+                .thenReturn(Optional.of(testKeyPair));
+        Mockito.when(keystoreService.decodePublicKey(testVerificationKey.getVerifyingKey()))
                 .thenReturn(testKeyPair.getPublic());
-        when(authentication.getPrincipal()).thenReturn(userDetails);
-        when(userDetails.getUsername()).thenReturn(username);
+        Mockito.when(authentication.getPrincipal()).thenReturn(userDetails);
+        Mockito.when(userDetails.getUsername()).thenReturn(username);
 
         String token = jwtService.generateToken(authentication, claims);
 
-        assertNotNull(token);
-        assertFalse(token.isEmpty());
-        assertEquals(username, jwtService.extractUsername(token));
+        Assertions.assertNotNull(token);
+        Assertions.assertFalse(token.isEmpty());
+        Assertions.assertEquals(username, jwtService.extractUsername(token));
 
         Map<String, Object> extractedClaims = jwtService.extractClaims(token);
-        assertEquals("admin", extractedClaims.get("role"));
-        assertEquals("IT", extractedClaims.get("department"));
+        Assertions.assertEquals("admin", extractedClaims.get("role"));
+        Assertions.assertEquals("IT", extractedClaims.get("department"));
     }
 
     @Test
     void testValidateTokenSuccess() throws Exception {
-        when(keystoreService.getActiveKey()).thenReturn(testVerificationKey);
-        when(keystoreService.getKeyPair("test-key-id")).thenReturn(Optional.of(testKeyPair));
-        when(keystoreService.decodePublicKey(testVerificationKey.getVerifyingKey()))
+        Mockito.when(keystoreService.getActiveKey()).thenReturn(testVerificationKey);
+        Mockito.when(keystoreService.getKeyPair("test-key-id"))
+                .thenReturn(Optional.of(testKeyPair));
+        Mockito.when(keystoreService.decodePublicKey(testVerificationKey.getVerifyingKey()))
                 .thenReturn(testKeyPair.getPublic());
-        when(authentication.getPrincipal()).thenReturn(userDetails);
-        when(userDetails.getUsername()).thenReturn("testuser");
+        Mockito.when(authentication.getPrincipal()).thenReturn(userDetails);
+        Mockito.when(userDetails.getUsername()).thenReturn("testuser");
 
         String token = jwtService.generateToken(authentication, new HashMap<>());
 
-        assertDoesNotThrow(() -> jwtService.validateToken(token));
+        Assertions.assertDoesNotThrow(() -> jwtService.validateToken(token));
     }
 
     @Test
     void testValidateTokenWithInvalidToken() throws Exception {
-        when(keystoreService.getActiveKey()).thenReturn(testVerificationKey);
-        when(keystoreService.decodePublicKey(testVerificationKey.getVerifyingKey()))
+        Mockito.when(keystoreService.getActiveKey()).thenReturn(testVerificationKey);
+        Mockito.when(keystoreService.decodePublicKey(testVerificationKey.getVerifyingKey()))
                 .thenReturn(testKeyPair.getPublic());
 
-        assertThrows(
+        Assertions.assertThrows(
                 AuthenticationFailureException.class,
-                () -> {
-                    jwtService.validateToken("invalid-token");
-                });
+                () -> jwtService.validateToken("invalid-token"));
     }
 
     @Test
     void testValidateTokenWithMalformedToken() throws Exception {
-        when(keystoreService.getActiveKey()).thenReturn(testVerificationKey);
-        when(keystoreService.decodePublicKey(testVerificationKey.getVerifyingKey()))
+        Mockito.when(keystoreService.getActiveKey()).thenReturn(testVerificationKey);
+        Mockito.when(keystoreService.decodePublicKey(testVerificationKey.getVerifyingKey()))
                 .thenReturn(testKeyPair.getPublic());
 
         AuthenticationFailureException exception =
-                assertThrows(
+                Assertions.assertThrows(
                         AuthenticationFailureException.class,
-                        () -> {
-                            jwtService.validateToken("malformed.token");
-                        });
+                        () -> jwtService.validateToken("malformed.token"));
 
-        assertTrue(exception.getMessage().contains("Invalid"));
+        Assertions.assertTrue(exception.getMessage().contains("Invalid"));
     }
 
     @Test
     void testValidateTokenWithEmptyToken() throws Exception {
-        when(keystoreService.getActiveKey()).thenReturn(testVerificationKey);
-        when(keystoreService.decodePublicKey(testVerificationKey.getVerifyingKey()))
+        Mockito.when(keystoreService.getActiveKey()).thenReturn(testVerificationKey);
+        Mockito.when(keystoreService.decodePublicKey(testVerificationKey.getVerifyingKey()))
                 .thenReturn(testKeyPair.getPublic());
 
         AuthenticationFailureException exception =
-                assertThrows(
-                        AuthenticationFailureException.class,
-                        () -> {
-                            jwtService.validateToken("");
-                        });
+                Assertions.assertThrows(
+                        AuthenticationFailureException.class, () -> jwtService.validateToken(""));
 
-        assertTrue(
+        Assertions.assertTrue(
                 exception.getMessage().contains("Claims are empty")
                         || exception.getMessage().contains("Invalid"));
     }
@@ -180,28 +164,29 @@ class JwtServiceTest {
     @Test
     void testExtractUsername() throws Exception {
         String username = "testuser";
-        User user = mock(User.class);
+        User user = Mockito.mock(User.class);
         Map<String, Object> claims = Map.of("sub", "testuser", "authType", "WEB");
 
-        when(keystoreService.getActiveKey()).thenReturn(testVerificationKey);
-        when(keystoreService.getKeyPair("test-key-id")).thenReturn(Optional.of(testKeyPair));
-        when(keystoreService.decodePublicKey(testVerificationKey.getVerifyingKey()))
+        Mockito.when(keystoreService.getActiveKey()).thenReturn(testVerificationKey);
+        Mockito.when(keystoreService.getKeyPair("test-key-id"))
+                .thenReturn(Optional.of(testKeyPair));
+        Mockito.when(keystoreService.decodePublicKey(testVerificationKey.getVerifyingKey()))
                 .thenReturn(testKeyPair.getPublic());
-        when(authentication.getPrincipal()).thenReturn(user);
-        when(user.getUsername()).thenReturn(username);
+        Mockito.when(authentication.getPrincipal()).thenReturn(user);
+        Mockito.when(user.getUsername()).thenReturn(username);
 
         String token = jwtService.generateToken(authentication, claims);
 
-        assertEquals(username, jwtService.extractUsername(token));
+        Assertions.assertEquals(username, jwtService.extractUsername(token));
     }
 
     @Test
     void testExtractUsernameWithInvalidToken() throws Exception {
-        when(keystoreService.getActiveKey()).thenReturn(testVerificationKey);
-        when(keystoreService.decodePublicKey(testVerificationKey.getVerifyingKey()))
+        Mockito.when(keystoreService.getActiveKey()).thenReturn(testVerificationKey);
+        Mockito.when(keystoreService.decodePublicKey(testVerificationKey.getVerifyingKey()))
                 .thenReturn(testKeyPair.getPublic());
 
-        assertThrows(
+        Assertions.assertThrows(
                 AuthenticationFailureException.class,
                 () -> jwtService.extractUsername("invalid-token"));
     }
@@ -211,29 +196,30 @@ class JwtServiceTest {
         String username = "testuser";
         Map<String, Object> claims = Map.of("role", "admin", "department", "IT");
 
-        when(keystoreService.getActiveKey()).thenReturn(testVerificationKey);
-        when(keystoreService.getKeyPair("test-key-id")).thenReturn(Optional.of(testKeyPair));
-        when(keystoreService.decodePublicKey(testVerificationKey.getVerifyingKey()))
+        Mockito.when(keystoreService.getActiveKey()).thenReturn(testVerificationKey);
+        Mockito.when(keystoreService.getKeyPair("test-key-id"))
+                .thenReturn(Optional.of(testKeyPair));
+        Mockito.when(keystoreService.decodePublicKey(testVerificationKey.getVerifyingKey()))
                 .thenReturn(testKeyPair.getPublic());
-        when(authentication.getPrincipal()).thenReturn(userDetails);
-        when(userDetails.getUsername()).thenReturn(username);
+        Mockito.when(authentication.getPrincipal()).thenReturn(userDetails);
+        Mockito.when(userDetails.getUsername()).thenReturn(username);
 
         String token = jwtService.generateToken(authentication, claims);
         Map<String, Object> extractedClaims = jwtService.extractClaims(token);
 
-        assertEquals("admin", extractedClaims.get("role"));
-        assertEquals("IT", extractedClaims.get("department"));
-        assertEquals(username, extractedClaims.get("sub"));
-        assertEquals("Stirling PDF", extractedClaims.get("iss"));
+        Assertions.assertEquals("admin", extractedClaims.get("role"));
+        Assertions.assertEquals("IT", extractedClaims.get("department"));
+        Assertions.assertEquals(username, extractedClaims.get("sub"));
+        Assertions.assertEquals("Stirling PDF", extractedClaims.get("iss"));
     }
 
     @Test
     void testExtractClaimsWithInvalidToken() throws Exception {
-        when(keystoreService.getActiveKey()).thenReturn(testVerificationKey);
-        when(keystoreService.decodePublicKey(testVerificationKey.getVerifyingKey()))
+        Mockito.when(keystoreService.getActiveKey()).thenReturn(testVerificationKey);
+        Mockito.when(keystoreService.decodePublicKey(testVerificationKey.getVerifyingKey()))
                 .thenReturn(testKeyPair.getPublic());
 
-        assertThrows(
+        Assertions.assertThrows(
                 AuthenticationFailureException.class,
                 () -> jwtService.extractClaims("invalid-token"));
     }
@@ -242,31 +228,31 @@ class JwtServiceTest {
     void testExtractTokenWithCookie() {
         String token = "test-token";
         Cookie[] cookies = {new Cookie("stirling_jwt", token)};
-        when(request.getCookies()).thenReturn(cookies);
+        Mockito.when(request.getCookies()).thenReturn(cookies);
 
-        assertEquals(token, jwtService.extractToken(request));
+        Assertions.assertEquals(token, jwtService.extractToken(request));
     }
 
     @Test
     void testExtractTokenWithNoCookies() {
-        when(request.getCookies()).thenReturn(null);
+        Mockito.when(request.getCookies()).thenReturn(null);
 
-        assertNull(jwtService.extractToken(request));
+        Assertions.assertNull(jwtService.extractToken(request));
     }
 
     @Test
     void testExtractTokenWithWrongCookie() {
         Cookie[] cookies = {new Cookie("OTHER_COOKIE", "value")};
-        when(request.getCookies()).thenReturn(cookies);
+        Mockito.when(request.getCookies()).thenReturn(cookies);
 
-        assertNull(jwtService.extractToken(request));
+        Assertions.assertNull(jwtService.extractToken(request));
     }
 
     @Test
     void testExtractTokenWithInvalidAuthorizationHeader() {
-        when(request.getCookies()).thenReturn(null);
+        Mockito.when(request.getCookies()).thenReturn(null);
 
-        assertNull(jwtService.extractToken(request));
+        Assertions.assertNull(jwtService.extractToken(request));
     }
 
     @ParameterizedTest
@@ -279,11 +265,18 @@ class JwtServiceTest {
 
         testJwtService.addToken(response, token);
 
-        verify(response).addHeader(eq("Set-Cookie"), contains("stirling_jwt=" + token));
-        verify(response).addHeader(eq("Set-Cookie"), contains("HttpOnly"));
+        Mockito.verify(response)
+                .addHeader(
+                        ArgumentMatchers.eq("Set-Cookie"),
+                        ArgumentMatchers.contains("stirling_jwt=" + token));
+        Mockito.verify(response)
+                .addHeader(
+                        ArgumentMatchers.eq("Set-Cookie"), ArgumentMatchers.contains("HttpOnly"));
 
         if (secureCookie) {
-            verify(response).addHeader(eq("Set-Cookie"), contains("Secure"));
+            Mockito.verify(response)
+                    .addHeader(
+                            ArgumentMatchers.eq("Set-Cookie"), ArgumentMatchers.contains("Secure"));
         }
     }
 
@@ -291,27 +284,33 @@ class JwtServiceTest {
     void testClearToken() {
         jwtService.clearToken(response);
 
-        verify(response).addHeader(eq("Set-Cookie"), contains("stirling_jwt="));
-        verify(response).addHeader(eq("Set-Cookie"), contains("Max-Age=0"));
+        Mockito.verify(response)
+                .addHeader(
+                        ArgumentMatchers.eq("Set-Cookie"),
+                        ArgumentMatchers.contains("stirling_jwt="));
+        Mockito.verify(response)
+                .addHeader(
+                        ArgumentMatchers.eq("Set-Cookie"), ArgumentMatchers.contains("Max-Age=0"));
     }
 
     @Test
-    void testGenerateTokenWithKeyId() throws Exception {
+    void testGenerateTokenWithKeyId() {
         String username = "testuser";
         Map<String, Object> claims = new HashMap<>();
 
-        when(keystoreService.getActiveKey()).thenReturn(testVerificationKey);
-        when(keystoreService.getKeyPair("test-key-id")).thenReturn(Optional.of(testKeyPair));
-        when(authentication.getPrincipal()).thenReturn(userDetails);
-        when(userDetails.getUsername()).thenReturn(username);
+        Mockito.when(keystoreService.getActiveKey()).thenReturn(testVerificationKey);
+        Mockito.when(keystoreService.getKeyPair("test-key-id"))
+                .thenReturn(Optional.of(testKeyPair));
+        Mockito.when(authentication.getPrincipal()).thenReturn(userDetails);
+        Mockito.when(userDetails.getUsername()).thenReturn(username);
 
         String token = jwtService.generateToken(authentication, claims);
 
-        assertNotNull(token);
-        assertFalse(token.isEmpty());
+        Assertions.assertNotNull(token);
+        Assertions.assertFalse(token.isEmpty());
         // Verify that the keystore service was called
-        verify(keystoreService).getActiveKey();
-        verify(keystoreService).getKeyPair("test-key-id");
+        Mockito.verify(keystoreService).getActiveKey();
+        Mockito.verify(keystoreService).getKeyPair("test-key-id");
     }
 
     @Test
@@ -319,24 +318,25 @@ class JwtServiceTest {
         String username = "testuser";
         Map<String, Object> claims = new HashMap<>();
 
-        when(keystoreService.getActiveKey()).thenReturn(testVerificationKey);
-        when(keystoreService.getKeyPair("test-key-id")).thenReturn(Optional.of(testKeyPair));
-        when(keystoreService.decodePublicKey(testVerificationKey.getVerifyingKey()))
+        Mockito.when(keystoreService.getActiveKey()).thenReturn(testVerificationKey);
+        Mockito.when(keystoreService.getKeyPair("test-key-id"))
+                .thenReturn(Optional.of(testKeyPair));
+        Mockito.when(keystoreService.decodePublicKey(testVerificationKey.getVerifyingKey()))
                 .thenReturn(testKeyPair.getPublic());
-        when(authentication.getPrincipal()).thenReturn(userDetails);
-        when(userDetails.getUsername()).thenReturn(username);
+        Mockito.when(authentication.getPrincipal()).thenReturn(userDetails);
+        Mockito.when(userDetails.getUsername()).thenReturn(username);
 
         // Generate token with key ID
         String token = jwtService.generateToken(authentication, claims);
 
         // Mock extraction of key ID and verification (lenient to avoid unused stubbing)
-        lenient()
+        Mockito.lenient()
                 .when(keystoreService.getKeyPair("test-key-id"))
                 .thenReturn(Optional.of(testKeyPair));
 
         // Verify token can be validated
-        assertDoesNotThrow(() -> jwtService.validateToken(token));
-        assertEquals(username, jwtService.extractUsername(token));
+        Assertions.assertDoesNotThrow(() -> jwtService.validateToken(token));
+        Assertions.assertEquals(username, jwtService.extractUsername(token));
     }
 
     @Test
@@ -345,12 +345,13 @@ class JwtServiceTest {
         Map<String, Object> claims = new HashMap<>();
 
         // First, generate a token successfully
-        when(keystoreService.getActiveKey()).thenReturn(testVerificationKey);
-        when(keystoreService.getKeyPair("test-key-id")).thenReturn(Optional.of(testKeyPair));
-        when(keystoreService.decodePublicKey(testVerificationKey.getVerifyingKey()))
+        Mockito.when(keystoreService.getActiveKey()).thenReturn(testVerificationKey);
+        Mockito.when(keystoreService.getKeyPair("test-key-id"))
+                .thenReturn(Optional.of(testKeyPair));
+        Mockito.when(keystoreService.decodePublicKey(testVerificationKey.getVerifyingKey()))
                 .thenReturn(testKeyPair.getPublic());
-        when(authentication.getPrincipal()).thenReturn(userDetails);
-        when(userDetails.getUsername()).thenReturn(username);
+        Mockito.when(authentication.getPrincipal()).thenReturn(userDetails);
+        Mockito.when(userDetails.getUsername()).thenReturn(username);
 
         String token = jwtService.generateToken(authentication, claims);
 
@@ -362,16 +363,17 @@ class JwtServiceTest {
                         Base64.getEncoder().encodeToString(testKeyPair.getPublic().getEncoded()));
 
         // Mock the specific key lookup to fail, but the active key should work
-        when(keystoreService.getKeyPair("test-key-id")).thenReturn(Optional.empty());
-        when(keystoreService.refreshActiveKeyPair()).thenReturn(fallbackKey);
-        when(keystoreService.getKeyPair("fallback-key")).thenReturn(Optional.of(testKeyPair));
+        Mockito.when(keystoreService.getKeyPair("test-key-id")).thenReturn(Optional.empty());
+        Mockito.when(keystoreService.refreshActiveKeyPair()).thenReturn(fallbackKey);
+        Mockito.when(keystoreService.getKeyPair("fallback-key"))
+                .thenReturn(Optional.of(testKeyPair));
 
         // Should still work by falling back to the active keypair
-        assertDoesNotThrow(() -> jwtService.validateToken(token));
-        assertEquals(username, jwtService.extractUsername(token));
+        Assertions.assertDoesNotThrow(() -> jwtService.validateToken(token));
+        Assertions.assertEquals(username, jwtService.extractUsername(token));
 
         // Verify fallback logic was used
-        verify(keystoreService, atLeast(1)).getActiveKey();
+        Mockito.verify(keystoreService, Mockito.atLeast(1)).getActiveKey();
     }
 
     private JwtService createJwtServiceWithSecureCookie(boolean secureCookie) throws Exception {

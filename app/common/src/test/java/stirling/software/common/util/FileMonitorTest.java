@@ -1,10 +1,5 @@
 package stirling.software.common.util;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.when;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -12,10 +7,12 @@ import java.nio.file.attribute.FileTime;
 import java.time.Instant;
 import java.util.function.Predicate;
 
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -35,11 +32,12 @@ class FileMonitorTest {
 
     @BeforeEach
     void setUp() throws IOException {
-        when(runtimePathConfig.getPipelineWatchedFoldersPath()).thenReturn(tempDir.toString());
+        Mockito.when(runtimePathConfig.getPipelineWatchedFoldersPath())
+                .thenReturn(tempDir.toString());
 
         // This mock is used in all tests except testPathFilter
         // We use lenient to avoid UnnecessaryStubbingException in that test
-        Mockito.lenient().when(pathFilter.test(any())).thenReturn(true);
+        Mockito.lenient().when(pathFilter.test(ArgumentMatchers.any())).thenReturn(true);
 
         fileMonitor = new FileMonitor(pathFilter, runtimePathConfig);
     }
@@ -54,7 +52,7 @@ class FileMonitorTest {
         Files.setLastModifiedTime(testFile, FileTime.from(Instant.now().minusMillis(10000)));
 
         // File should be ready for processing as it was modified more than 5 seconds ago
-        assertTrue(fileMonitor.isFileReadyForProcessing(testFile));
+        Assertions.assertTrue(fileMonitor.isFileReadyForProcessing(testFile));
     }
 
     @Test
@@ -67,7 +65,7 @@ class FileMonitorTest {
         Files.setLastModifiedTime(testFile, FileTime.from(Instant.now()));
 
         // File should not be ready for processing as it was just modified
-        assertFalse(fileMonitor.isFileReadyForProcessing(testFile));
+        Assertions.assertFalse(fileMonitor.isFileReadyForProcessing(testFile));
     }
 
     @Test
@@ -76,7 +74,7 @@ class FileMonitorTest {
         Path nonExistentFile = tempDir.resolve("non-existent-file.txt");
 
         // Non-existent file should not be ready for processing
-        assertFalse(fileMonitor.isFileReadyForProcessing(nonExistentFile));
+        Assertions.assertFalse(fileMonitor.isFileReadyForProcessing(nonExistentFile));
     }
 
     @Test
@@ -89,7 +87,7 @@ class FileMonitorTest {
         Files.setLastModifiedTime(testFile, FileTime.from(Instant.now().minusMillis(10000)));
 
         // Verify the file is considered ready when it meets the time criteria
-        assertTrue(
+        Assertions.assertTrue(
                 fileMonitor.isFileReadyForProcessing(testFile),
                 "File should be ready for processing when sufficiently old");
     }
@@ -113,15 +111,15 @@ class FileMonitorTest {
         Files.setLastModifiedTime(txtFile, FileTime.from(Instant.now().minusMillis(10000)));
 
         // PDF file should be ready for processing
-        assertTrue(pdfMonitor.isFileReadyForProcessing(pdfFile));
+        Assertions.assertTrue(pdfMonitor.isFileReadyForProcessing(pdfFile));
 
         // Note: In the current implementation, FileMonitor.isFileReadyForProcessing()
         // doesn't check file filters directly - it only checks criteria like file existence
         // and modification time. The filtering is likely handled elsewhere in the workflow.
 
         // To avoid test failures, we'll verify that the filter itself works correctly
-        assertFalse(pdfFilter.test(txtFile), "PDF filter should reject txt files");
-        assertTrue(pdfFilter.test(pdfFile), "PDF filter should accept pdf files");
+        Assertions.assertFalse(pdfFilter.test(txtFile), "PDF filter should reject txt files");
+        Assertions.assertTrue(pdfFilter.test(pdfFile), "PDF filter should accept pdf files");
     }
 
     @Test
@@ -134,7 +132,7 @@ class FileMonitorTest {
         Files.setLastModifiedTime(testFile, FileTime.from(Instant.now().minusMillis(10000)));
 
         // First check that the file is ready when meeting time criteria
-        assertTrue(
+        Assertions.assertTrue(
                 fileMonitor.isFileReadyForProcessing(testFile),
                 "File should be ready for processing when sufficiently old");
 
@@ -142,7 +140,7 @@ class FileMonitorTest {
         Files.write(testFile, "updated content".getBytes());
         Files.setLastModifiedTime(testFile, FileTime.from(Instant.now().minusMillis(10000)));
 
-        assertTrue(
+        Assertions.assertTrue(
                 fileMonitor.isFileReadyForProcessing(testFile),
                 "File should be ready for processing after updating");
     }
@@ -158,7 +156,7 @@ class FileMonitorTest {
 
         // File should be ready for processing as it was modified more than 5 seconds ago
         // Use the absolute path to make sure it's handled correctly
-        assertTrue(fileMonitor.isFileReadyForProcessing(testFile.toAbsolutePath()));
+        Assertions.assertTrue(fileMonitor.isFileReadyForProcessing(testFile.toAbsolutePath()));
     }
 
     @Test
@@ -172,6 +170,7 @@ class FileMonitorTest {
 
         // A directory should not be considered ready for processing
         boolean isReady = fileMonitor.isFileReadyForProcessing(testDir);
-        assertFalse(isReady, "A directory should not be considered ready for processing");
+        Assertions.assertFalse(
+                isReady, "A directory should not be considered ready for processing");
     }
 }

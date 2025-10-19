@@ -1,10 +1,9 @@
 package stirling.software.common.model;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-
 import java.io.File;
 import java.time.LocalDateTime;
 
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -35,7 +34,7 @@ public class FileInfoTest {
                         fileSize,
                         LocalDateTime.now().minusDays(1));
 
-        assertEquals(expectedFormattedSize, fileInfo.getFormattedFileSize());
+        Assertions.assertEquals(expectedFormattedSize, fileInfo.getFormattedFileSize());
     }
 
     @Test
@@ -47,7 +46,7 @@ public class FileInfoTest {
                         LocalDateTime.now(),
                         1234,
                         LocalDateTime.now().minusDays(2));
-        assertEquals(
+        Assertions.assertEquals(
                 File.separator + "tmp" + File.separator + "test.pdf",
                 fileInfo.getFilePathAsPath().toString());
     }
@@ -62,7 +61,7 @@ public class FileInfoTest {
                         modDate,
                         100,
                         LocalDateTime.of(2024, 5, 31, 10, 0, 0));
-        assertEquals("2024-06-01 15:30:45", fileInfo.getFormattedModificationDate());
+        Assertions.assertEquals("2024-06-01 15:30:45", fileInfo.getFormattedModificationDate());
     }
 
     @Test
@@ -75,7 +74,7 @@ public class FileInfoTest {
                         LocalDateTime.of(2024, 1, 1, 0, 0, 0),
                         500,
                         creationDate);
-        assertEquals("2023-12-25 08:15:00", fileInfo.getFormattedCreationDate());
+        Assertions.assertEquals("2023-12-25 08:15:00", fileInfo.getFormattedCreationDate());
     }
 
     @Test
@@ -89,11 +88,12 @@ public class FileInfoTest {
                         2048,
                         now.minusDays(1));
         // Test getters
-        assertEquals("doc.pdf", fileInfo.getFileName());
-        assertEquals(File.separator + "docs" + File.separator + "doc.pdf", fileInfo.getFilePath());
-        assertEquals(now, fileInfo.getModificationDate());
-        assertEquals(2048, fileInfo.getFileSize());
-        assertEquals(now.minusDays(1), fileInfo.getCreationDate());
+        Assertions.assertEquals("doc.pdf", fileInfo.getFileName());
+        Assertions.assertEquals(
+                File.separator + "docs" + File.separator + "doc.pdf", fileInfo.getFilePath());
+        Assertions.assertEquals(now, fileInfo.getModificationDate());
+        Assertions.assertEquals(2048, fileInfo.getFileSize());
+        Assertions.assertEquals(now.minusDays(1), fileInfo.getCreationDate());
 
         // Test setters
         fileInfo.setFileName("new.pdf");
@@ -102,10 +102,11 @@ public class FileInfoTest {
         fileInfo.setFileSize(4096);
         fileInfo.setCreationDate(now.minusDays(2));
 
-        assertEquals("new.pdf", fileInfo.getFileName());
-        assertEquals(File.separator + "new" + File.separator + "new.pdf", fileInfo.getFilePath());
-        assertEquals(now.plusDays(1), fileInfo.getModificationDate());
-        assertEquals(4096, fileInfo.getFileSize());
-        assertEquals(now.minusDays(2), fileInfo.getCreationDate());
+        Assertions.assertEquals("new.pdf", fileInfo.getFileName());
+        Assertions.assertEquals(
+                File.separator + "new" + File.separator + "new.pdf", fileInfo.getFilePath());
+        Assertions.assertEquals(now.plusDays(1), fileInfo.getModificationDate());
+        Assertions.assertEquals(4096, fileInfo.getFileSize());
+        Assertions.assertEquals(now.minusDays(2), fileInfo.getCreationDate());
     }
 }

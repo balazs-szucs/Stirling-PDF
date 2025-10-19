@@ -1,14 +1,11 @@
 package stirling.software.common.service;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
 import java.lang.management.MemoryMXBean;
 import java.lang.management.OperatingSystemMXBean;
 import java.time.Instant;
 import java.util.concurrent.atomic.AtomicReference;
 
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -33,11 +30,11 @@ class ResourceMonitorTest {
     @Mock private MemoryMXBean memoryMXBean;
 
     @Spy
-    private AtomicReference<ResourceStatus> currentStatus =
+    private final AtomicReference<ResourceStatus> currentStatus =
             new AtomicReference<>(ResourceStatus.OK);
 
     @Spy
-    private AtomicReference<ResourceMetrics> latestMetrics =
+    private final AtomicReference<ResourceMetrics> latestMetrics =
             new AtomicReference<>(new ResourceMetrics());
 
     @BeforeEach
@@ -66,7 +63,8 @@ class ResourceMonitorTest {
         int capacity = resourceMonitor.calculateDynamicQueueCapacity(baseCapacity, minCapacity);
 
         // Then
-        assertEquals(baseCapacity, capacity, "With OK status, capacity should equal base capacity");
+        Assertions.assertEquals(
+                baseCapacity, capacity, "With OK status, capacity should equal base capacity");
 
         // Given
         currentStatus.set(ResourceStatus.WARNING);
@@ -75,7 +73,8 @@ class ResourceMonitorTest {
         capacity = resourceMonitor.calculateDynamicQueueCapacity(baseCapacity, minCapacity);
 
         // Then
-        assertEquals(6, capacity, "With WARNING status, capacity should be reduced to 60%");
+        Assertions.assertEquals(
+                6, capacity, "With WARNING status, capacity should be reduced to 60%");
 
         // Given
         currentStatus.set(ResourceStatus.CRITICAL);
@@ -84,10 +83,11 @@ class ResourceMonitorTest {
         capacity = resourceMonitor.calculateDynamicQueueCapacity(baseCapacity, minCapacity);
 
         // Then
-        assertEquals(3, capacity, "With CRITICAL status, capacity should be reduced to 30%");
+        Assertions.assertEquals(
+                3, capacity, "With CRITICAL status, capacity should be reduced to 30%");
 
         // Test minimum capacity enforcement
-        assertEquals(
+        Assertions.assertEquals(
                 minCapacity,
                 resourceMonitor.calculateDynamicQueueCapacity(1, minCapacity),
                 "Should never go below minimum capacity");
@@ -114,7 +114,7 @@ class ResourceMonitorTest {
         boolean result = resourceMonitor.shouldQueueJob(weight);
 
         // Then
-        assertEquals(
+        Assertions.assertEquals(
                 shouldQueue,
                 result,
                 String.format(
@@ -132,9 +132,9 @@ class ResourceMonitorTest {
         ResourceMetrics freshMetrics = new ResourceMetrics(0.5, 0.5, 1024, 2048, 4096, now);
 
         // When/Then
-        assertTrue(
+        Assertions.assertTrue(
                 staleMetrics.isStale(5000),
                 "Metrics from 6 seconds ago should be stale with 5s threshold");
-        assertFalse(freshMetrics.isStale(5000), "Fresh metrics should not be stale");
+        Assertions.assertFalse(freshMetrics.isStale(5000), "Fresh metrics should not be stale");
     }
 }

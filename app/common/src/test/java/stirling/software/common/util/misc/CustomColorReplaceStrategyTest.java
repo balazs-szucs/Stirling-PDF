@@ -1,11 +1,9 @@
 package stirling.software.common.util.misc;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-
 import java.io.IOException;
 import java.lang.reflect.Method;
 
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
@@ -43,9 +41,10 @@ class CustomColorReplaceStrategyTest {
     @Test
     void testConstructor() {
         // Test the constructor sets values correctly
-        assertNotNull(strategy, "Strategy should be initialized");
-        assertEquals(mockFile, strategy.getFileInput(), "File input should be set correctly");
-        assertEquals(
+        Assertions.assertNotNull(strategy, "Strategy should be initialized");
+        Assertions.assertEquals(
+                mockFile, strategy.getFileInput(), "File input should be set correctly");
+        Assertions.assertEquals(
                 ReplaceAndInvert.CUSTOM_COLOR,
                 strategy.getReplaceAndInvert(),
                 "ReplaceAndInvert should be set correctly");
@@ -61,7 +60,7 @@ class CustomColorReplaceStrategyTest {
 
         // Test with ASCII character which should be supported by standard fonts
         Object result = method.invoke(strategy, "A");
-        assertNotNull(result, "Standard font should support ASCII character");
+        Assertions.assertNotNull(result, "Standard font should support ASCII character");
     }
 
     @Test
@@ -100,8 +99,8 @@ class CustomColorReplaceStrategyTest {
 
             // For BLACK_TEXT_ON_WHITE, text color should be "0" and background color should be
             // "16777215"
-            assertEquals("0", textColor, "Text color should be black (0)");
-            assertEquals(
+            Assertions.assertEquals("0", textColor, "Text color should be black (0)");
+            Assertions.assertEquals(
                     "16777215", backgroundColor, "Background color should be white (16777215)");
 
         } catch (Exception e) {

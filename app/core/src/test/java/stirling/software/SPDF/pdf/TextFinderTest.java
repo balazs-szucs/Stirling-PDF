@@ -1,11 +1,5 @@
 package stirling.software.SPDF.pdf;
 
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
 import java.io.IOException;
 import java.util.List;
 
@@ -15,11 +9,7 @@ import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Nested;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -49,7 +39,7 @@ class TextFinderTest {
         textFinder.getText(document);
         List<PDFText> foundTexts = textFinder.getFoundTexts();
 
-        assertEquals(
+        Assertions.assertEquals(
                 expectedCount,
                 foundTexts.size(),
                 String.format(
@@ -57,7 +47,7 @@ class TextFinderTest {
 
         if (expectedTexts != null) {
             for (String expectedText : expectedTexts) {
-                assertTrue(
+                Assertions.assertTrue(
                         foundTexts.stream().anyMatch(text -> text.getText().equals(expectedText)),
                         String.format("Expected to find text: '%s'", expectedText));
             }
@@ -66,12 +56,12 @@ class TextFinderTest {
         // Verify basic properties of found texts
         foundTexts.forEach(
                 text -> {
-                    assertNotNull(text.getText());
-                    assertTrue(text.getX1() >= 0);
-                    assertTrue(text.getY1() >= 0);
-                    assertTrue(text.getX2() >= text.getX1());
-                    assertTrue(text.getY2() >= text.getY1());
-                    assertEquals(0, text.getPageIndex()); // Single page test
+                    Assertions.assertNotNull(text.getText());
+                    Assertions.assertTrue(text.getX1() >= 0);
+                    Assertions.assertTrue(text.getY1() >= 0);
+                    Assertions.assertTrue(text.getX2() >= text.getX1());
+                    Assertions.assertTrue(text.getY2() >= text.getY1());
+                    Assertions.assertEquals(0, text.getPageIndex()); // Single page test
                 });
     }
 
@@ -273,7 +263,7 @@ class TextFinderTest {
             List<PDFText> foundTexts = textFinder.getFoundTexts();
 
             // Each pattern should find at least one match in our test content
-            assertFalse(
+            Assertions.assertFalse(
                     foundTexts.isEmpty(),
                     String.format("Pattern '%s' should find at least one match", regexPattern));
         }
@@ -287,15 +277,15 @@ class TextFinderTest {
                 TextFinder textFinder = new TextFinder("[invalid regex(", true, false);
                 textFinder.getText(document);
                 List<PDFText> foundTexts = textFinder.getFoundTexts();
-                assertNotNull(foundTexts);
+                Assertions.assertNotNull(foundTexts);
             } catch (java.util.regex.PatternSyntaxException e) {
-                assertNotNull(e.getMessage());
-                assertTrue(
+                Assertions.assertNotNull(e.getMessage());
+                Assertions.assertTrue(
                         e.getMessage().contains("Unclosed character class")
                                 || e.getMessage().contains("syntax"),
                         "Exception should indicate regex syntax error");
             } catch (RuntimeException | IOException e) {
-                assertNotNull(e.getMessage());
+                Assertions.assertNotNull(e.getMessage());
             }
         }
     }
@@ -360,13 +350,13 @@ class TextFinderTest {
             textFinder.getText(document);
             List<PDFText> foundTexts = textFinder.getFoundTexts();
 
-            assertEquals(2, foundTexts.size());
+            Assertions.assertEquals(2, foundTexts.size());
 
             long page0Count = foundTexts.stream().filter(text -> text.getPageIndex() == 0).count();
             long page1Count = foundTexts.stream().filter(text -> text.getPageIndex() == 1).count();
 
-            assertEquals(1, page0Count);
-            assertEquals(1, page1Count);
+            Assertions.assertEquals(1, page0Count);
+            Assertions.assertEquals(1, page1Count);
         }
 
         @Test
@@ -381,8 +371,8 @@ class TextFinderTest {
             textFinder.getText(document);
             List<PDFText> foundTexts = textFinder.getFoundTexts();
 
-            assertEquals(1, foundTexts.size());
-            assertEquals(0, foundTexts.get(0).getPageIndex());
+            Assertions.assertEquals(1, foundTexts.size());
+            Assertions.assertEquals(0, foundTexts.get(0).getPageIndex());
         }
     }
 
@@ -415,8 +405,8 @@ class TextFinderTest {
             List<PDFText> foundTexts = textFinder.getFoundTexts();
             long endTime = System.currentTimeMillis();
 
-            assertEquals(10, foundTexts.size());
-            assertTrue(
+            Assertions.assertEquals(10, foundTexts.size());
+            Assertions.assertTrue(
                     endTime - startTime < 3000,
                     "Multi-page search should complete within 3 seconds");
         }
@@ -434,10 +424,10 @@ class TextFinderTest {
             try {
                 textFinder.getText(null);
                 List<PDFText> foundTexts = textFinder.getFoundTexts();
-                assertNotNull(foundTexts);
-                assertEquals(0, foundTexts.size());
+                Assertions.assertNotNull(foundTexts);
+                Assertions.assertEquals(0, foundTexts.size());
             } catch (Exception e) {
-                assertNotNull(e.getMessage());
+                Assertions.assertNotNull(e.getMessage());
             }
         }
 
@@ -448,7 +438,7 @@ class TextFinderTest {
                 TextFinder textFinder = new TextFinder("test", false, false);
                 textFinder.getText(emptyDocument);
                 List<PDFText> foundTexts = textFinder.getFoundTexts();
-                assertEquals(0, foundTexts.size());
+                Assertions.assertEquals(0, foundTexts.size());
             }
         }
 
@@ -459,7 +449,7 @@ class TextFinderTest {
             textFinder.getText(document);
             List<PDFText> foundTexts = textFinder.getFoundTexts();
 
-            assertEquals(0, foundTexts.size());
+            Assertions.assertEquals(0, foundTexts.size());
         }
 
         @Test
@@ -469,12 +459,12 @@ class TextFinderTest {
 
             String complexRegex = "(?=.*\\d)(?=.*[a-z])(?=.*[A-Z])[a-zA-Z\\d]{6}";
 
-            assertDoesNotThrow(
+            Assertions.assertDoesNotThrow(
                     () -> {
                         TextFinder textFinder = new TextFinder(complexRegex, true, false);
                         textFinder.getText(document);
                         List<PDFText> foundTexts = textFinder.getFoundTexts();
-                        assertNotNull(foundTexts);
+                        Assertions.assertNotNull(foundTexts);
                     });
         }
 
@@ -488,7 +478,7 @@ class TextFinderTest {
             textFinder.getText(document);
             List<PDFText> foundTexts = textFinder.getFoundTexts();
 
-            assertEquals(0, foundTexts.size());
+            Assertions.assertEquals(0, foundTexts.size());
         }
     }
 
@@ -505,21 +495,23 @@ class TextFinderTest {
             textFinder.getText(document);
             List<PDFText> foundTexts = textFinder.getFoundTexts();
 
-            assertEquals(1, foundTexts.size());
+            Assertions.assertEquals(1, foundTexts.size());
             PDFText foundText = foundTexts.get(0);
 
-            assertTrue(foundText.getX1() >= 0, "X1 should be non-negative");
-            assertTrue(foundText.getY1() >= 0, "Y1 should be non-negative");
-            assertTrue(foundText.getX2() > foundText.getX1(), "X2 should be greater than X1");
-            assertTrue(foundText.getY2() > foundText.getY1(), "Y2 should be greater than Y1");
+            Assertions.assertTrue(foundText.getX1() >= 0, "X1 should be non-negative");
+            Assertions.assertTrue(foundText.getY1() >= 0, "Y1 should be non-negative");
+            Assertions.assertTrue(
+                    foundText.getX2() > foundText.getX1(), "X2 should be greater than X1");
+            Assertions.assertTrue(
+                    foundText.getY2() > foundText.getY1(), "Y2 should be greater than Y1");
 
             double width = foundText.getX2() - foundText.getX1();
             double height = foundText.getY2() - foundText.getY1();
 
-            assertTrue(width > 0, "Text width should be positive");
-            assertTrue(height > 0, "Text height should be positive");
-            assertTrue(width < 1000, "Text width should be reasonable");
-            assertTrue(height < 100, "Text height should be reasonable");
+            Assertions.assertTrue(width > 0, "Text width should be positive");
+            Assertions.assertTrue(height > 0, "Text height should be positive");
+            Assertions.assertTrue(width < 1000, "Text width should be reasonable");
+            Assertions.assertTrue(height < 100, "Text height should be reasonable");
         }
 
         @Test
@@ -531,11 +523,11 @@ class TextFinderTest {
             textFinder.getText(document);
             List<PDFText> foundTexts = textFinder.getFoundTexts();
 
-            assertFalse(foundTexts.isEmpty());
+            Assertions.assertFalse(foundTexts.isEmpty());
             foundTexts.forEach(
                     text -> {
-                        assertNotNull(text.getText());
-                        assertTrue(text.getX1() >= 0 && text.getY1() >= 0);
+                        Assertions.assertNotNull(text.getText());
+                        Assertions.assertTrue(text.getX1() >= 0 && text.getY1() >= 0);
                     });
         }
     }
@@ -554,11 +546,11 @@ class TextFinderTest {
             textFinder.getText(document);
             List<PDFText> foundTexts = textFinder.getFoundTexts();
 
-            assertEquals(
+            Assertions.assertEquals(
                     1,
                     foundTexts.size(),
                     "Should find exactly one standalone '1', not the ones embedded in other numbers/codes");
-            assertEquals("1", foundTexts.get(0).getText());
+            Assertions.assertEquals("1", foundTexts.get(0).getText());
         }
 
         @Test
@@ -571,7 +563,7 @@ class TextFinderTest {
             textFinder.getText(document);
             List<PDFText> foundTexts = textFinder.getFoundTexts();
 
-            assertTrue(
+            Assertions.assertTrue(
                     foundTexts.size() >= 3,
                     "Should find multiple instances of '1' including standalone, in '1234', and in 'A1B'");
         }
@@ -587,10 +579,11 @@ class TextFinderTest {
             textFinder.getText(document);
             List<PDFText> foundTexts = textFinder.getFoundTexts();
 
-            assertTrue(foundTexts.size() >= 2, "Should find multiple standalone 'A' characters");
+            Assertions.assertTrue(
+                    foundTexts.size() >= 2, "Should find multiple standalone 'A' characters");
 
             for (PDFText found : foundTexts) {
-                assertEquals("A", found.getText());
+                Assertions.assertEquals("A", found.getText());
             }
         }
 
@@ -605,7 +598,7 @@ class TextFinderTest {
             textFinder1.getText(document);
             List<PDFText> foundTexts1 = textFinder1.getFoundTexts();
 
-            assertEquals(
+            Assertions.assertEquals(
                     1,
                     foundTexts1.size(),
                     "Should find only the standalone '1'; do not count the '1' in '1.0' or in 'Item1'.");
@@ -614,7 +607,7 @@ class TextFinderTest {
             textFinder2.getText(document);
             List<PDFText> foundTexts2 = textFinder2.getFoundTexts();
 
-            assertEquals(
+            Assertions.assertEquals(
                     1,
                     foundTexts2.size(),
                     "Should find only the standalone '2' in the number list");
@@ -630,8 +623,9 @@ class TextFinderTest {
             textFinder.getText(document);
             List<PDFText> foundTexts = textFinder.getFoundTexts();
 
-            assertEquals(1, foundTexts.size(), "Should find '1' surrounded by parentheses");
-            assertEquals("1", foundTexts.get(0).getText());
+            Assertions.assertEquals(
+                    1, foundTexts.size(), "Should find '1' surrounded by parentheses");
+            Assertions.assertEquals("1", foundTexts.get(0).getText());
         }
 
         @Test
@@ -644,7 +638,7 @@ class TextFinderTest {
             textFinder.getText(document);
             List<PDFText> foundTexts = textFinder.getFoundTexts();
 
-            assertEquals(
+            Assertions.assertEquals(
                     2,
                     foundTexts.size(),
                     "Should find both '1' instances despite spacing variations");
