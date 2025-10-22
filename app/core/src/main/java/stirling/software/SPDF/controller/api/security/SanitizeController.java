@@ -224,6 +224,9 @@ public class SanitizeController {
     }
 
     private static void sanitizeLinks(PDDocument document) throws IOException {
+        // Remove all external URI links from annotations
+        removeAllExternalLinks(document);
+
         for (PDPage page : document.getPages()) {
             List<PDAnnotation> annotations = page.getAnnotations();
             if (annotations == null || annotations.isEmpty()) {
@@ -264,6 +267,52 @@ public class SanitizeController {
 
             page.setAnnotations(keptAnnotations);
         }
+    }
+
+    private static void removeAllExternalLinks(PDDocument document) throws IOException {
+        for (PDPage page : document.getPages()) {
+            List<PDAnnotation> annotations = page.getAnnotations();
+            if (annotations == null || annotations.isEmpty()) {
+                continue;
+            }
+
+            List<PDAnnotation> annotationsToKeep = new ArrayList<>();
+
+            for (PDAnnotation annotation : annotations) {
+                boolean shouldRemove = false;
+
+                if (annotation instanceof PDAnnotationLink linkAnnotation) {
+                    PDAction action = linkAnnotation.getAction();
+
+                    if (action instanceof PDActionURI uriAction) {
+                        String uri = uriAction.getURI();
+
+                        if (isExternalLink(uri)) {
+                            shouldRemove = true;
+                            log.debug("Removing external link: {}", uri);
+                        }
+                    }
+                }
+
+                if (!shouldRemove) {
+                    annotationsToKeep.add(annotation);
+                }
+            }
+
+            page.setAnnotations(annotationsToKeep);
+        }
+    }
+    private static boolean isExternalLink(String uri) {
+        if (uri == null || uri.isEmpty()) {
+            return false;
+        }
+
+        String lowerUri = uri.toLowerCase();
+        return lowerUri.startsWith("http://")
+                || lowerUri.startsWith("https://")
+                || lowerUri.startsWith("ftp://")
+                || lowerUri.startsWith("ftps://")
+                || lowerUri.startsWith("www.");
     }
 
     private static void sanitizeFonts(PDDocument document) {
