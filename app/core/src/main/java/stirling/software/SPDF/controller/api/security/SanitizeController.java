@@ -2,6 +2,7 @@ package stirling.software.SPDF.controller.api.security;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.pdfbox.cos.COSDictionary;
@@ -224,14 +225,44 @@ public class SanitizeController {
 
     private static void sanitizeLinks(PDDocument document) throws IOException {
         for (PDPage page : document.getPages()) {
-            for (PDAnnotation annotation : page.getAnnotations()) {
-                if (annotation instanceof PDAnnotationLink linkAnnotation) {
-                    PDAction action = linkAnnotation.getAction();
-                    if ((action instanceof PDActionLaunch || action instanceof PDActionURI)) {
-                        linkAnnotation.setAction(null);
+            List<PDAnnotation> annotations = page.getAnnotations();
+            if (annotations == null || annotations.isEmpty()) {
+                continue;
+            }
+
+            List<PDAnnotation> keptAnnotations = new ArrayList<>(annotations.size());
+            for (PDAnnotation annotation : annotations) {
+                try {
+                    if (annotation instanceof PDAnnotationLink linkAnnotation) {
+                        PDAction action = linkAnnotation.getAction();
+                        if (action instanceof PDActionLaunch
+                                || action instanceof PDActionURI
+                                || action instanceof PDActionJavaScript) {
+                            // clear action for safety
+                            linkAnnotation.setAction(null);
+                        }
+                        continue;
                     }
+
+                    if (annotation instanceof PDAnnotationWidget widget) {
+                        PDAction widgetAction = widget.getAction();
+                        if (widgetAction instanceof PDActionLaunch
+                                || widgetAction instanceof PDActionURI
+                                || widgetAction instanceof PDActionJavaScript) {
+                            widget.setAction(null);
+                            continue;
+                        }
+                    }
+
+                    keptAnnotations.add(annotation);
+                } catch (Exception e) {
+                    log.debug(
+                            "Removing annotation due to error while sanitizing links: {}",
+                            e.getMessage());
                 }
             }
+
+            page.setAnnotations(keptAnnotations);
         }
     }
 
