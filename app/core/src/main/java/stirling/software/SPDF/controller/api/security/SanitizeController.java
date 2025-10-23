@@ -201,7 +201,7 @@ public class SanitizeController {
             List<PDAnnotation> annotations = page.getAnnotations();
             if (annotations != null && !annotations.isEmpty()) {
                 annotations.removeIf(
-                        annotation -> annotation instanceof PDAnnotationFileAttachment);
+                    PDAnnotationFileAttachment.class::isInstance);
             }
         }
     }
