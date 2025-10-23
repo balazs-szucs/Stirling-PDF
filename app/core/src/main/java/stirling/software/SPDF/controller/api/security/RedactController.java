@@ -32,6 +32,7 @@ import org.apache.pdfbox.pdmodel.PDResources;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.common.PDStream;
 import org.apache.pdfbox.pdmodel.font.PDFont;
+import org.apache.pdfbox.pdmodel.font.PDType0Font;
 import org.apache.pdfbox.pdmodel.graphics.PDXObject;
 import org.apache.pdfbox.pdmodel.graphics.form.PDFormXObject;
 import org.springframework.http.MediaType;
@@ -78,8 +79,9 @@ public class RedactController {
     private static final float PRECISION_THRESHOLD = 1e-3f;
     private static final int FONT_SCALE_FACTOR = 1000;
 
-    // Redaction box width reduction factor (10% reduction)
-    private static final float REDACTION_WIDTH_REDUCTION_FACTOR = 0.9f;
+    // Redaction box width reduction factor
+    // Set to 1.0f to always fully cover the detected text area even if text replacement fails
+    private static final float REDACTION_WIDTH_REDUCTION_FACTOR = 1.0f;
 
     // Text showing operators
     private static final Set<String> TEXT_SHOWING_OPERATORS = Set.of("Tj", "TJ", "'", "\"");
@@ -644,6 +646,69 @@ public class RedactController {
         }
     }
 
+    private static String extractTextFromToken(Object token, String operatorName, PDFont font) {
+        return switch (operatorName) {
+            case "Tj", "'" -> {
+                if (token instanceof COSString cosString) {
+                    yield decodeText(cosString, font);
+                }
+                yield "";
+            }
+            case "TJ" -> {
+                if (token instanceof COSArray cosArray) {
+                    StringBuilder sb = new StringBuilder();
+                    for (COSBase element : cosArray) {
+                        if (element instanceof COSString cosString) {
+                            sb.append(decodeText(cosString, font));
+                        }
+                    }
+                    yield sb.toString();
+                }
+                yield "";
+            }
+            default -> "";
+        };
+    }
+
+    private static String decodeText(COSString cosString, PDFont font) {
+        if (font == null) {
+            return cosString.getString();
+        }
+
+        try {
+            byte[] bytes = cosString.getBytes();
+            StringBuilder decoded = new StringBuilder();
+
+            int i = 0;
+            while (i < bytes.length) {
+                int code;
+                if (i + 1 < bytes.length && font instanceof PDType0Font) {
+                    code = ((bytes[i] & 0xFF) << 8) | (bytes[i + 1] & 0xFF);
+                    i += 2;
+                } else {
+                    // Single-byte font
+                    code = bytes[i] & 0xFF;
+                    i++;
+                }
+
+                String unicode = font.toUnicode(code);
+                if (unicode != null) {
+                    decoded.append(unicode);
+                } else {
+                    decoded.append((char) code);
+                }
+            }
+
+            return decoded.toString();
+        } catch (Exception e) {
+            log.debug(
+                    "Failed to decode text with font {}: {}, falling back to raw string",
+                    font.getName(),
+                    e.getMessage());
+            return cosString.getString();
+        }
+    }
+
     private Map<Integer, List<PDFText>> findTextToRedact(
             PDDocument document, String[] listOfText, boolean useRegex, boolean wholeWordSearch) {
         Map<Integer, List<PDFText>> allFoundTextsByPage = new HashMap<>();
@@ -661,6 +726,10 @@ public class RedactController {
             try {
                 TextFinder textFinder = new TextFinder(text, useRegex, wholeWordSearch);
                 textFinder.getText(document);
+                log.info(
+                        "TextFinder completed search for '{}': found {} instances",
+                        text,
+                        textFinder.getFoundTexts().size());
 
                 List<PDFText> foundTexts = textFinder.getFoundTexts();
                 log.debug("TextFinder found {} instances of '{}'", foundTexts.size(), text);
@@ -684,100 +753,6 @@ public class RedactController {
         }
 
         return allFoundTextsByPage;
-    }
-
-    private boolean performTextReplacement(
-            PDDocument document,
-            Map<Integer, List<PDFText>> allFoundTextsByPage,
-            String[] listOfText,
-            boolean useRegex,
-            boolean wholeWordSearchBool) {
-        if (allFoundTextsByPage.isEmpty()) {
-            return false;
-        }
-
-        if (detectCustomEncodingFonts(document)) {
-            log.warn(
-                    "Custom encoded fonts detected (non-standard encodings / DictionaryEncoding / damaged fonts). "
-                            + "Text replacement is unreliable for these fonts. Falling back to box-only redaction mode.");
-            return true; // signal caller to fall back
-        }
-
-        try {
-            Set<String> allSearchTerms =
-                    Arrays.stream(listOfText)
-                            .map(String::trim)
-                            .filter(s -> !s.isEmpty())
-                            .collect(Collectors.toSet());
-
-            int pageCount = 0;
-            for (PDPage page : document.getPages()) {
-                pageCount++;
-                List<Object> filteredTokens =
-                        createTokensWithoutTargetText(
-                                document, page, allSearchTerms, useRegex, wholeWordSearchBool);
-                writeFilteredContentStream(document, page, filteredTokens);
-            }
-            log.info("Successfully performed text replacement redaction on {} pages.", pageCount);
-            return false;
-        } catch (Exception e) {
-            log.error(
-                    "Text replacement redaction failed due to font or encoding issues. "
-                            + "Will fall back to box-only redaction mode. Error: {}",
-                    e.getMessage());
-            return true;
-        }
-    }
-
-    private byte[] finalizeRedaction(
-            PDDocument document,
-            Map<Integer, List<PDFText>> allFoundTextsByPage,
-            String colorString,
-            float customPadding,
-            Boolean convertToImage,
-            boolean isTextRemovalMode)
-            throws IOException {
-
-        List<PDFText> allFoundTexts = new ArrayList<>();
-        for (List<PDFText> pageTexts : allFoundTextsByPage.values()) {
-            allFoundTexts.addAll(pageTexts);
-        }
-
-        if (!allFoundTexts.isEmpty()) {
-            Color redactColor = decodeOrDefault(colorString);
-
-            redactFoundText(document, allFoundTexts, customPadding, redactColor, isTextRemovalMode);
-
-            cleanDocumentMetadata(document);
-        }
-
-        if (Boolean.TRUE.equals(convertToImage)) {
-            try (PDDocument convertedPdf = PdfUtils.convertPdfToPdfImage(document)) {
-                cleanDocumentMetadata(convertedPdf);
-
-                ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                convertedPdf.save(baos);
-                byte[] out = baos.toByteArray();
-
-                log.info(
-                        "Redaction finalized (image mode): {} pages ➜ {} KB",
-                        convertedPdf.getNumberOfPages(),
-                        out.length / 1024);
-
-                return out;
-            }
-        }
-
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        document.save(baos);
-        byte[] out = baos.toByteArray();
-
-        log.info(
-                "Redaction finalized: {} pages ➜ {} KB",
-                document.getNumberOfPages(),
-                out.length / 1024);
-
-        return out;
     }
 
     private void cleanDocumentMetadata(PDDocument document) {
@@ -881,49 +856,88 @@ public class RedactController {
         private int endPos;
     }
 
-    private List<TextSegment> extractTextSegments(PDPage page, List<Object> tokens) {
+    private boolean performTextReplacement(
+            PDDocument document,
+            Map<Integer, List<PDFText>> allFoundTextsByPage,
+            String[] listOfText,
+            boolean useRegex,
+            boolean wholeWordSearchBool) {
+        if (allFoundTextsByPage.isEmpty()) {
+            return false;
+        }
 
-        List<TextSegment> segments = new ArrayList<>();
-        int currentTextPos = 0;
-        GraphicsState graphicsState = new GraphicsState();
-        PDResources resources = page.getResources();
+        try {
+            Set<String> allSearchTerms =
+                    Arrays.stream(listOfText)
+                            .map(String::trim)
+                            .filter(s -> !s.isEmpty())
+                            .collect(Collectors.toSet());
 
-        for (int i = 0; i < tokens.size(); i++) {
-            Object currentToken = tokens.get(i);
+            int pageCount = 0;
+            for (PDPage page : document.getPages()) {
+                pageCount++;
+                List<Object> filteredTokens =
+                        createTokensWithoutTargetText(
+                                document, page, allSearchTerms, useRegex, wholeWordSearchBool);
+                log.info(
+                        "Page {}: Created filtered content stream with {} tokens",
+                        pageCount,
+                        filteredTokens.size());
+                writeFilteredContentStream(document, page, filteredTokens);
+            }
+            log.info("Successfully performed text replacement redaction on {} pages.", pageCount);
+            return false;
+        } catch (Exception e) {
+            log.error(
+                    "Text replacement redaction failed due to font or encoding issues. "
+                            + "Will fall back to box-only redaction mode. Error: {}",
+                    e.getMessage());
+            return true;
+        }
+    }
 
-            if (currentToken instanceof Operator op) {
-                String opName = op.getName();
+    private byte[] finalizeRedaction(
+            PDDocument document,
+            Map<Integer, List<PDFText>> allFoundTextsByPage,
+            String colorString,
+            float customPadding,
+            Boolean convertToImage,
+            boolean isTextRemovalMode)
+            throws IOException {
 
-                if ("Tf".equals(opName) && i >= 2) {
-                    try {
-                        COSName fontName = (COSName) tokens.get(i - 2);
-                        COSBase fontSizeBase = (COSBase) tokens.get(i - 1);
-                        if (fontSizeBase instanceof COSNumber cosNumber) {
-                            graphicsState.setFont(resources.getFont(fontName));
-                            graphicsState.setFontSize(cosNumber.floatValue());
-                        }
-                    } catch (ClassCastException | IOException e) {
-                        log.debug(
-                                "Failed to extract font and font size from Tf operator: {}",
-                                e.getMessage());
-                    }
-                }
+        List<PDFText> allFoundTexts = new ArrayList<>();
+        for (List<PDFText> pageTexts : allFoundTextsByPage.values()) {
+            allFoundTexts.addAll(pageTexts);
+        }
 
-                currentTextPos =
-                        getCurrentTextPos(
-                                tokens, segments, currentTextPos, graphicsState, i, opName);
+        if (!allFoundTexts.isEmpty()) {
+            Color redactColor = decodeOrDefault(colorString);
+
+            redactFoundText(document, allFoundTexts, customPadding, redactColor, isTextRemovalMode);
+
+            cleanDocumentMetadata(document);
+        }
+
+        if (Boolean.TRUE.equals(convertToImage)) {
+            try (PDDocument convertedPdf = PdfUtils.convertPdfToPdfImage(document)) {
+                cleanDocumentMetadata(convertedPdf);
+
+                ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                convertedPdf.save(baos);
+                byte[] out = baos.toByteArray();
+
+                log.info(
+                        "Redaction finalized (image mode): {} pages ➜ {} KB",
+                        convertedPdf.getNumberOfPages(),
+                        out.length / 1024);
+
+                return out;
             }
         }
 
-        return segments;
-    }
-
-    private String buildCompleteText(List<TextSegment> segments) {
-        StringBuilder sb = new StringBuilder();
-        for (TextSegment segment : segments) {
-            sb.append(segment.text);
-        }
-        return sb.toString();
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        document.save(baos);
+        return baos.toByteArray();
     }
 
     private List<MatchRange> findAllMatches(
@@ -955,66 +969,42 @@ public class RedactController {
                 .collect(Collectors.toList());
     }
 
-    private List<Object> applyRedactionsToTokens(
-            List<Object> tokens, List<TextSegment> textSegments, List<MatchRange> matches) {
+    private List<TextSegment> extractTextSegments(PDPage page, List<Object> tokens) {
 
-        long startTime = System.currentTimeMillis();
+        List<TextSegment> segments = new ArrayList<>();
+        int currentTextPos = 0;
+        GraphicsState graphicsState = new GraphicsState();
+        PDResources resources = page.getResources();
+        log.info(resources.toString());
 
-        try {
-            List<Object> newTokens = new ArrayList<>(tokens);
+        for (int i = 0; i < tokens.size(); i++) {
+            Object currentToken = tokens.get(i);
 
-            Map<Integer, List<MatchRange>> matchesBySegment = new HashMap<>();
-            for (MatchRange match : matches) {
-                for (int i = 0; i < textSegments.size(); i++) {
-                    TextSegment segment = textSegments.get(i);
-                    int overlapStart = Math.max(match.startPos, segment.startPos);
-                    int overlapEnd = Math.min(match.endPos, segment.endPos);
-                    if (overlapStart < overlapEnd) {
-                        matchesBySegment.computeIfAbsent(i, k -> new ArrayList<>()).add(match);
-                    }
-                }
-            }
+            if (currentToken instanceof Operator op) {
+                String opName = op.getName();
 
-            List<ModificationTask> tasks = new ArrayList<>();
-            for (Map.Entry<Integer, List<MatchRange>> entry : matchesBySegment.entrySet()) {
-                int segmentIndex = entry.getKey();
-                List<MatchRange> segmentMatches = entry.getValue();
-                TextSegment segment = textSegments.get(segmentIndex);
-
-                if ("Tj".equals(segment.operatorName) || "'".equals(segment.operatorName)) {
-                    String newText = applyRedactionsToSegmentText(segment, segmentMatches);
+                if ("Tf".equals(opName) && i >= 2) {
                     try {
-                        float adjustment = calculateWidthAdjustment(segment, segmentMatches);
-                        tasks.add(new ModificationTask(segment, newText, adjustment));
-                    } catch (Exception e) {
+                        COSName fontName = (COSName) tokens.get(i - 2);
+                        COSBase fontSizeBase = (COSBase) tokens.get(i - 1);
+                        if (fontSizeBase instanceof COSNumber cosNumber) {
+                            graphicsState.setFont(resources.getFont(fontName));
+                            graphicsState.setFontSize(cosNumber.floatValue());
+                        }
+                    } catch (ClassCastException | IOException e) {
                         log.debug(
-                                "Width adjustment calculation failed for segment: {}",
+                                "Failed to extract font and font size from Tf operator: {}",
                                 e.getMessage());
                     }
-                } else if ("TJ".equals(segment.operatorName)) {
-                    tasks.add(new ModificationTask(segment, null, 0));
                 }
+
+                currentTextPos =
+                        getCurrentTextPos(
+                                tokens, segments, currentTextPos, graphicsState, i, opName);
             }
-
-            tasks.sort((a, b) -> Integer.compare(b.segment.tokenIndex, a.segment.tokenIndex));
-
-            for (ModificationTask task : tasks) {
-                List<MatchRange> segmentMatches =
-                        matchesBySegment.getOrDefault(
-                                textSegments.indexOf(task.segment), Collections.emptyList());
-                modifyTokenForRedaction(
-                        newTokens, task.segment, task.newText, task.adjustment, segmentMatches);
-            }
-
-            return newTokens;
-
-        } finally {
-            long processingTime = System.currentTimeMillis() - startTime;
-            log.debug(
-                    "Token redaction processing completed in {} ms for {} matches",
-                    processingTime,
-                    matches.size());
         }
+
+        return segments;
     }
 
     @Data
@@ -1025,64 +1015,13 @@ public class RedactController {
         private float adjustment; // Only for Tj
     }
 
-    private String applyRedactionsToSegmentText(TextSegment segment, List<MatchRange> matches) {
-        String text = segment.getText();
-
-        if (segment.getFont() != null
-                && !TextEncodingHelper.isTextSegmentRemovable(segment.getFont(), text)) {
-            log.debug(
-                    "Skipping text segment '{}' - font {} cannot process this text reliably",
-                    text,
-                    segment.getFont().getName());
-            return text; // Return original text unchanged
+    private String buildCompleteText(List<TextSegment> segments) {
+        StringBuilder sb = new StringBuilder();
+        for (TextSegment segment : segments) {
+            sb.append(segment.text);
         }
-
-        StringBuilder result = new StringBuilder(text);
-
-        for (MatchRange match : matches) {
-            int segmentStart = Math.max(0, match.getStartPos() - segment.getStartPos());
-            int segmentEnd = Math.min(text.length(), match.getEndPos() - segment.getStartPos());
-
-            if (segmentStart < text.length() && segmentEnd > segmentStart) {
-                String originalPart = text.substring(segmentStart, segmentEnd);
-
-                if (segment.getFont() != null
-                        && !TextEncodingHelper.isTextSegmentRemovable(
-                                segment.getFont(), originalPart)) {
-                    log.debug(
-                            "Skipping text part '{}' within segment - cannot be processed reliably",
-                            originalPart);
-                    continue; // Skip this match, process others
-                }
-
-                float originalWidth = 0;
-                if (segment.getFont() != null && segment.getFontSize() > 0) {
-                    try {
-                        originalWidth =
-                                safeGetStringWidth(segment.getFont(), originalPart)
-                                        / FONT_SCALE_FACTOR
-                                        * segment.getFontSize();
-                    } catch (Exception e) {
-                        log.debug(
-                                "Failed to calculate original width for placeholder: {}",
-                                e.getMessage());
-                    }
-                }
-
-                String placeholder =
-                        (originalWidth > 0)
-                                ? createPlaceholderWithWidth(
-                                        originalPart,
-                                        originalWidth,
-                                        segment.getFont(),
-                                        segment.getFontSize())
-                                : createPlaceholderWithFont(originalPart, segment.getFont());
-
-                result.replace(segmentStart, segmentEnd, placeholder);
-            }
-        }
-
-        return result.toString();
+        log.info("Built complete text: {}", sb.toString());
+        return sb.toString();
     }
 
     private float safeGetStringWidth(PDFont font, String text) {
@@ -1280,6 +1219,148 @@ public class RedactController {
         }
     }
 
+    private List<Object> applyRedactionsToTokens(
+            List<Object> tokens, List<TextSegment> textSegments, List<MatchRange> matches) {
+
+        long startTime = System.currentTimeMillis();
+
+        try {
+            List<Object> newTokens = new ArrayList<>(tokens);
+
+            Map<Integer, List<MatchRange>> matchesBySegment = new HashMap<>();
+            for (MatchRange match : matches) {
+                for (int i = 0; i < textSegments.size(); i++) {
+                    TextSegment segment = textSegments.get(i);
+                    int overlapStart = Math.max(match.startPos, segment.startPos);
+                    int overlapEnd = Math.min(match.endPos, segment.endPos);
+                    if (overlapStart < overlapEnd) {
+                        matchesBySegment.computeIfAbsent(i, k -> new ArrayList<>()).add(match);
+                    }
+                }
+            }
+
+            List<ModificationTask> tasks = new ArrayList<>();
+            for (Map.Entry<Integer, List<MatchRange>> entry : matchesBySegment.entrySet()) {
+                int segmentIndex = entry.getKey();
+                List<MatchRange> segmentMatches = entry.getValue();
+                TextSegment segment = textSegments.get(segmentIndex);
+
+                log.info(
+                        "Processing segment #{}: text='{}', startPos={}, endPos={}, matches={}",
+                        segmentIndex,
+                        segment.text,
+                        segment.startPos,
+                        segment.endPos,
+                        segmentMatches.size());
+
+                if ("Tj".equals(segment.operatorName) || "'".equals(segment.operatorName)) {
+                    String newText = applyRedactionsToSegmentText(segment, segmentMatches);
+                    log.info("After applyRedactionsToSegmentText: newText='{}'", newText);
+                    try {
+                        float adjustment = calculateWidthAdjustment(segment, segmentMatches);
+                        tasks.add(new ModificationTask(segment, newText, adjustment));
+                    } catch (Exception e) {
+                        log.debug(
+                                "Width adjustment calculation failed for segment: {}",
+                                e.getMessage());
+                    }
+                } else if ("TJ".equals(segment.operatorName)) {
+                    tasks.add(new ModificationTask(segment, null, 0));
+                }
+            }
+
+            tasks.sort((a, b) -> Integer.compare(b.segment.tokenIndex, a.segment.tokenIndex));
+
+            for (ModificationTask task : tasks) {
+                log.info(task.toString());
+                List<MatchRange> segmentMatches =
+                        matchesBySegment.getOrDefault(
+                                textSegments.indexOf(task.segment), Collections.emptyList());
+                modifyTokenForRedaction(
+                        newTokens, task.segment, task.newText, task.adjustment, segmentMatches);
+            }
+
+            return newTokens;
+
+        } finally {
+            long processingTime = System.currentTimeMillis() - startTime;
+            log.debug(
+                    "Token redaction processing completed in {} ms for {} matches",
+                    processingTime,
+                    matches.size());
+        }
+    }
+
+    private String applyRedactionsToSegmentText(TextSegment segment, List<MatchRange> matches) {
+        String text = segment.getText();
+
+        log.info(
+                "applyRedactionsToSegmentText - segment: '{}', startPos: {}, endPos: {}, matches count: {}",
+                text,
+                segment.getStartPos(),
+                segment.getEndPos(),
+                matches.size());
+
+        StringBuilder result = new StringBuilder(text);
+
+        for (MatchRange match : matches) {
+            int segmentStart = Math.max(0, match.getStartPos() - segment.getStartPos());
+            int segmentEnd = Math.min(text.length(), match.getEndPos() - segment.getStartPos());
+
+            log.info(
+                    "Processing match - matchStart: {}, matchEnd: {}, segmentStart: {}, segmentEnd: {}",
+                    match.getStartPos(),
+                    match.getEndPos(),
+                    segmentStart,
+                    segmentEnd);
+
+            if (segmentStart < text.length() && segmentEnd > segmentStart) {
+                String originalPart = text.substring(segmentStart, segmentEnd);
+
+                log.info("originalPart to redact: '{}'", originalPart);
+
+                float originalWidth = 0;
+                if (segment.getFont() != null && segment.getFontSize() > 0) {
+                    try {
+                        originalWidth =
+                                safeGetStringWidth(segment.getFont(), originalPart)
+                                        / FONT_SCALE_FACTOR
+                                        * segment.getFontSize();
+                    } catch (Exception e) {
+                        log.debug(
+                                "Failed to calculate original width for placeholder: {}",
+                                e.getMessage());
+                    }
+                }
+
+                log.info("originalWidth calculated: {}", originalWidth);
+
+                String placeholder =
+                        (originalWidth > 0)
+                                ? createPlaceholderWithWidth(
+                                        originalPart,
+                                        originalWidth,
+                                        segment.getFont(),
+                                        segment.getFontSize())
+                                : createPlaceholderWithFont(originalPart, segment.getFont());
+
+                log.info(
+                        "Created placeholder: '{}' (length: {}) to replace '{}'",
+                        placeholder,
+                        placeholder.length(),
+                        originalPart);
+
+                result.replace(segmentStart, segmentEnd, placeholder);
+
+                log.info("After replacement, result: '{}'", result.toString());
+            }
+        }
+
+        String finalResult = result.toString();
+        log.info("applyRedactionsToSegmentText - returning: '{}'", finalResult);
+        return finalResult;
+    }
+
     private void modifyTokenForRedaction(
             List<Object> tokens,
             TextSegment segment,
@@ -1302,11 +1383,11 @@ public class RedactController {
                     if (newText.isEmpty()) {
                         tokens.set(segment.getTokenIndex(), EMPTY_COS_STRING);
                     } else {
-                        tokens.set(segment.getTokenIndex(), new COSString(newText));
+                        tokens.set(segment.getTokenIndex(), encodeText(newText, segment.getFont()));
                     }
                 } else {
                     COSArray newArray = new COSArray();
-                    newArray.add(new COSString(newText));
+                    newArray.add(encodeText(newText, segment.getFont()));
                     if (segment.getFontSize() > 0) {
 
                         float kerning = (-adjustment / segment.getFontSize()) * FONT_SCALE_FACTOR;
@@ -1343,18 +1424,7 @@ public class RedactController {
             for (COSBase element : originalArray) {
                 if (element instanceof COSString cosString) {
                     String originalText = cosString.getString();
-
-                    if (segment.getFont() != null
-                            && !TextEncodingHelper.isTextSegmentRemovable(
-                                    segment.getFont(), originalText)) {
-                        log.debug(
-                                "Skipping TJ text part '{}' - cannot be processed reliably with font {}",
-                                originalText,
-                                segment.getFont().getName());
-                        newArray.add(element); // Keep original unchanged
-                        textOffsetInSegment += originalText.length();
-                        continue;
-                    }
+                    // Always attempt redaction even if font validations fail
 
                     StringBuilder newText = new StringBuilder(originalText);
                     boolean modified = false;
@@ -1375,14 +1445,7 @@ public class RedactController {
                                         originalText.substring(
                                                 redactionStartInString, redactionEndInString);
 
-                                if (segment.getFont() != null
-                                        && !TextEncodingHelper.isTextSegmentRemovable(
-                                                segment.getFont(), originalPart)) {
-                                    log.debug(
-                                            "Skipping TJ text part '{}' - cannot be redacted reliably",
-                                            originalPart);
-                                    continue; // Skip this redaction, keep original text
-                                }
+                                // Proceed with redaction regardless of font validation status
 
                                 modified = true;
                                 float originalWidth = 0;
@@ -1416,7 +1479,7 @@ public class RedactController {
                     }
 
                     String modifiedString = newText.toString();
-                    newArray.add(new COSString(modifiedString));
+                    newArray.add(encodeText(modifiedString, segment.getFont()));
 
                     if (modified && segment.getFont() != null && segment.getFontSize() > 0) {
                         try {
@@ -1455,116 +1518,21 @@ public class RedactController {
         }
     }
 
-    private String extractTextFromToken(Object token, String operatorName) {
-        return switch (operatorName) {
-            case "Tj", "'" -> {
-                if (token instanceof COSString cosString) {
-                    yield cosString.getString();
-                }
-                yield "";
-            }
-            case "TJ" -> {
-                if (token instanceof COSArray cosArray) {
-                    StringBuilder sb = new StringBuilder();
-                    for (COSBase element : cosArray) {
-                        if (element instanceof COSString cosString) {
-                            sb.append(cosString.getString());
-                        }
-                    }
-                    yield sb.toString();
-                }
-                yield "";
-            }
-            default -> "";
-        };
-    }
+    private COSString encodeText(String text, PDFont font) {
+        if (font == null) {
+            return new COSString(text);
+        }
 
-    private boolean detectCustomEncodingFonts(PDDocument document) {
         try {
-            var documentCatalog = document.getDocumentCatalog();
-            if (documentCatalog == null) {
-                return false;
-            }
-
-            int totalFonts = 0;
-            int customEncodedFonts = 0;
-            int subsetFonts = 0;
-            int unreliableFonts = 0;
-
-            for (PDPage page : document.getPages()) {
-                if (TextFinderUtils.hasProblematicFonts(page)) {
-                    log.debug("Page contains fonts flagged as problematic by TextFinderUtils");
-                }
-
-                PDResources resources = page.getResources();
-                if (resources == null) {
-                    continue;
-                }
-
-                for (COSName fontName : resources.getFontNames()) {
-                    try {
-                        PDFont font = resources.getFont(fontName);
-                        if (font != null) {
-                            totalFonts++;
-
-                            // Enhanced analysis using helper classes
-                            boolean isSubset = TextEncodingHelper.isFontSubset(font.getName());
-                            boolean hasCustomEncoding = TextEncodingHelper.hasCustomEncoding(font);
-                            boolean isReliable = WidthCalculator.isWidthCalculationReliable(font);
-                            boolean canCalculateWidths =
-                                    TextEncodingHelper.canCalculateBasicWidths(font);
-
-                            if (isSubset) {
-                                subsetFonts++;
-                            }
-
-                            if (hasCustomEncoding) {
-                                customEncodedFonts++;
-                                log.debug("Font {} has custom encoding", font.getName());
-                            }
-
-                            if (!isReliable || !canCalculateWidths) {
-                                unreliableFonts++;
-                                log.debug(
-                                        "Font {} flagged as unreliable: reliable={}, canCalculateWidths={}",
-                                        font.getName(),
-                                        isReliable,
-                                        canCalculateWidths);
-                            }
-
-                            if (!TextFinderUtils.validateFontReliability(font)) {
-                                log.debug(
-                                        "Font {} failed comprehensive reliability check",
-                                        font.getName());
-                            }
-                        }
-                    } catch (Exception e) {
-                        log.debug(
-                                "Font loading/analysis failed for {}: {}",
-                                fontName.getName(),
-                                e.getMessage());
-                        customEncodedFonts++;
-                        unreliableFonts++;
-                        totalFonts++;
-                    }
-                }
-            }
-
-            log.info(
-                    "Enhanced font analysis: {}/{} custom encoding, {}/{} subset, {}/{} unreliable fonts",
-                    customEncodedFonts,
-                    totalFonts,
-                    subsetFonts,
-                    totalFonts,
-                    unreliableFonts,
-                    totalFonts);
-
-            // Consider document problematic if we have custom encodings or unreliable fonts
-            return customEncodedFonts > 0 || unreliableFonts > 0;
-
+            byte[] encodedBytes = font.encode(text);
+            return new COSString(encodedBytes);
         } catch (Exception e) {
-            log.warn("Enhanced font detection analysis failed: {}", e.getMessage());
-            return true; // Assume problematic if analysis fails
+            log.debug(
+                    "Failed to encode text '{}' with font {}: {}, using default encoding",
+                    text,
+                    font.getName(),
+                    e.getMessage());
+            return new COSString(text);
         }
     }
 
@@ -1656,7 +1624,8 @@ public class RedactController {
             int i,
             String opName) {
         if (isTextShowingOperator(opName) && i > 0) {
-            String textContent = extractTextFromToken(tokens.get(i - 1), opName);
+            String textContent =
+                    extractTextFromToken(tokens.get(i - 1), opName, graphicsState.font);
             if (!textContent.isEmpty()) {
                 segments.add(
                         new TextSegment(
