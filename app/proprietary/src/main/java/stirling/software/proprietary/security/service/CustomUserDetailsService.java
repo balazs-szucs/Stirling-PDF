@@ -1,5 +1,7 @@
 package stirling.software.proprietary.security.service;
 
+import java.util.Locale;
+
 import org.springframework.security.authentication.LockedException;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -59,7 +61,7 @@ public class CustomUserDetailsService implements UserDetailsService {
         }
 
         AuthenticationType userAuthenticationType =
-                AuthenticationType.valueOf(authTypeStr.toUpperCase());
+                AuthenticationType.valueOf(authTypeStr.toUpperCase(Locale.ROOT));
         if (!user.hasPassword() && userAuthenticationType == AuthenticationType.WEB) {
             throw new IllegalArgumentException("Password must not be null");
         }
@@ -75,8 +77,11 @@ public class CustomUserDetailsService implements UserDetailsService {
      */
     private AuthenticationType determinePreferredSSOType() {
         // Check what SSO types are enabled and prefer in order: OAUTH2 > SAML2 > fallback to OAUTH2
-        boolean oauth2Enabled = securityProperties.getOauth2() != null && securityProperties.getOauth2().getEnabled();
-        boolean saml2Enabled = securityProperties.getSaml2() != null && securityProperties.getSaml2().getEnabled();
+        boolean oauth2Enabled =
+                securityProperties.getOauth2() != null
+                        && securityProperties.getOauth2().getEnabled();
+        boolean saml2Enabled =
+                securityProperties.getSaml2() != null && securityProperties.getSaml2().getEnabled();
 
         if (oauth2Enabled) {
             return AuthenticationType.OAUTH2;

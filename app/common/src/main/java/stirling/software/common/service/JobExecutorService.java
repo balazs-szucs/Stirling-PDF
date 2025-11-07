@@ -1,6 +1,7 @@
 package stirling.software.common.service;
 
 import java.io.IOException;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -22,6 +23,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import stirling.software.common.model.job.JobResponse;
 import stirling.software.common.util.ExecutorFactory;
+import stirling.software.common.util.RegexPatternUtils;
 
 /** Service for executing jobs asynchronously or synchronously */
 @Service
@@ -426,12 +428,20 @@ public class JobExecutorService {
         }
 
         try {
-            String value = timeout.replaceAll("[^\\d.]", "");
-            String unit = timeout.replaceAll("[\\d.]", "");
+            String value =
+                    RegexPatternUtils.getInstance()
+                            .getNonDigitDotPattern()
+                            .matcher(timeout)
+                            .replaceAll("");
+            String unit =
+                    RegexPatternUtils.getInstance()
+                            .getDigitDotPattern()
+                            .matcher(timeout)
+                            .replaceAll("");
 
             double numericValue = Double.parseDouble(value);
 
-            return switch (unit.toLowerCase()) {
+            return switch (unit.toLowerCase(Locale.ROOT)) {
                 case "s" -> (long) (numericValue * 1000);
                 case "m" -> (long) (numericValue * 60 * 1000);
                 case "h" -> (long) (numericValue * 60 * 60 * 1000);

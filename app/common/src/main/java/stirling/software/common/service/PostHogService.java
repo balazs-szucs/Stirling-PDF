@@ -56,7 +56,7 @@ public class PostHogService {
     }
 
     private void captureSystemInfo() {
-        if (!applicationProperties.getSystem().isAnalyticsEnabled()) {
+        if (!applicationProperties.getSystem().isPosthogEnabled()) {
             return;
         }
         try {
@@ -67,7 +67,7 @@ public class PostHogService {
     }
 
     public void captureEvent(String eventName, Map<String, Object> properties) {
-        if (!applicationProperties.getSystem().isAnalyticsEnabled()) {
+        if (!applicationProperties.getSystem().isPosthogEnabled()) {
             return;
         }
 
@@ -397,7 +397,7 @@ public class PostHogService {
                 if (hardwareAddress != null) {
                     String[] hexadecimal = new String[hardwareAddress.length];
                     for (int i = 0; i < hardwareAddress.length; i++) {
-                        hexadecimal[i] = String.format("%02X", hardwareAddress[i]);
+                        hexadecimal[i] = String.format(Locale.ROOT, "%02X", hardwareAddress[i]);
                     }
                     return String.join("-", hexadecimal);
                 }

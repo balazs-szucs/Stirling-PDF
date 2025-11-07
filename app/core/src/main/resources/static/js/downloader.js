@@ -74,6 +74,12 @@
         showGameBtn.style.display = 'none';
       }
 
+      // Log fileOrder for debugging
+      const fileOrderValue = formData.get('fileOrder');
+      if (fileOrderValue) {
+        console.log('FormData fileOrder:', fileOrderValue);
+      }
+
       // Remove empty file entries
       for (let [key, value] of formData.entries()) {
         if (value instanceof File && !value.name) {
@@ -249,10 +255,15 @@
                    (error.message && error.message.includes('Invalid PDF structure'))) {
           // Handle corrupted PDF files
           console.log(`Corrupted PDF detected: ${file.name}`, error);
-          showErrorBanner(
-            `${window.stirlingPDF.pdfCorruptedMessage.replace('{0}', file.name)}`,
-            `${window.stirlingPDF.tryRepairMessage}`
-          );
+          if (window.stirlingPDF.currentPage !== 'repair') {
+            showErrorBanner(
+              `${window.stirlingPDF.pdfCorruptedMessage.replace('{0}', file.name)}`,
+              `${window.stirlingPDF.tryRepairMessage}`
+            );
+          } else {
+            // On repair page, suppress banner; user already knows and is repairing
+            console.log('Suppressing corrupted PDF banner on repair page');
+          }
           throw error;
         } else {
           console.log(`Error loading PDF: ${file.name}`, error);

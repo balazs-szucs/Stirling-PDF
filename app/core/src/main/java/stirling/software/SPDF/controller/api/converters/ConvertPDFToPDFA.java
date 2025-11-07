@@ -7,10 +7,12 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Comparator;
+import java.util.GregorianCalendar;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -270,6 +272,7 @@ public class ConvertPDFToPDFA {
             log.warn("Falling back to sRGB ICC profile for grayscale defaults", e);
             Files.copy(rgbProfile, grayProfile, StandardCopyOption.REPLACE_EXISTING);
         }
+        }
 
         return new ColorProfiles(rgbProfile, grayProfile);
     }
@@ -332,8 +335,35 @@ public class ConvertPDFToPDFA {
                                                     .anyMatch(token -> token.equals(normalized)))
                             .findFirst();
 
-            return match.orElse(PDF_A_2B);
+        // Set creation and modification dates using java.time and convert to GregorianCalendar
+        Instant nowInstant = Instant.now();
+        ZonedDateTime nowZdt = ZonedDateTime.ofInstant(nowInstant, ZoneId.of("UTC"));
+        GregorianCalendar nowCal = GregorianCalendar.from(nowZdt);
+
+        java.util.Calendar originalCreationDate = docInfo.getCreationDate();
+        GregorianCalendar creationCal;
+        if (originalCreationDate == null) {
+            creationCal = nowCal;
+        } else if (originalCreationDate instanceof GregorianCalendar) {
+            creationCal = (GregorianCalendar) originalCreationDate;
+        } else {
+            // convert other Calendar implementations to GregorianCalendar preserving instant
+            creationCal =
+                    GregorianCalendar.from(
+                            ZonedDateTime.ofInstant(
+                                    originalCreationDate.toInstant(), ZoneId.of("UTC")));
         }
+        }
+        docInfo.setCreationDate(creationCal);
+        xmpBasicSchema.setCreateDate(creationCal);
+
+        docInfo.setModificationDate(nowCal);
+        xmpBasicSchema.setModifyDate(nowCal);
+        xmpBasicSchema.setMetadataDate(nowCal);
+
+        // Serialize the created metadata so it can be attached to the existent metadata
+        ByteArrayOutputStream xmpOut = new ByteArrayOutputStream();
+        new XmpSerializer().serialize(xmp, xmpOut, true);
 
         int part() {
             return part;

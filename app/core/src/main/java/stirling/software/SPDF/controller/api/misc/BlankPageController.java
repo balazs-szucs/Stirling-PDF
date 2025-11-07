@@ -5,6 +5,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -34,6 +35,7 @@ import stirling.software.common.model.ApplicationProperties;
 import stirling.software.common.service.CustomPDFDocumentFactory;
 import stirling.software.common.util.ApplicationContextProvider;
 import stirling.software.common.util.ExceptionUtils;
+import stirling.software.common.util.GeneralUtils;
 import stirling.software.common.util.PdfUtils;
 import stirling.software.common.util.WebResponseUtils;
 
@@ -67,7 +69,11 @@ public class BlankPageController {
         }
 
         double whitePixelPercentage = (whitePixels / (double) totalPixels) * 100;
-        log.info(String.format("Page has white pixel percent of %.2f%%", whitePixelPercentage));
+        log.info(
+                String.format(
+                        Locale.ROOT,
+                        "Page has white pixel percent of %.2f%%",
+                        whitePixelPercentage));
 
         return whitePixelPercentage >= whitePercent;
     }
@@ -149,8 +155,8 @@ public class BlankPageController {
             ZipOutputStream zos = new ZipOutputStream(baos);
 
             String filename =
-                    Filenames.toSimpleFileName(inputFile.getOriginalFilename())
-                            .replaceFirst("[.][^.]+$", "");
+                    GeneralUtils.removeExtension(
+                            Filenames.toSimpleFileName(inputFile.getOriginalFilename()));
 
             if (!nonBlankPages.isEmpty()) {
                 createZipEntry(zos, nonBlankPages, filename + "_nonBlankPages.pdf");
