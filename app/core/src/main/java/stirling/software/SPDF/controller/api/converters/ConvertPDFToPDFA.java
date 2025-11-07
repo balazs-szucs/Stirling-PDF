@@ -7,12 +7,10 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Instant;
-import java.time.ZoneId;
-import java.time.ZonedDateTime;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.GregorianCalendar;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -63,7 +61,8 @@ public class ConvertPDFToPDFA {
             Path outputPdf,
             ColorProfiles colorProfiles,
             Path workingDir,
-            PdfaProfile profile) {
+            PdfaProfile profile,
+            Path pdfaDefFile) {
 
         List<String> command = new ArrayList<>();
         command.add("gs");
@@ -71,13 +70,15 @@ public class ConvertPDFToPDFA {
         command.add("--permit-file-read=" + colorProfiles.rgb().toAbsolutePath());
         command.add("--permit-file-read=" + colorProfiles.gray().toAbsolutePath());
         command.add("--permit-file-read=" + inputPdf.toAbsolutePath());
+        command.add("--permit-file-read=" + pdfaDefFile.toAbsolutePath());
         command.add("--permit-file-write=" + workingDir.toAbsolutePath());
-        command.add("-sDEVICE=pdfwrite");
         command.add("-dPDFA=" + profile.part());
         command.add("-dPDFACompatibilityPolicy=" + PDFA_COMPATIBILITY_POLICY);
         command.add("-dCompatibilityLevel=" + profile.compatibilityLevel());
+        command.add("-sDEVICE=pdfwrite");
         command.add("-sColorConversionStrategy=RGB");
-        command.add("-sProcessColorModel=DeviceRGB");
+        command.add("-dProcessColorModel=/DeviceRGB");
+        // Add ICC profile references
         command.add("-sOutputICCProfile=" + colorProfiles.rgb().toAbsolutePath());
         command.add("-sDefaultRGBProfile=" + colorProfiles.rgb().toAbsolutePath());
         command.add("-sDefaultGrayProfile=" + colorProfiles.gray().toAbsolutePath());
@@ -86,7 +87,9 @@ public class ConvertPDFToPDFA {
         command.add("-dCompressFonts=true");
         command.add("-dNOPAUSE");
         command.add("-dBATCH");
+        command.add("-dNOOUTERSAVE");
         command.add("-sOutputFile=" + outputPdf.toAbsolutePath());
+        command.add(pdfaDefFile.toAbsolutePath().toString());
         command.add(inputPdf.toAbsolutePath().toString());
 
         return command;
@@ -101,6 +104,7 @@ public class ConvertPDFToPDFA {
 
         try (RandomAccessRead rar = new RandomAccessReadBufferedFile(pdfPath.toFile())) {
             PreflightParser parser = new PreflightParser(rar);
+
             PreflightDocument document;
             try {
                 document =
@@ -237,12 +241,56 @@ public class ConvertPDFToPDFA {
         }
     }
 
+    private static void writeJavaIccProfile(ICC_Profile profile, Path target) throws IOException {
+        try (OutputStream out = Files.newOutputStream(target)) {
+            out.write(profile.getData());
+        }
+    }
+
+    private static Path createPdfaDefFile(
+            Path workingDir, ColorProfiles colorProfiles, PdfaProfile profile) throws IOException {
+        Path pdfaDefFile = workingDir.resolve("PDFA_def.ps");
+
+        String title = "Converted to " + profile.displayName();
+        String pdfaDefContent =
+                String.format(
+                        "%% This is a sample prefix file for creating a PDF/A document.\n"
+                                + "%% Feel free to modify entries marked with \"Customize\".\n\n"
+                                + "%% Define entries in the document Info dictionary.\n"
+                                + "[/Title (%s)\n"
+                                + " /DOCINFO pdfmark\n\n"
+                                + "%% Define an ICC profile.\n"
+                                + "[/_objdef {icc_PDFA} /type /stream /OBJ pdfmark\n"
+                                + "[{icc_PDFA} <<\n"
+                                + "  /N 3\n"
+                                + ">> /PUT pdfmark\n"
+                                + "[{icc_PDFA} (%s) (r) file /PUT pdfmark\n\n"
+                                + "%% Define the output intent dictionary.\n"
+                                + "[/_objdef {OutputIntent_PDFA} /type /dict /OBJ pdfmark\n"
+                                + "[{OutputIntent_PDFA} <<\n"
+                                + "  /Type /OutputIntent\n"
+                                + "  /S /GTS_PDFA1\n"
+                                + "  /DestOutputProfile {icc_PDFA}\n"
+                                + "  /OutputConditionIdentifier (sRGB IEC61966-2.1)\n"
+                                + "  /Info (sRGB IEC61966-2.1)\n"
+                                + "  /RegistryName (http://www.color.org)\n"
+                                + ">> /PUT pdfmark\n"
+                                + "[{Catalog} <</OutputIntents [ {OutputIntent_PDFA} ]>> /PUT pdfmark\n",
+                        title, colorProfiles.rgb().toAbsolutePath().toString().replace("\\", "/"));
+
+        Files.writeString(pdfaDefFile, pdfaDefContent);
+        return pdfaDefFile;
+    }
+
     private byte[] convertWithGhostscript(Path inputPdf, Path workingDir, PdfaProfile profile)
             throws IOException, InterruptedException {
-    Path outputPdf = workingDir.resolve("output.pdf");
-    ColorProfiles colorProfiles = prepareColorProfiles(workingDir);
-    List<String> command =
-        buildGhostscriptCommand(inputPdf, outputPdf, colorProfiles, workingDir, profile);
+        Path outputPdf = workingDir.resolve("output.pdf");
+        ColorProfiles colorProfiles = prepareColorProfiles(workingDir);
+        Path pdfaDefFile = createPdfaDefFile(workingDir, colorProfiles, profile);
+
+        List<String> command =
+                buildGhostscriptCommand(
+                        inputPdf, outputPdf, colorProfiles, workingDir, profile, pdfaDefFile);
 
         ProcessExecutorResult result =
                 ProcessExecutor.getInstance(ProcessExecutor.Processes.GHOSTSCRIPT)
@@ -263,7 +311,7 @@ public class ConvertPDFToPDFA {
 
     private ColorProfiles prepareColorProfiles(Path workingDir) throws IOException {
         Path rgbProfile = workingDir.resolve("sRGB.icc");
-        copyResourceIcc(ICC_RESOURCE_PATH, rgbProfile);
+        copyResourceIcc(rgbProfile);
 
         Path grayProfile = workingDir.resolve("Gray.icc");
         try {
@@ -272,23 +320,17 @@ public class ConvertPDFToPDFA {
             log.warn("Falling back to sRGB ICC profile for grayscale defaults", e);
             Files.copy(rgbProfile, grayProfile, StandardCopyOption.REPLACE_EXISTING);
         }
-        }
 
         return new ColorProfiles(rgbProfile, grayProfile);
     }
 
-    private void copyResourceIcc(String resourcePath, Path target) throws IOException {
-        try (InputStream in = getClass().getResourceAsStream(resourcePath)) {
+    private void copyResourceIcc(Path target) throws IOException {
+        try (InputStream in = getClass().getResourceAsStream(ConvertPDFToPDFA.ICC_RESOURCE_PATH)) {
             if (in == null) {
-                throw new IOException("ICC profile resource not found: " + resourcePath);
+                throw new IOException(
+                        "ICC profile resource not found: " + ConvertPDFToPDFA.ICC_RESOURCE_PATH);
             }
             Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
-        }
-    }
-
-    private void writeJavaIccProfile(ICC_Profile profile, Path target) throws IOException {
-        try (OutputStream out = Files.newOutputStream(target)) {
-            out.write(profile.getData());
         }
     }
 
@@ -335,35 +377,8 @@ public class ConvertPDFToPDFA {
                                                     .anyMatch(token -> token.equals(normalized)))
                             .findFirst();
 
-        // Set creation and modification dates using java.time and convert to GregorianCalendar
-        Instant nowInstant = Instant.now();
-        ZonedDateTime nowZdt = ZonedDateTime.ofInstant(nowInstant, ZoneId.of("UTC"));
-        GregorianCalendar nowCal = GregorianCalendar.from(nowZdt);
-
-        java.util.Calendar originalCreationDate = docInfo.getCreationDate();
-        GregorianCalendar creationCal;
-        if (originalCreationDate == null) {
-            creationCal = nowCal;
-        } else if (originalCreationDate instanceof GregorianCalendar) {
-            creationCal = (GregorianCalendar) originalCreationDate;
-        } else {
-            // convert other Calendar implementations to GregorianCalendar preserving instant
-            creationCal =
-                    GregorianCalendar.from(
-                            ZonedDateTime.ofInstant(
-                                    originalCreationDate.toInstant(), ZoneId.of("UTC")));
+            return match.orElse(PDF_A_2B);
         }
-        }
-        docInfo.setCreationDate(creationCal);
-        xmpBasicSchema.setCreateDate(creationCal);
-
-        docInfo.setModificationDate(nowCal);
-        xmpBasicSchema.setModifyDate(nowCal);
-        xmpBasicSchema.setMetadataDate(nowCal);
-
-        // Serialize the created metadata so it can be attached to the existent metadata
-        ByteArrayOutputStream xmpOut = new ByteArrayOutputStream();
-        new XmpSerializer().serialize(xmp, xmpOut, true);
 
         int part() {
             return part;
