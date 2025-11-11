@@ -66,6 +66,13 @@ public class SecurityWebController {
         return "security/validate-signature";
     }
 
+    @GetMapping("/verify-pdf")
+    @Hidden
+    public String verifyPdfForm(Model model) {
+        model.addAttribute("currentPage", "verify-pdf");
+        return "security/verify-pdf";
+    }
+
     @GetMapping("/remove-cert-sign")
     @Hidden
     public String certUnSignForm(Model model) {
