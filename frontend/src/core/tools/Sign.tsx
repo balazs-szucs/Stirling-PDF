@@ -4,6 +4,7 @@ import { createToolFlow } from "@app/components/tools/shared/createToolFlow";
 import { useSignParameters } from "@app/hooks/tools/sign/useSignParameters";
 import { useSignOperation } from "@app/hooks/tools/sign/useSignOperation";
 import { useBaseTool } from "@app/hooks/tools/shared/useBaseTool";
+import { useSignTips } from "@app/components/tooltips/useSignTips";
 import { BaseToolProps, ToolComponent } from "@app/types/tool";
 import SignSettings from "@app/components/tools/sign/SignSettings";
 import { useNavigation } from "@app/contexts/NavigationContext";
@@ -14,6 +15,7 @@ import { flattenSignatures } from "@app/utils/signatureFlattening";
 
 const Sign = (props: BaseToolProps) => {
   const { t } = useTranslation();
+  const signTips = useSignTips();
   const { setWorkbench } = useNavigation();
   const { setSignatureConfig, activateDrawMode, activateSignaturePlacementMode, deactivateDrawMode, updateDrawSettings, undo, redo, signatureApiRef, getImageData, setSignaturesApplied } = useSignature();
   const { consumeFiles, selectors } = useFileContext();
@@ -133,6 +135,7 @@ const Sign = (props: BaseToolProps) => {
         title: t('sign.steps.configure', 'Configure Signature'),
         isCollapsed: false,
         onCollapsedClick: undefined,
+        tooltip: signTips,
         content: (
           <SignSettings
             parameters={base.params.parameters}

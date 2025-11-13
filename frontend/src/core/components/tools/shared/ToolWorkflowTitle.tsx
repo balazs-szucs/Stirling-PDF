@@ -2,18 +2,12 @@ import React from 'react';
 import { Flex, Text, Divider } from '@mantine/core';
 import LocalIcon from '@app/components/shared/LocalIcon';
 import { Tooltip } from '@app/components/shared/Tooltip';
+import { TooltipContent } from '@app/types/tips';
 
 export interface ToolWorkflowTitleProps {
   title: string;
   description?: string;
-  tooltip?: {
-    content?: React.ReactNode;
-    tips?: any[];
-    header?: {
-      title: string;
-      logo?: React.ReactNode;
-    };
-  };
+  tooltip?: TooltipContent;
 }
 
 export function ToolWorkflowTitle({ title, tooltip, description }: ToolWorkflowTitleProps) {
@@ -35,6 +29,7 @@ export function ToolWorkflowTitle({ title, tooltip, description }: ToolWorkflowT
             tips={tooltip.tips}
             header={tooltip.header}
             sidebarTooltip={true}
+            pinOnClick={true}
           >
             {titleContent}
           </Tooltip>

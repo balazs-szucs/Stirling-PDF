@@ -3,10 +3,12 @@ import { createToolFlow } from "@app/components/tools/shared/createToolFlow";
 import { useSingleLargePageParameters } from "@app/hooks/tools/singleLargePage/useSingleLargePageParameters";
 import { useSingleLargePageOperation } from "@app/hooks/tools/singleLargePage/useSingleLargePageOperation";
 import { useBaseTool } from "@app/hooks/tools/shared/useBaseTool";
+import { useSingleLargePageTips } from "@app/components/tooltips/useSingleLargePageTips";
 import { BaseToolProps, ToolComponent } from "@app/types/tool";
 
 const SingleLargePage = (props: BaseToolProps) => {
   const { t } = useTranslation();
+  const singleLargePageTips = useSingleLargePageTips();
 
   const base = useBaseTool(
     'singleLargePage',
@@ -16,6 +18,11 @@ const SingleLargePage = (props: BaseToolProps) => {
   );
 
   return createToolFlow({
+    title: {
+      title: t("singleLargePage.title", "Single Large Page"),
+      description: t("singleLargePage.description", "Combine all pages into one continuous large page"),
+      tooltip: singleLargePageTips
+    },
     files: {
       selectedFiles: base.selectedFiles,
       isCollapsed: base.hasResults,

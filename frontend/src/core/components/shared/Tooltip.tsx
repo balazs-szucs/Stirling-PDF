@@ -35,7 +35,7 @@ export interface TooltipProps {
   openOnFocus?: boolean;
 }
 
-export const Tooltip: React.FC<TooltipProps> = ({
+export const Tooltip: React.FC<TooltipProps & Record<string, any>> = ({
   sidebarTooltip = false,
   position = 'right',
   content,
@@ -55,6 +55,7 @@ export const Tooltip: React.FC<TooltipProps> = ({
   closeOnOutside = true,
   disabled = false,
   openOnFocus = true,
+  ...rest
 }) => {
   const [internalOpen, setInternalOpen] = useState(false);
   const [isPinned, setIsPinned] = useState(false);
@@ -350,7 +351,7 @@ export const Tooltip: React.FC<TooltipProps> = ({
           <span className={styles['tooltip-title']}>{header.title}</span>
         </div>
       )}
-      <TooltipContent content={content} tips={tips} />
+  <TooltipContent content={content} tips={tips} header={header} {...rest} />
     </div>
   ) : null;
 

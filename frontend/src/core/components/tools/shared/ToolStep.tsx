@@ -2,7 +2,7 @@ import React, { createContext, useContext, useMemo } from 'react';
 import { Text, Stack, Flex, Divider } from '@mantine/core';
 import LocalIcon from '@app/components/shared/LocalIcon';
 import { Tooltip } from '@app/components/shared/Tooltip';
-import { TooltipTip } from '@app/types/tips';
+import { TooltipContent } from '@app/types/tips';
 import { createFilesToolStep, FilesToolStepProps } from '@app/components/tools/shared/FilesToolStep';
 import { createReviewToolStep, ReviewToolStepProps } from '@app/components/tools/shared/ReviewToolStep';
 
@@ -25,14 +25,7 @@ export interface ToolStepProps {
   _excludeFromCount?: boolean; // Internal prop to exclude from visible count calculation
   _noPadding?: boolean; // Internal prop to exclude from default left padding
   alwaysShowTooltip?: boolean; // Force tooltip to show even when collapsed
-  tooltip?: {
-    content?: React.ReactNode;
-    tips?: TooltipTip[];
-    header?: {
-      title: string;
-      logo?: React.ReactNode;
-    };
-  };
+  tooltip?: TooltipContent;
 }
 
 const renderTooltipTitle = (

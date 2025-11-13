@@ -3,10 +3,12 @@ import { createToolFlow } from "@app/components/tools/shared/createToolFlow";
 import { useRepairParameters } from "@app/hooks/tools/repair/useRepairParameters";
 import { useRepairOperation } from "@app/hooks/tools/repair/useRepairOperation";
 import { useBaseTool } from "@app/hooks/tools/shared/useBaseTool";
+import { useRepairTips } from "@app/components/tooltips/useRepairTips";
 import { BaseToolProps, ToolComponent } from "@app/types/tool";
 
 const Repair = (props: BaseToolProps) => {
   const { t } = useTranslation();
+  const repairTips = useRepairTips();
 
   const base = useBaseTool(
     'repair',
@@ -16,6 +18,10 @@ const Repair = (props: BaseToolProps) => {
   );
 
   return createToolFlow({
+    title: {
+      title: t("repair.title", "PDF Repair"),
+      tooltip: repairTips
+    },
     files: {
       selectedFiles: base.selectedFiles,
       isCollapsed: base.hasResults,

@@ -9,10 +9,12 @@ import ConvertSettings from "@app/components/tools/convert/ConvertSettings";
 
 import { useConvertParameters } from "@app/hooks/tools/convert/useConvertParameters";
 import { useConvertOperation } from "@app/hooks/tools/convert/useConvertOperation";
+import { useConvertTips } from "@app/components/tooltips/useConvertTips";
 import { BaseToolProps, ToolComponent } from "@app/types/tool";
 
 const Convert = ({ onPreviewFile, onComplete, onError }: BaseToolProps) => {
   const { t } = useTranslation();
+  const convertTips = useConvertTips();
   const { selectors } = useFileState();
   const activeFiles = selectors.getFiles();
   const { selectedFiles } = useFileSelection();
@@ -106,6 +108,7 @@ const Convert = ({ onPreviewFile, onComplete, onError }: BaseToolProps) => {
         title: t("convert.settings", "Settings"),
         isCollapsed: settingsCollapsed,
         onCollapsedClick: settingsCollapsed ? handleSettingsReset : undefined,
+        tooltip: convertTips,
         content: (
           <ConvertSettings
             parameters={convertParams.parameters}

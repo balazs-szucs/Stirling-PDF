@@ -6,12 +6,14 @@ import { BaseToolProps, ToolComponent } from "@app/types/tool";
 import { useEndpointEnabled } from "@app/hooks/useEndpointConfig";
 import { useAddPageNumbersParameters } from "@app/components/tools/addPageNumbers/useAddPageNumbersParameters";
 import { useAddPageNumbersOperation } from "@app/components/tools/addPageNumbers/useAddPageNumbersOperation";
+import { useAddPageNumbersTips } from "@app/components/tooltips/useAddPageNumbersTips";
 import { useAccordionSteps } from "@app/hooks/tools/shared/useAccordionSteps";
 import AddPageNumbersPositionSettings from "@app/components/tools/addPageNumbers/AddPageNumbersPositionSettings";
 import AddPageNumbersAppearanceSettings from "@app/components/tools/addPageNumbers/AddPageNumbersAppearanceSettings";
 
 const AddPageNumbers = ({ onPreviewFile, onComplete, onError }: BaseToolProps) => {
   const { t } = useTranslation();
+  const addPageNumbersTips = useAddPageNumbersTips();
   const { selectedFiles } = useFileSelection();
 
   const params = useAddPageNumbersParameters();
@@ -66,6 +68,7 @@ const AddPageNumbers = ({ onPreviewFile, onComplete, onError }: BaseToolProps) =
       isCollapsed: accordion.getCollapsedState(AddPageNumbersStep.POSITION_AND_PAGES),
       onCollapsedClick: () => accordion.handleStepToggle(AddPageNumbersStep.POSITION_AND_PAGES),
       isVisible: hasFiles || hasResults,
+      tooltip: addPageNumbersTips,
       content: (
         <AddPageNumbersPositionSettings
           parameters={params.parameters}

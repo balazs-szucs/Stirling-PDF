@@ -26,12 +26,14 @@ import type { CompareWorkbenchData } from '@app/types/compare';
 import FitText from '@app/components/shared/FitText';
 import { getDefaultWorkbench } from '@app/types/workbench';
 import { useFilesModalContext } from '@app/contexts/FilesModalContext';
+import { useCompareTips } from '@app/components/tooltips/useCompareTips';
 
 const CUSTOM_VIEW_ID = 'compareWorkbenchView';
 const CUSTOM_WORKBENCH_ID = 'custom:compareWorkbenchView' as const;
 
 const Compare = (props: BaseToolProps) => {
   const { t } = useTranslation();
+  const compareTips = useCompareTips();
   const { actions: navigationActions } = useNavigationActions();
   const {
     registerCustomWorkbenchView,
@@ -447,6 +449,7 @@ const Compare = (props: BaseToolProps) => {
       {
         title: t('compare.selection.originalEditedTitle', 'Select Original and Edited PDFs'),
         isVisible: true,
+        tooltip: compareTips,
         content: (
           <Box
             style={{

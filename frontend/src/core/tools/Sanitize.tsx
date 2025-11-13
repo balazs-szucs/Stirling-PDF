@@ -4,10 +4,12 @@ import SanitizeSettings from "@app/components/tools/sanitize/SanitizeSettings";
 import { useSanitizeParameters } from "@app/hooks/tools/sanitize/useSanitizeParameters";
 import { useSanitizeOperation } from "@app/hooks/tools/sanitize/useSanitizeOperation";
 import { useBaseTool } from "@app/hooks/tools/shared/useBaseTool";
+import { useSanitizeTips } from "@app/components/tooltips/useSanitizeTips";
 import { BaseToolProps, ToolComponent } from "@app/types/tool";
 
 const Sanitize = (props: BaseToolProps) => {
   const { t } = useTranslation();
+  const sanitizeTips = useSanitizeTips();
 
   const base = useBaseTool(
     'sanitize',
@@ -23,9 +25,10 @@ const Sanitize = (props: BaseToolProps) => {
     },
     steps: [
       {
-        title: t("sanitize.steps.settings", "Settings"),
+        title: t("sanitize.options.title", "Sanitisation Options"),
         isCollapsed: base.settingsCollapsed,
         onCollapsedClick: base.settingsCollapsed ? base.handleSettingsReset : undefined,
+        tooltip: sanitizeTips,
         content: (
           <SanitizeSettings
             parameters={base.params.parameters}

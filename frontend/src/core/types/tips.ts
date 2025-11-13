@@ -12,4 +12,6 @@ export interface TooltipContent {
   };
   tips?: TooltipTip[];
   content?: React.ReactNode;
-} 
+  // Support for named tooltip sections (alternative to tips array)
+  [key: string]: any;
+}

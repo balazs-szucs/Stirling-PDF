@@ -3,10 +3,12 @@ import { createToolFlow } from "@app/components/tools/shared/createToolFlow";
 import { useRemoveImageParameters } from "@app/hooks/tools/removeImage/useRemoveImageParameters";
 import { useRemoveImageOperation } from "@app/hooks/tools/removeImage/useRemoveImageOperation";
 import { useBaseTool } from "@app/hooks/tools/shared/useBaseTool";
+import { useRemoveImageTips } from "@app/components/tooltips/useRemoveImageTips";
 import { BaseToolProps, ToolComponent } from "@app/types/tool";
 
 const RemoveImage = (props: BaseToolProps) => {
   const { t } = useTranslation();
+  const removeImageTips = useRemoveImageTips();
 
   const base = useBaseTool(
     'removeImage',
@@ -16,6 +18,11 @@ const RemoveImage = (props: BaseToolProps) => {
   );
 
   return createToolFlow({
+    title: {
+      title: t("removeImage.title", "Remove Images"),
+      description: t("removeImage.description", "Remove all images from PDF documents"),
+      tooltip: removeImageTips
+    },
     files: {
       selectedFiles: base.selectedFiles,
       isCollapsed: base.hasResults,

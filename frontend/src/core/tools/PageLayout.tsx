@@ -4,10 +4,12 @@ import { useBaseTool } from '@app/hooks/tools/shared/useBaseTool';
 import { BaseToolProps, ToolComponent } from '@app/types/tool';
 import { usePageLayoutParameters } from '@app/hooks/tools/pageLayout/usePageLayoutParameters';
 import { usePageLayoutOperation } from '@app/hooks/tools/pageLayout/usePageLayoutOperation';
+import { usePageLayoutTips } from '@app/components/tooltips/usePageLayoutTips';
 import PageLayoutSettings from '@app/components/tools/pageLayout/PageLayoutSettings';
 
 const PageLayout = (props: BaseToolProps) => {
   const { t } = useTranslation();
+  const pageLayoutTips = usePageLayoutTips();
 
   const base = useBaseTool(
     'pageLayout',
@@ -26,6 +28,7 @@ const PageLayout = (props: BaseToolProps) => {
         title: 'Settings',
         isCollapsed: base.settingsCollapsed,
         onCollapsedClick: base.settingsCollapsed ? base.handleSettingsReset : undefined,
+        tooltip: pageLayoutTips,
         content: (
           <PageLayoutSettings
             parameters={base.params.parameters}

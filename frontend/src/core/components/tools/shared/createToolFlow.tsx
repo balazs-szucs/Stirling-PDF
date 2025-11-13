@@ -5,7 +5,7 @@ import OperationButton from '@app/components/tools/shared/OperationButton';
 import { ToolOperationHook } from '@app/hooks/tools/shared/useToolOperation';
 import { ToolWorkflowTitle, ToolWorkflowTitleProps } from '@app/components/tools/shared/ToolWorkflowTitle';
 import { StirlingFile } from '@app/types/fileContext';
-import type { TooltipTip } from '@app/types/tips';
+import type { TooltipContent } from '@app/types/tips';
 
 export interface FilesStepConfig {
   selectedFiles: StirlingFile[];
@@ -21,14 +21,7 @@ export interface MiddleStepConfig {
   isCollapsed?: boolean;
   onCollapsedClick?: () => void;
   content: React.ReactNode;
-  tooltip?: {
-    content?: React.ReactNode;
-    tips?: TooltipTip[];
-    header?: {
-      title: string;
-      logo?: React.ReactNode;
-    };
-  };
+  tooltip?: TooltipContent;
 }
 
 export interface ExecuteButtonConfig {

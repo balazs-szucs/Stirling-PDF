@@ -6,6 +6,7 @@ import { BaseToolProps, ToolComponent } from "@app/types/tool";
 import { useEndpointEnabled } from "@app/hooks/useEndpointConfig";
 import { useAddStampParameters } from "@app/components/tools/addStamp/useAddStampParameters";
 import { useAddStampOperation } from "@app/components/tools/addStamp/useAddStampOperation";
+import { useAddStampTips } from "@app/components/tooltips/useAddStampTips";
 import { Stack, Text } from "@mantine/core";
 import StampPreview from "@app/components/tools/addStamp/StampPreview";
 import styles from "@app/components/tools/addStamp/StampPreview.module.css";
@@ -17,6 +18,7 @@ import StampPositionFormattingSettings from "@app/components/tools/addStamp/Stam
 
 const AddStamp = ({ onPreviewFile, onComplete, onError }: BaseToolProps) => {
   const { t } = useTranslation();
+  const addStampTips = useAddStampTips();
   const { selectedFiles } = useFileSelection();
 
   const [quickPositionModeSelected, setQuickPositionModeSelected] = useState(false);
@@ -75,6 +77,7 @@ const AddStamp = ({ onPreviewFile, onComplete, onError }: BaseToolProps) => {
       isCollapsed: accordion.getCollapsedState(AddStampStep.STAMP_SETUP),
       onCollapsedClick: () => accordion.handleStepToggle(AddStampStep.STAMP_SETUP),
       isVisible: hasFiles || hasResults,
+      tooltip: addStampTips,
       content: (
         <StampSetupSettings
           parameters={params.parameters}

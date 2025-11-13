@@ -2210,7 +2210,7 @@
     },
     "cta": "Compare",
     "loading": "Comparing...",
-    
+
     "summary": {
       "baseHeading": "Original document",
       "comparisonHeading": "Edited document",
@@ -2266,7 +2266,7 @@
       "body": "This comparison is taking longer than usual. You can let it continue or cancel it.",
       "cancel": "Cancel comparison"
     },
-    
+
     "newLine": "new-line",
     "complex": {
       "message": "One or both of the provided documents are large files, accuracy of comparison may be reduced"
@@ -2442,6 +2442,30 @@
     "filenamePrefix": "unsigned",
     "files": {
       "placeholder": "Select a PDF file in the main view to get started"
+    },
+    "tooltip": {
+      "header": {
+        "title": "About Removing Certificate Signatures"
+      },
+      "overview": {
+        "title": "What this does",
+        "text": "Removes digital certificate signatures and signature fields from the PDF. Previously valid signatures will no longer be verifiable after removal."
+      },
+      "consequences": {
+        "title": "Consequences",
+        "bullet1": "Signature validation information is removed.",
+        "bullet2": "Document will appear unsigned in PDF viewers.",
+        "bullet3": "This action cannot be undone — keep a backup of the original signed file."
+      },
+      "whenToUse": {
+        "title": "When to use this",
+        "text": "Use when you need to edit a signed file or remove signature metadata before distribution."
+      },
+      "safety": {
+        "title": "Safety tips",
+        "bullet1": "Keep the original signed PDF as a backup.",
+        "bullet2": "Removing a signature may affect legal or official documents; verify you have permission."
+      }
     },
     "error": {
       "failed": "An error occurred whilst removing certificate signatures."
@@ -2769,6 +2793,7 @@
     "tags": "JS",
     "title": "Show Javascript",
     "header": "Show Javascript",
+    "description": "Extract and display JavaScript code from PDF documents",
     "downloadJS": "Download Javascript",
     "submit": "Show",
     "results": "Result",
@@ -5303,5 +5328,184 @@
     "offline": "Backend Offline",
     "starting": "Backend starting up...",
     "wait": "Please wait for the backend to finish launching and try again."
+  },
+  "addAttachments": {
+    "tooltip": {
+      "header": {
+        "title": "Add Attachments"
+      },
+      "description": "Embed files directly into your PDF document. These attachments become part of the PDF and can be viewed by anyone who opens it.",
+      "fileTypes": {
+        "title": "Supported Files",
+        "text": "You can attach any file type - documents, images, spreadsheets, presentations, and archives."
+      }
+    }
+  },
+  "addPageNumbers": {
+    "tooltip": {
+      "header": {
+        "title": "Add Page Numbers"
+      },
+      "description": "Add page numbers to your PDF. Choose position, pages to number, starting number, custom text, and font style.",
+      "customText": {
+        "title": "Custom Text",
+        "text": "Use {page} for current page and {total} for total pages. Example: 'Page {page} of {total}'"
+      }
+    }
+  },
+  "addStamp": {
+    "tooltip": {
+      "header": {
+        "title": "Add Stamp"
+      },
+      "description": "Add text stamps (like 'CONFIDENTIAL'), images, or watermarks to your PDF pages. Control their position, size, and opacity.",
+      "positioning": {
+        "title": "Positioning",
+        "text": "Use preset positions (corners, center, edges) or set exact coordinates with custom rotation and margins."
+      }
+    }
+  },
+  "adjustContrast": {
+    "tooltip": {
+      "header": {
+        "title": "Adjust Contrast"
+      },
+      "description": "Fine-tune contrast, brightness, saturation, and individual color channels (red, green, blue) for your PDF.",
+      "preview": {
+        "title": "Live Preview",
+        "text": "See real-time changes in the preview pane before applying."
+      }
+    }
+  },
+  "compare": {
+    "tooltip": {
+      "header": {
+        "title": "PDF Comparison"
+      },
+      "description": "Compare two PDF documents to identify differences. Perfect for reviewing changes or checking document versions.",
+      "setup": {
+        "title": "Setup",
+        "text": "Select your original PDF and the edited version. Use the swap button to reverse the comparison direction."
+      }
+    }
+  },
+  "convert": {
+    "tooltip": {
+      "header": {
+        "title": "File Conversion"
+      },
+      "description": "Transform documents between different formats. Convert PDFs to images, images to PDFs, or documents to PDFs.",
+      "quality": {
+        "title": "Quality Options",
+        "text": "Adjust DPI, color modes, and compression settings to control output quality and file size."
+      }
+    }
+  },
+  "extractImages": {
+    "tooltip": {
+      "header": {
+        "title": "Extract Images"
+      },
+      "description": "Extract all embedded images from your PDF and save them as individual files.",
+      "format": {
+        "title": "Output Format",
+        "text": "Choose JPG for smaller files or PNG for transparency and higher quality."
+      }
+    }
+  },
+  "pageLayout": {
+    "tooltip": {
+      "header": {
+        "title": "Page Layout"
+      },
+      "description": "Rearrange pages by dragging and dropping, rotate pages, or delete unwanted pages from your PDF."
+    }
+  },
+  "removeAnnotations": {
+    "tooltip": {
+      "header": {
+        "title": "Remove Annotations"
+      },
+      "description": "Remove all annotations, comments, highlights, and markup from your PDF while preserving the original content."
+    }
+  },
+  "removeCertSign": {
+    "tooltip": {
+      "header": {
+        "title": "Remove Certificate Signatures"
+      },
+      "description": {
+        "title": "Digital Signature Removal",
+        "text": "Remove digital certificate signatures from PDF documents. Note: This invalidates the signature and allows further editing."
+      }
+    }
+  },
+  "removeImage": {
+    "tooltip": {
+      "header": {
+        "title": "Remove Images"
+      },
+      "description": "Remove all images from your PDF while preserving text content and layout. Great for reducing file size."
+    }
+  },
+  "repair": {
+    "tooltip": {
+      "header": {
+        "title": "PDF Repair"
+      },
+      "description": "Fix corrupted or damaged PDF files. Use this when PDFs won't open properly or display incorrectly."
+    }
+  },
+  "sanitize": {
+    "tooltip": {
+      "header": {
+        "title": "PDF Sanitization"
+      },
+      "description": "Remove potentially sensitive elements from your PDF: JavaScript, embedded files, metadata, links, and fonts. Makes documents safer for sharing.",
+      "options": {
+        "title": "What Gets Removed",
+        "text": "JavaScript, embedded files, metadata, links, and fonts. Note: Removing fonts may change document appearance."
+      }
+    }
+  },
+  "showJS": {
+    "tooltip": {
+      "header": {
+        "title": "Extract JavaScript"
+      },
+      "description": "Extract and view JavaScript code embedded in PDF documents. Useful for security analysis and debugging."
+    }
+  },
+  "sign": {
+    "tooltip": {
+      "header": {
+        "title": "Sign PDF"
+      },
+      "description": "Add digital signatures to verify authenticity and integrity. Draw, type, or upload your signature, then position it on the document."
+    }
+  },
+  "singleLargePage": {
+    "tooltip": {
+      "header": {
+        "title": "Single Large Page"
+      },
+      "description": "Combine all pages into one continuous large page. Useful for posters or specialized printing needs."
+    }
+  },
+  "swaggerUI": {
+    "tooltip": {
+      "header": {
+        "title": "API Documentation"
+      },
+      "description": "Interactive API documentation for developers. Test endpoints, view request/response formats, and generate code samples."
+    }
+  },
+  "unlockPdfForms": {
+    "tooltip": {
+      "header": {
+        "title": "Unlock PDF Forms"
+      },
+      "description": "Remove restrictions from PDF forms to make them fully editable and fillable."
+    }
   }
 }

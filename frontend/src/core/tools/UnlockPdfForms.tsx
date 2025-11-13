@@ -3,10 +3,12 @@ import { createToolFlow } from "@app/components/tools/shared/createToolFlow";
 import { useUnlockPdfFormsParameters } from "@app/hooks/tools/unlockPdfForms/useUnlockPdfFormsParameters";
 import { useUnlockPdfFormsOperation } from "@app/hooks/tools/unlockPdfForms/useUnlockPdfFormsOperation";
 import { useBaseTool } from "@app/hooks/tools/shared/useBaseTool";
+import { useUnlockPdfFormsTips } from "@app/components/tooltips/useUnlockPdfFormsTips";
 import { BaseToolProps, ToolComponent } from "@app/types/tool";
 
 const UnlockPdfForms = (props: BaseToolProps) => {
   const { t } = useTranslation();
+  const unlockPdfFormsTips = useUnlockPdfFormsTips();
 
   const base = useBaseTool(
     'unlockPdfForms',
@@ -16,6 +18,11 @@ const UnlockPdfForms = (props: BaseToolProps) => {
   );
 
   return createToolFlow({
+    title: {
+      title: t("unlockPdfForms.title", "Unlock PDF Forms"),
+      description: t("unlockPdfForms.description", "Remove restrictions from PDF forms"),
+      tooltip: unlockPdfFormsTips
+    },
     files: {
       selectedFiles: base.selectedFiles,
       isCollapsed: base.hasFiles || base.hasResults,

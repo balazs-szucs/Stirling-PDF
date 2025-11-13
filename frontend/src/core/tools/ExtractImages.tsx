@@ -4,10 +4,12 @@ import ExtractImagesSettings from "@app/components/tools/extractImages/ExtractIm
 import { useExtractImagesParameters } from "@app/hooks/tools/extractImages/useExtractImagesParameters";
 import { useExtractImagesOperation } from "@app/hooks/tools/extractImages/useExtractImagesOperation";
 import { useBaseTool } from "@app/hooks/tools/shared/useBaseTool";
+import { useExtractImagesTips } from "@app/components/tooltips/useExtractImagesTips";
 import { BaseToolProps, ToolComponent } from "@app/types/tool";
 
 const ExtractImages = (props: BaseToolProps) => {
   const { t } = useTranslation();
+  const extractImagesTips = useExtractImagesTips();
 
   const base = useBaseTool(
     'extractImages',
@@ -26,6 +28,7 @@ const ExtractImages = (props: BaseToolProps) => {
         title: t("extractImages.settings.title", "Settings"),
         isCollapsed: base.settingsCollapsed,
         onCollapsedClick: base.settingsCollapsed ? base.handleSettingsReset : undefined,
+        tooltip: extractImagesTips,
         content: (
           <ExtractImagesSettings
             parameters={base.params.parameters}

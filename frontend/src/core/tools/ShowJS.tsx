@@ -10,9 +10,11 @@ import { useToolWorkflow } from '@app/contexts/ToolWorkflowContext';
 import { useNavigationActions, useNavigationState } from '@app/contexts/NavigationContext';
 import ShowJSView from '@app/components/tools/showJS/ShowJSView';
 import { useFileSelection } from '@app/contexts/file/fileHooks';
+import { useShowJSTips } from '@app/components/tooltips/useShowJSTips';
 
 const ShowJS = (props: BaseToolProps) => {
 	const { t } = useTranslation();
+	const showJSTips = useShowJSTips();
 	const { actions: navigationActions } = useNavigationActions();
 	const navigationState = useNavigationState();
 
@@ -95,6 +97,11 @@ const ShowJS = (props: BaseToolProps) => {
 	]);
 
 	return createToolFlow({
+		title: {
+			title: t('showJS.title', 'Show Javascript'),
+			description: t('showJS.description', 'Extract and display JavaScript code from PDF documents'),
+			tooltip: showJSTips
+		},
 		files: {
 			selectedFiles: base.selectedFiles,
 			isCollapsed: false,

@@ -20,10 +20,6 @@ const SanitizeSettings = ({ parameters, onParameterChange, disabled = false }: S
 
   return (
     <Stack gap="md">
-      <Text size="sm" fw={500}>
-        {t('sanitize.options.title', 'Sanitization Options')}
-      </Text>
-
       <Stack gap="sm">
         {options.map((option) => (
           <Checkbox

@@ -3,10 +3,12 @@ import { createToolFlow } from "@app/components/tools/shared/createToolFlow";
 import { useRemoveCertificateSignParameters } from "@app/hooks/tools/removeCertificateSign/useRemoveCertificateSignParameters";
 import { useRemoveCertificateSignOperation } from "@app/hooks/tools/removeCertificateSign/useRemoveCertificateSignOperation";
 import { useBaseTool } from "@app/hooks/tools/shared/useBaseTool";
+import { useRemoveCertificateSignTips } from "@app/components/tooltips/useRemoveCertificateSignTips";
 import { BaseToolProps, ToolComponent } from "@app/types/tool";
 
 const RemoveCertificateSign = (props: BaseToolProps) => {
   const { t } = useTranslation();
+  const removeCertificateSignTips = useRemoveCertificateSignTips();
 
   const base = useBaseTool(
     'removeCertificateSign',
@@ -16,6 +18,10 @@ const RemoveCertificateSign = (props: BaseToolProps) => {
   );
 
   return createToolFlow({
+    title: {
+      title: t("removeCertSign.title", "Remove Certificate Signature"),
+      tooltip: removeCertificateSignTips
+    },
     files: {
       selectedFiles: base.selectedFiles,
       isCollapsed: base.hasResults,

@@ -5,6 +5,7 @@ import { BaseToolProps, ToolComponent } from '@app/types/tool';
 import { useBaseTool } from '@app/hooks/tools/shared/useBaseTool';
 import { useAdjustContrastParameters } from '@app/hooks/tools/adjustContrast/useAdjustContrastParameters';
 import { useAdjustContrastOperation } from '@app/hooks/tools/adjustContrast/useAdjustContrastOperation';
+import { useAdjustContrastTips } from '@app/components/tooltips/useAdjustContrastTips';
 import AdjustContrastBasicSettings from '@app/components/tools/adjustContrast/AdjustContrastBasicSettings';
 import AdjustContrastColorSettings from '@app/components/tools/adjustContrast/AdjustContrastColorSettings';
 import AdjustContrastPreview from '@app/components/tools/adjustContrast/AdjustContrastPreview';
@@ -13,6 +14,7 @@ import NavigationArrows from '@app/components/shared/filePreview/NavigationArrow
 
 const AdjustContrast = (props: BaseToolProps) => {
   const { t } = useTranslation();
+  const adjustContrastTips = useAdjustContrastTips();
 
   const base = useBaseTool(
     'adjustContrast',
@@ -56,6 +58,7 @@ const AdjustContrast = (props: BaseToolProps) => {
         title: t('adjustContrast.basic', 'Basic Adjustments'),
         isCollapsed: accordion.getCollapsedState(Step.BASIC),
         onCollapsedClick: () => accordion.handleStepToggle(Step.BASIC),
+        tooltip: adjustContrastTips,
         content: (
           <AdjustContrastBasicSettings
             parameters={base.params.parameters}
