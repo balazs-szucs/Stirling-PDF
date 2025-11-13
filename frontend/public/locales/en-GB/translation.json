@@ -73,7 +73,17 @@
       "title": "Page Number Results"
     },
     "preview": "Position Selection",
-    "previewDisclaimer": "Preview is approximate. Final output may vary due to PDF font metrics."
+    "previewDisclaimer": "Preview is approximate. Final output may vary due to PDF font metrics.",
+    "tooltip": {
+      "header": {
+        "title": "Add Page Numbers"
+      },
+      "description": "Add page numbers to your PDF. Choose position, pages to number, starting number, custom text, and font style.",
+      "customText": {
+        "title": "Custom Text",
+        "text": "Use {page} for current page and {total} for total pages. Example: 'Page {page} of {total}'"
+      }
+    }
   },
   "pageSelectionPrompt": "Custom Page Selection (Enter a comma-separated list of page numbers 1,5,6 or Functions like 2n+1)",
   "startingNumberTooltip": "The first number to display. Subsequent pages will increment from this number.",
@@ -1114,7 +1124,17 @@
     "cbzOptions": "CBZ to PDF Options",
     "optimizeForEbook": "Optimize PDF for ebook readers (uses Ghostscript)",
     "cbzOutputOptions": "PDF to CBZ Options",
-    "cbzDpi": "DPI for image rendering"
+    "cbzDpi": "DPI for image rendering",
+    "tooltip": {
+      "header": {
+        "title": "File Conversion"
+      },
+      "description": "Transform documents between different formats. Convert PDFs to images, images to PDFs, or documents to PDFs.",
+      "quality": {
+        "title": "Quality Options",
+        "text": "Adjust DPI, color modes, and compression settings to control output quality and file size."
+      }
+    }
   },
   "imageToPdf": {
     "tags": "conversion,img,jpg,picture,photo"
@@ -1621,6 +1641,16 @@
       "title": "Unlocked Forms Results"
     }
   },
+  "unlockPdfForms": {
+    "title": "Unlock PDF Forms",
+    "description": "Remove restrictions from PDF forms to make them fully editable and fillable.",
+    "tooltip": {
+      "header": {
+        "title": "Unlock PDF Forms"
+      },
+      "description": "Remove restrictions from PDF forms to make them fully editable and fillable."
+    }
+  },
   "changeMetadata": {
     "header": "Change Metadata",
     "submit": "Change",
@@ -1872,6 +1902,16 @@
     },
     "error": {
       "failed": "An error occurred while extracting images from the PDF."
+    },
+    "tooltip": {
+      "header": {
+        "title": "Extract Images"
+      },
+      "description": "Extract all embedded images from your PDF and save them as individual files.",
+      "format": {
+        "title": "Output Format",
+        "text": "Choose JPG for smaller files or PNG for transparency and higher quality."
+      }
     }
   },
   "pdfToPDFA": {
@@ -2037,6 +2077,12 @@
     },
     "error": {
       "failed": "An error occurred while signing the PDF."
+    },
+    "tooltip": {
+      "header": {
+        "title": "Sign PDF"
+      },
+      "description": "Add digital signatures to verify authenticity and integrity. Draw, type, or upload your signature, then position it on the document."
     }
   },
   "flatten": {
@@ -2103,6 +2149,12 @@
     },
     "results": {
       "title": "Repair Results"
+    },
+    "tooltip": {
+      "header": {
+        "title": "PDF Repair"
+      },
+      "description": "Fix corrupted or damaged PDF files. Use this when PDFs won't open properly or display incorrectly."
     }
   },
   "removeBlanks": {
@@ -2169,6 +2221,12 @@
     },
     "error": {
       "failed": "An error occurred while removing annotations from the PDF."
+    },
+    "tooltip": {
+      "header": {
+        "title": "Remove Annotations"
+      },
+      "description": "Remove all annotations, comments, highlights, and markup from your PDF while preserving the original content."
     }
   },
   "compare": {
@@ -2266,7 +2324,6 @@
       "body": "This comparison is taking longer than usual. You can let it continue or cancel it.",
       "cancel": "Cancel comparison"
     },
-
     "newLine": "new-line",
     "complex": {
       "message": "One or both of the provided documents are large files, accuracy of comparison may be reduced"
@@ -2290,6 +2347,16 @@
       "title": "These PDFs look highly different",
       "body": "We're seeing very few similarities so far. You can stop the comparison if these aren't related documents.",
       "stopButton": "Stop comparison"
+    },
+    "tooltip": {
+      "header": {
+        "title": "PDF Comparison"
+      },
+      "description": "Compare two PDF documents to identify differences. Perfect for reviewing changes or checking document versions.",
+      "setup": {
+        "title": "Setup",
+        "text": "Select your original PDF and the edited version. Use the swap button to reverse the comparison direction."
+      }
     }
   },
   "certSign": {
@@ -2490,6 +2557,12 @@
     },
     "error": {
       "failed": "An error occurred while creating the multi-page layout."
+    },
+    "tooltip": {
+      "header": {
+        "title": "Page Layout"
+      },
+      "description": "Rearrange pages by dragging and dropping, rotate pages, or delete unwanted pages from your PDF."
     }
   },
   "bookletImposition": {
@@ -2638,7 +2711,7 @@
     "tags": "auto-detect,header-based,organize,relabel",
     "title": "Auto Rename",
     "header": "Auto Rename PDF",
-    "description": "Automatically finds the title from your PDF content and uses it as the filename.",
+    "description": "Rename your PDF using the document title detected from its contents.",
     "submit": "Auto Rename",
     "files": {
       "placeholder": "Select a PDF file in the main view to get started"
@@ -2651,14 +2724,24 @@
     },
     "tooltip": {
       "header": {
-        "title": "How Auto-Rename Works"
+        "title": "Auto Rename"
       },
-      "howItWorks": {
-        "title": "Smart Renaming",
-        "text": "Automatically finds the title from your PDF content and uses it as the filename.",
-        "bullet1": "Looks for text that appears to be a title or heading",
-        "bullet2": "Creates a clean, valid filename from the detected title",
-        "bullet3": "Keeps the original name if no suitable title is found"
+      "overview": {
+        "title": "What this does",
+        "text": "Rename your PDF automatically by detecting a likely document title or heading."
+      },
+      "detection": {
+        "title": "How titles are chosen",
+        "text": "Scans the first pages for prominent headings, metadata, bookmarks, or form fields that look like a document title.",
+        "bullet1": "Prioritises large or bold text near the start of the document",
+        "bullet2": "Cleans the detected text to form a safe, readable filename",
+        "bullet3": "Keeps the original filename if no suitable title is found"
+      },
+      "bestResults": {
+        "title": "Get the best results",
+        "bullet1": "Place a clear title or heading near the top of the first page.",
+        "bullet2": "Avoid special characters in headings you want to use for filenames.",
+        "bullet3": "Review the suggested name in the results panel before exporting."
       }
     }
   },
@@ -2802,6 +2885,12 @@
     "singleFileWarning": "This tool only supports one file at a time. Please select a single file.",
     "view": {
       "title": "Extracted JavaScript"
+    },
+    "tooltip": {
+      "header": {
+        "title": "Extract JavaScript"
+      },
+      "description": "Extract and view JavaScript code embedded in PDF documents. Useful for security analysis and debugging."
     }
   },
   "redact": {
@@ -3041,6 +3130,18 @@
     "quickPosition": "Select a position on the page to place the stamp.",
     "results": {
       "title": "Stamp Results"
+    }
+  },
+  "addStamp": {
+    "tooltip": {
+      "header": {
+        "title": "Add Stamp"
+      },
+      "description": "Add text stamps (like 'CONFIDENTIAL'), images, or watermarks to your PDF pages. Control their position, size, and opacity.",
+      "positioning": {
+        "title": "Positioning",
+        "text": "Use preset positions (corners, center, edges) or set exact coordinates with custom rotation and margins."
+      }
     }
   },
   "removeImagePdf": {
@@ -3354,6 +3455,16 @@
     "red": "Red",
     "results": {
       "title": "Adjusted PDF"
+    },
+    "tooltip": {
+      "header": {
+        "title": "Adjust Contrast"
+      },
+      "description": "Fine-tune contrast, brightness, saturation, and individual color channels (red, green, blue) for your PDF.",
+      "preview": {
+        "title": "Live Preview",
+        "text": "See real-time changes in the preview pane before applying."
+      }
     }
   },
   "compress": {
@@ -3500,13 +3611,30 @@
   "removeImage": {
     "title": "Remove image",
     "header": "Remove image",
+    "description": "Remove all images from PDF documents",
     "removeImage": "Remove image",
     "submit": "Remove image",
     "error": {
-      "failed": "Failed to remove images from the PDF."
+      "failed": "An error occurred while removing images from the PDF."
     },
     "results": {
       "title": "Remove Images Results"
+    },
+    "tooltip": {
+      "header": {
+        "title": "Remove Images"
+      },
+      "description": "Remove all images from your PDF while preserving text content and layout. Great for reducing file size."
+    }
+  },
+  "singleLargePage": {
+    "title": "Single Large Page",
+    "description": "Combine all pages into one continuous large page.",
+    "tooltip": {
+      "header": {
+        "title": "Single Large Page"
+      },
+      "description": "Combine all pages into one continuous large page. Useful for posters or specialized printing needs."
     }
   },
   "splitByChapters": {
@@ -3546,6 +3674,15 @@
     "header": "API Documentation",
     "desc": "View and test the Stirling PDF API endpoints",
     "tags": "api,documentation,swagger,endpoints,development"
+  },
+  "swaggerUI": {
+    "settings": "API Documentation",
+    "tooltip": {
+      "header": {
+        "title": "API Documentation"
+      },
+      "description": "Interactive API documentation for developers. Test endpoints, view request/response formats, and generate code samples."
+    }
   },
   "cookieBanner": {
     "popUp": {
@@ -4440,6 +4577,16 @@
         "label": "Remove Fonts",
         "desc": "Remove embedded fonts from the PDF"
       }
+    },
+    "tooltip": {
+      "header": {
+        "title": "PDF Sanitization"
+      },
+      "description": "Remove potentially sensitive elements from your PDF: JavaScript, embedded files, metadata, links, and fonts. Makes documents safer for sharing.",
+      "options": {
+        "title": "What Gets Removed",
+        "text": "JavaScript, embedded files, metadata, links, and fonts. Note: Removing fonts may change document appearance."
+      }
     }
   },
   "addPassword": {
@@ -4638,6 +4785,25 @@
       "cancel": "Cancel",
       "save": "Save Configuration"
     },
+    "tooltip": {
+      "header": {
+        "title": "Automation Workflows"
+      },
+      "overview": {
+        "title": "What this does",
+        "text": "Chain multiple PDF tools to run automatically in a single repeatable workflow."
+      },
+      "steps": {
+        "title": "How it is structured",
+        "text": "Use Selection to pick an existing automation, Creation to build or edit one, and Run to execute it with your files."
+      },
+      "bestPractices": {
+        "title": "Best practices",
+        "bullet1": "Test new automations with sample documents before processing critical files.",
+        "bullet2": "Refresh saved automations after updating individual tools so configurations stay in sync.",
+        "bullet3": "Review the results step to confirm every tool completed successfully before sharing output files."
+      }
+    },
     "copyToSaved": "Copy to Saved"
   },
   "automation": {
@@ -4739,6 +4905,16 @@
   "addAttachments": {
     "error": {
       "failed": "An error occurred while adding attachments to the PDF."
+    },
+    "tooltip": {
+      "header": {
+        "title": "Add Attachments"
+      },
+      "description": "Embed files directly into your PDF document. These attachments become part of the PDF and can be viewed by anyone who opens it.",
+      "fileTypes": {
+        "title": "Supported Files",
+        "text": "You can attach any file type - documents, images, spreadsheets, presentations, and archives."
+      }
     }
   },
   "autoRename": {
@@ -5328,184 +5504,5 @@
     "offline": "Backend Offline",
     "starting": "Backend starting up...",
     "wait": "Please wait for the backend to finish launching and try again."
-  },
-  "addAttachments": {
-    "tooltip": {
-      "header": {
-        "title": "Add Attachments"
-      },
-      "description": "Embed files directly into your PDF document. These attachments become part of the PDF and can be viewed by anyone who opens it.",
-      "fileTypes": {
-        "title": "Supported Files",
-        "text": "You can attach any file type - documents, images, spreadsheets, presentations, and archives."
-      }
-    }
-  },
-  "addPageNumbers": {
-    "tooltip": {
-      "header": {
-        "title": "Add Page Numbers"
-      },
-      "description": "Add page numbers to your PDF. Choose position, pages to number, starting number, custom text, and font style.",
-      "customText": {
-        "title": "Custom Text",
-        "text": "Use {page} for current page and {total} for total pages. Example: 'Page {page} of {total}'"
-      }
-    }
-  },
-  "addStamp": {
-    "tooltip": {
-      "header": {
-        "title": "Add Stamp"
-      },
-      "description": "Add text stamps (like 'CONFIDENTIAL'), images, or watermarks to your PDF pages. Control their position, size, and opacity.",
-      "positioning": {
-        "title": "Positioning",
-        "text": "Use preset positions (corners, center, edges) or set exact coordinates with custom rotation and margins."
-      }
-    }
-  },
-  "adjustContrast": {
-    "tooltip": {
-      "header": {
-        "title": "Adjust Contrast"
-      },
-      "description": "Fine-tune contrast, brightness, saturation, and individual color channels (red, green, blue) for your PDF.",
-      "preview": {
-        "title": "Live Preview",
-        "text": "See real-time changes in the preview pane before applying."
-      }
-    }
-  },
-  "compare": {
-    "tooltip": {
-      "header": {
-        "title": "PDF Comparison"
-      },
-      "description": "Compare two PDF documents to identify differences. Perfect for reviewing changes or checking document versions.",
-      "setup": {
-        "title": "Setup",
-        "text": "Select your original PDF and the edited version. Use the swap button to reverse the comparison direction."
-      }
-    }
-  },
-  "convert": {
-    "tooltip": {
-      "header": {
-        "title": "File Conversion"
-      },
-      "description": "Transform documents between different formats. Convert PDFs to images, images to PDFs, or documents to PDFs.",
-      "quality": {
-        "title": "Quality Options",
-        "text": "Adjust DPI, color modes, and compression settings to control output quality and file size."
-      }
-    }
-  },
-  "extractImages": {
-    "tooltip": {
-      "header": {
-        "title": "Extract Images"
-      },
-      "description": "Extract all embedded images from your PDF and save them as individual files.",
-      "format": {
-        "title": "Output Format",
-        "text": "Choose JPG for smaller files or PNG for transparency and higher quality."
-      }
-    }
-  },
-  "pageLayout": {
-    "tooltip": {
-      "header": {
-        "title": "Page Layout"
-      },
-      "description": "Rearrange pages by dragging and dropping, rotate pages, or delete unwanted pages from your PDF."
-    }
-  },
-  "removeAnnotations": {
-    "tooltip": {
-      "header": {
-        "title": "Remove Annotations"
-      },
-      "description": "Remove all annotations, comments, highlights, and markup from your PDF while preserving the original content."
-    }
-  },
-  "removeCertSign": {
-    "tooltip": {
-      "header": {
-        "title": "Remove Certificate Signatures"
-      },
-      "description": {
-        "title": "Digital Signature Removal",
-        "text": "Remove digital certificate signatures from PDF documents. Note: This invalidates the signature and allows further editing."
-      }
-    }
-  },
-  "removeImage": {
-    "tooltip": {
-      "header": {
-        "title": "Remove Images"
-      },
-      "description": "Remove all images from your PDF while preserving text content and layout. Great for reducing file size."
-    }
-  },
-  "repair": {
-    "tooltip": {
-      "header": {
-        "title": "PDF Repair"
-      },
-      "description": "Fix corrupted or damaged PDF files. Use this when PDFs won't open properly or display incorrectly."
-    }
-  },
-  "sanitize": {
-    "tooltip": {
-      "header": {
-        "title": "PDF Sanitization"
-      },
-      "description": "Remove potentially sensitive elements from your PDF: JavaScript, embedded files, metadata, links, and fonts. Makes documents safer for sharing.",
-      "options": {
-        "title": "What Gets Removed",
-        "text": "JavaScript, embedded files, metadata, links, and fonts. Note: Removing fonts may change document appearance."
-      }
-    }
-  },
-  "showJS": {
-    "tooltip": {
-      "header": {
-        "title": "Extract JavaScript"
-      },
-      "description": "Extract and view JavaScript code embedded in PDF documents. Useful for security analysis and debugging."
-    }
-  },
-  "sign": {
-    "tooltip": {
-      "header": {
-        "title": "Sign PDF"
-      },
-      "description": "Add digital signatures to verify authenticity and integrity. Draw, type, or upload your signature, then position it on the document."
-    }
-  },
-  "singleLargePage": {
-    "tooltip": {
-      "header": {
-        "title": "Single Large Page"
-      },
-      "description": "Combine all pages into one continuous large page. Useful for posters or specialized printing needs."
-    }
-  },
-  "swaggerUI": {
-    "tooltip": {
-      "header": {
-        "title": "API Documentation"
-      },
-      "description": "Interactive API documentation for developers. Test endpoints, view request/response formats, and generate code samples."
-    }
-  },
-  "unlockPdfForms": {
-    "tooltip": {
-      "header": {
-        "title": "Unlock PDF Forms"
-      },
-      "description": "Remove restrictions from PDF forms to make them fully editable and fillable."
-    }
   }
 }

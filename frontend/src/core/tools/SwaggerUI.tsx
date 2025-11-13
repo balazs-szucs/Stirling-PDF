@@ -1,13 +1,30 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { createToolFlow } from "@app/components/tools/shared/createToolFlow";
 import { BaseToolProps, ToolComponent } from "@app/types/tool";
 import { withBasePath } from "@app/constants/app";
 import { useSwaggerUITips } from "@app/components/tooltips/useSwaggerUITips";
+import type { ToolOperationHook } from "@app/hooks/tools/shared/useToolOperation";
 
 const SwaggerUI = (_props: BaseToolProps): React.ReactElement => {
   const { t } = useTranslation();
   const swaggerUITips = useSwaggerUITips();
+  const noopOperation = useMemo<ToolOperationHook>(() => ({
+    files: [],
+    thumbnails: [],
+    isGeneratingThumbnails: false,
+    downloadUrl: null,
+    downloadFilename: "",
+    isLoading: false,
+    status: "",
+    errorMessage: null,
+    progress: null,
+    executeOperation: async () => {},
+    resetResults: () => {},
+    clearError: () => {},
+    cancelOperation: () => {},
+    undoOperation: async () => {}
+  }), []);
 
   useEffect(() => {
     // Redirect to Swagger UI
@@ -15,6 +32,14 @@ const SwaggerUI = (_props: BaseToolProps): React.ReactElement => {
   }, []);
 
   return createToolFlow({
+    title: {
+      title: t("swaggerUI.settings", "API Documentation"),
+      description: t(
+        "swaggerUI.tooltip.description",
+        "Interactive API documentation for developers. Test endpoints, view request/response formats, and generate code samples."
+      ),
+      tooltip: swaggerUITips
+    },
     files: {
       selectedFiles: [],
       isCollapsed: false,
@@ -38,6 +63,11 @@ const SwaggerUI = (_props: BaseToolProps): React.ReactElement => {
         ),
       },
     ],
+    review: {
+      isVisible: false,
+      operation: noopOperation,
+      title: t("swaggerUI.settings", "API Documentation")
+    }
   });
 };
 

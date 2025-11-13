@@ -16,9 +16,11 @@ import { useToolRegistry } from "@app/contexts/ToolRegistryContext";
 import { useSavedAutomations } from "@app/hooks/tools/automate/useSavedAutomations";
 import { AutomationConfig, AutomationStepData, AutomationMode, AutomationStep } from "@app/types/automation";
 import { AUTOMATION_STEPS } from "@app/constants/automation";
+import { useAutomateTips } from "@app/components/tooltips/useAutomateTips";
 
 const Automate = ({ onPreviewFile, onComplete, onError }: BaseToolProps) => {
   const { t } = useTranslation();
+  const automateTips = useAutomateTips();
   const { selectedFiles } = useFileSelection();
   const { actions } = useNavigationActions();
   const { registerToolReset } = useToolWorkflow();
@@ -200,6 +202,14 @@ const Automate = ({ onPreviewFile, onComplete, onError }: BaseToolProps) => {
   ];
 
   return createToolFlow({
+    title: {
+      title: t('automate.title', 'Automate'),
+      description: t(
+        'automate.desc',
+        'Build multi-step workflows by chaining together PDF actions. Ideal for recurring tasks.'
+      ),
+      tooltip: automateTips
+    },
     files: {
       selectedFiles: currentStep === AUTOMATION_STEPS.RUN ? selectedFiles : [],
       isCollapsed: currentStep !== AUTOMATION_STEPS.RUN || hasResults,
