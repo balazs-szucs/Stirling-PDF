@@ -188,10 +188,10 @@ class FileProcessingService {
    * Cancel all ongoing processing operations
    */
   cancelAllProcessing(): void {
-    this.processingCache.forEach((operation, fileId) => {
+    for (const [fileId, operation] of this.processingCache) {
       operation.abortController.abort();
       console.log(`📁 FileProcessingService: Cancelled processing for ${fileId}`);
-    });
+    }
     console.log(`📁 FileProcessingService: Cancelled ${this.processingCache.size} processing operations`);
   }
 

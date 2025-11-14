@@ -39,7 +39,9 @@ class BackendHealthMonitor {
       status: nextStatus,
       isHealthy: nextStatus === 'healthy',
     };
-    this.listeners.forEach((listener) => listener(this.state));
+    for (const listener of this.listeners) {
+      listener(this.state);
+    }
   }
 
   private ensurePolling() {

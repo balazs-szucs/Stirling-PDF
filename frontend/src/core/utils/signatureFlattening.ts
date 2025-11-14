@@ -146,7 +146,9 @@ export async function flattenSignatures(options: SignatureFlatteningOptions): Pr
               });
               const pageIndices = sourcePdf.getPages().map((_, i) => i);
               const copiedPages = await pdfDoc.copyPages(sourcePdf, pageIndices);
-              copiedPages.forEach(page => pdfDoc.addPage(page));
+              for (const page of copiedPages) {
+                pdfDoc.addPage(page);
+              }
             } catch (copyError) {
               console.error('Failed to load PDF with any method:', copyError);
               throw copyError;

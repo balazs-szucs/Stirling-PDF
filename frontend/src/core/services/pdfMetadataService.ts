@@ -86,7 +86,7 @@ function extractCustomMetadata(custom: unknown): CustomMetadataEntry[] {
   if (typeof custom === 'object' && custom !== null) {
     const customObj = custom as Record<string, unknown>;
 
-    Object.entries(customObj).forEach(([key, value]) => {
+    for (const [key, value] of Object.entries(customObj)) {
       if (value != null && value !== '') {
         const entry = {
           key,
@@ -95,7 +95,7 @@ function extractCustomMetadata(custom: unknown): CustomMetadataEntry[] {
         };
         customMetadata.push(entry);
       }
-    });
+    }
   }
 
   return customMetadata;

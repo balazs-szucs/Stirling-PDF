@@ -41,7 +41,7 @@ export default function TeamsSection() {
   const [selectedUserId, setSelectedUserId] = useState<string>('');
 
   useEffect(() => {
-    fetchTeams();
+    void fetchTeams();
   }, []);
 
   const fetchTeams = async () => {
@@ -69,7 +69,7 @@ export default function TeamsSection() {
       alert({ alertType: 'success', title: t('workspace.teams.createTeam.success') });
       setCreateModalOpened(false);
       setNewTeamName('');
-      fetchTeams();
+      await fetchTeams();
     } catch (error: any) {
       console.error('Failed to create team:', error);
       const errorMessage = error.response?.data?.message ||
@@ -95,7 +95,7 @@ export default function TeamsSection() {
       setRenameModalOpened(false);
       setSelectedTeam(null);
       setRenameTeamName('');
-      fetchTeams();
+      await fetchTeams();
     } catch (error: any) {
       console.error('Failed to rename team:', error);
       const errorMessage = error.response?.data?.message ||
@@ -121,7 +121,7 @@ export default function TeamsSection() {
     try {
       await teamService.deleteTeam(team.id);
       alert({ alertType: 'success', title: t('workspace.teams.deleteTeam.success') });
-      fetchTeams();
+      await fetchTeams();
     } catch (error: any) {
       console.error('Failed to delete team:', error);
       const errorMessage = error.response?.data?.message ||
@@ -167,12 +167,12 @@ export default function TeamsSection() {
 
     try {
       setProcessing(true);
-      await teamService.addUserToTeam(selectedTeam.id, parseInt(selectedUserId));
+      await teamService.addUserToTeam(selectedTeam.id, Number.parseInt(selectedUserId));
       alert({ alertType: 'success', title: t('workspace.teams.addMemberToTeam.success') });
       setAddMemberModalOpened(false);
       setSelectedTeam(null);
       setSelectedUserId('');
-      fetchTeams();
+      await fetchTeams();
     } catch (error) {
       console.error('Failed to add member to team:', error);
       alert({ alertType: 'error', title: t('workspace.teams.addMemberToTeam.error') });
@@ -188,7 +188,7 @@ export default function TeamsSection() {
         teamId={viewingTeamId}
         onBack={() => {
           setViewingTeamId(null);
-          fetchTeams(); // Refresh teams list
+          void fetchTeams(); // Refresh teams list
         }}
       />
     );

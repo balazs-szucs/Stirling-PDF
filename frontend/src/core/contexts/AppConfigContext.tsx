@@ -170,8 +170,8 @@ export const AppConfigProvider: React.FC<AppConfigProviderProps> = ({
       fetchConfig(true);
     };
 
-    window.addEventListener('jwt-available', handleJwtAvailable);
-    return () => window.removeEventListener('jwt-available', handleJwtAvailable);
+    globalThis.addEventListener('jwt-available', handleJwtAvailable);
+    return () => globalThis.removeEventListener('jwt-available', handleJwtAvailable);
   }, [fetchConfig]);
 
   const value: AppConfigContextValue = {

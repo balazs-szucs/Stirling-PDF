@@ -24,15 +24,15 @@ const useFileSummary = (results: SignatureValidationReportEntry[]) => {
     let signatureCount = 0;
     let fullyValidCount = 0;
 
-    results.forEach((result) => {
+    for (const result of results) {
       signatureCount += result.signatures.length;
-      result.signatures.forEach((signature) => {
+      for (const signature of result.signatures) {
         const isValid = signature.valid;
         if (isValid) {
           fullyValidCount += 1;
         }
-      });
-    });
+      }
+    }
 
     return {
       fileCount: results.length,

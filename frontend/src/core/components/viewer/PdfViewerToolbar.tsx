@@ -153,7 +153,7 @@ export function PdfViewerToolbar({
           onChange={(value) => {
             const page = Number(value);
             setPageInput(page);
-            if (!isNaN(page) && page >= 1 && page <= scrollState.totalPages) {
+            if (!Number.isNaN(page) && page >= 1 && page <= scrollState.totalPages) {
               handlePageNavigation(page);
             }
           }}

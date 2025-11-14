@@ -501,20 +501,18 @@ export class EnhancedPDFProcessingService {
     return new Map(this.processing);
   }
 
-  private notifyListeners(): void {
-    this.processingListeners.forEach(callback => callback(this.processing));
-  }
-
   /**
    * Cleanup method for removed files
    */
   cleanup(removedFiles: File[]): void {
-    removedFiles.forEach(async (file) => {
-      const key = await this.generateFileKey(file);
-      this.cache.delete(key);
-      this.cancelProcessing(key);
-      this.processing.delete(key);
-    });
+    for (const file of removedFiles) {
+      (async () => {
+        const key = await this.generateFileKey(file);
+        this.cache.delete(key);
+        this.cancelProcessing(key);
+        this.processing.delete(key);
+      })();
+    }
     this.notifyListeners();
   }
 
@@ -523,11 +521,11 @@ export class EnhancedPDFProcessingService {
    */
   clearAllProcessing(): void {
     // Cancel all ongoing processing
-    this.processing.forEach((state) => {
+    for (const state of this.processing.values()) {
       if (state.cancellationToken) {
         state.cancellationToken.abort();
       }
-    });
+    }
 
     // Clear processing states
     this.processing.clear();
@@ -535,6 +533,12 @@ export class EnhancedPDFProcessingService {
 
     // Force memory cleanup hint
     setTimeout(() => window.gc?.(), 100);
+  }
+
+  private notifyListeners(): void {
+    for (const callback of this.processingListeners) {
+      callback(this.processing);
+    }
   }
 
   /**

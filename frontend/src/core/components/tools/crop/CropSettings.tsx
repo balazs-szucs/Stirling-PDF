@@ -120,7 +120,7 @@ const CropSettings = ({ parameters, disabled = false }: CropSettingsProps) => {
   // Handle manual coordinate input changes
   const handleCoordinateChange = (field: keyof Rectangle, value: number | string) => {
     const numValue = typeof value === 'string' ? Number.parseFloat(value) : value;
-    if (isNaN(numValue)) return;
+    if (Number.isNaN(numValue)) return;
 
     const newCropArea = { ...cropArea, [field]: numValue };
     if (pdfBounds) {
@@ -139,12 +139,13 @@ const CropSettings = ({ parameters, disabled = false }: CropSettingsProps) => {
   if (!selectedStub || !pdfBounds) {
     return (
       <Center style={{ height: '200px' }}>
-        <Text color="dimmed">
+        <Text c="dimmed">
           {t("crop.noFileSelected", "Select a PDF file to begin cropping")}
         </Text>
       </Center>
     );
   }
+
 
   const isCropValid = parameters.isCropAreaValid(pdfBounds);
   const isFullCrop = parameters.isFullPDFCrop(pdfBounds);

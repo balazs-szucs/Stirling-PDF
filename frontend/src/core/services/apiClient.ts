@@ -17,7 +17,7 @@ apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
     await handleHttpError(error); // Handle error (shows toast unless suppressed)
-    return Promise.reject(error);
+    throw error;
   }
 );
 

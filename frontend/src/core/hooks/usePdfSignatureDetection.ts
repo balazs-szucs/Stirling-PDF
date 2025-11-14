@@ -33,11 +33,11 @@ export const usePdfSignatureDetection = (files: StirlingFile[]): PdfSignatureDet
               const page = await pdf.getPage(i);
               const annotations = await page.getAnnotations({ intent: 'display' });
 
-              annotations.forEach((annotation: any) => {
+              for (const annotation of annotations as any[]) {
                 if (annotation.subtype === 'Widget' && annotation.fieldType === 'Sig') {
                   foundSignature = true;
                 }
-              });
+              }
 
               if (foundSignature) break;
             }

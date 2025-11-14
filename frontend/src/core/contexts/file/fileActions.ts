@@ -443,29 +443,29 @@ async function restoreFilesAndCleanup(
   indexedDB?: { deleteFile: (fileId: FileId) => Promise<void> } | null
 ): Promise<void> {
   // Remove files from filesRef
-  fileIdsToRemove.forEach(id => {
+  for (const id of fileIdsToRemove) {
     if (filesRef.current.has(id)) {
       if (DEBUG) console.log(`📄 Removing file ${id} from filesRef`);
       filesRef.current.delete(id);
     } else {
       if (DEBUG) console.warn(`📄 File ${id} not found in filesRef`);
     }
-  });
+  }
 
   // Restore files to filesRef
-  filesToRestore.forEach(({ file, record }) => {
+  for (const { file, record } of filesToRestore) {
     if (file && record) {
       // Validate the file before restoring
       if (file.size === 0) {
         if (DEBUG) console.warn(`📄 Skipping empty file ${file.name}`);
-        return;
+        continue;
       }
 
       // Restore the file to filesRef
       if (DEBUG) console.log(`📄 Restoring file ${file.name} with id ${record.id} to filesRef`);
       filesRef.current.set(record.id, file);
     }
-  });
+  }
 
   // Clean up IndexedDB
   if (indexedDB) {
@@ -531,9 +531,9 @@ export async function undoConsumeFiles(
     // Rollback filesRef to previous state
     if (DEBUG) console.error('📄 undoConsumeFiles: Error during undo, rolling back filesRef', error);
     filesRef.current.clear();
-    backupFilesRef.forEach((file, id) => {
+    for (const [id, file] of backupFilesRef.entries()) {
       filesRef.current.set(id, file);
-    });
+    }
     throw error; // Re-throw to let caller handle
   }
 }

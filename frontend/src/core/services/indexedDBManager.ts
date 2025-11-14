@@ -21,8 +21,8 @@ export interface DatabaseConfig {
 
 class IndexedDBManager {
   private static instance: IndexedDBManager;
-  private databases = new Map<string, IDBDatabase>();
-  private initPromises = new Map<string, Promise<IDBDatabase>>();
+  private readonly databases = new Map<string, IDBDatabase>();
+  private readonly initPromises = new Map<string, Promise<IDBDatabase>>();
 
   private constructor() {}
 
@@ -60,92 +60,16 @@ class IndexedDBManager {
     }
   }
 
-  private performDatabaseInit(config: DatabaseConfig): Promise<IDBDatabase> {
-    return new Promise((resolve, reject) => {
-      console.log(`Opening IndexedDB: ${config.name} v${config.version}`);
-      const request = indexedDB.open(config.name, config.version);
-
-      request.onerror = () => {
-        console.error(`Failed to open ${config.name}:`, request.error);
-        reject(request.error);
-      };
-
-      request.onsuccess = () => {
-        const db = request.result;
-        console.log(`Successfully opened ${config.name}`);
-
-        // Set up close handler to clean up our references
-        db.onclose = () => {
-          console.log(`Database ${config.name} closed`);
-          this.databases.delete(config.name);
-          this.initPromises.delete(config.name);
-        };
-
-        resolve(db);
-      };
-
-      request.onupgradeneeded = (event) => {
-        const db = request.result;
-        const oldVersion = event.oldVersion;
-        const transaction = request.transaction;
-
-        console.log(`Upgrading ${config.name} from v${oldVersion} to v${config.version}`);
-
-        // Create or update object stores
-        config.stores.forEach(storeConfig => {
-          let store: IDBObjectStore | undefined;
-
-          if (db.objectStoreNames.contains(storeConfig.name)) {
-            // Store exists - get reference for migration
-            console.log(`Object store '${storeConfig.name}' already exists`);
-            store = transaction?.objectStore(storeConfig.name);
-
-            // Add new indexes if they don't exist
-            if (storeConfig.indexes && store) {
-              storeConfig.indexes.forEach(indexConfig => {
-                if (!store?.indexNames.contains(indexConfig.name)) {
-                  store?.createIndex(
-                    indexConfig.name,
-                    indexConfig.keyPath,
-                    { unique: indexConfig.unique }
-                  );
-                  console.log(`Created index '${indexConfig.name}' on '${storeConfig.name}'`);
-                }
-              });
-            }
-          } else {
-            // Create new object store
-            const options: IDBObjectStoreParameters = {};
-            if (storeConfig.keyPath) {
-              options.keyPath = storeConfig.keyPath;
-            }
-            if (storeConfig.autoIncrement) {
-              options.autoIncrement = storeConfig.autoIncrement;
-            }
-
-            store = db.createObjectStore(storeConfig.name, options);
-            console.log(`Created object store '${storeConfig.name}'`);
-
-            // Create indexes
-            if (storeConfig.indexes) {
-              storeConfig.indexes.forEach(indexConfig => {
-                store?.createIndex(
-                  indexConfig.name,
-                  indexConfig.keyPath,
-                  { unique: indexConfig.unique }
-                );
-                console.log(`Created index '${indexConfig.name}' on '${storeConfig.name}'`);
-              });
-            }
-          }
-
-          // Perform data migration for files database
-          if (config.name === 'stirling-pdf-files' && storeConfig.name === 'files' && store) {
-            this.migrateFileHistoryFields(store, oldVersion);
-          }
-        });
-      };
-    });
+  /**
+   * Close all database connections
+   */
+  closeAllDatabases(): void {
+    for (const [name, db] of this.databases) {
+      console.log(`Closing database: ${name}`);
+      db.close();
+    }
+    this.databases.clear();
+    this.initPromises.clear();
   }
 
   /**
@@ -235,16 +159,92 @@ class IndexedDBManager {
     }
   }
 
-  /**
-   * Close all database connections
-   */
-  closeAllDatabases(): void {
-    this.databases.forEach((db, name) => {
-      console.log(`Closing database: ${name}`);
-      db.close();
+  private performDatabaseInit(config: DatabaseConfig): Promise<IDBDatabase> {
+    return new Promise((resolve, reject) => {
+      console.log(`Opening IndexedDB: ${config.name} v${config.version}`);
+      const request = indexedDB.open(config.name, config.version);
+
+      request.onerror = () => {
+        console.error(`Failed to open ${config.name}:`, request.error);
+        reject(request.error);
+      };
+
+      request.onsuccess = () => {
+        const db = request.result;
+        console.log(`Successfully opened ${config.name}`);
+
+        // Set up close handler to clean up our references
+        db.onclose = () => {
+          console.log(`Database ${config.name} closed`);
+          this.databases.delete(config.name);
+          this.initPromises.delete(config.name);
+        };
+
+        resolve(db);
+      };
+
+      request.onupgradeneeded = (event) => {
+        const db = request.result;
+        const oldVersion = event.oldVersion;
+        const transaction = request.transaction;
+
+        console.log(`Upgrading ${config.name} from v${oldVersion} to v${config.version}`);
+
+        // Create or update object stores
+        for (const storeConfig of config.stores) {
+          let store: IDBObjectStore | undefined;
+
+          if (db.objectStoreNames.contains(storeConfig.name)) {
+            // Store exists - get reference for migration
+            console.log(`Object store '${storeConfig.name}' already exists`);
+            store = transaction?.objectStore(storeConfig.name);
+
+            // Add new indexes if they don't exist
+            if (storeConfig.indexes && store) {
+              for (const indexConfig of storeConfig.indexes) {
+                if (!store?.indexNames.contains(indexConfig.name)) {
+                  store?.createIndex(
+                    indexConfig.name,
+                    indexConfig.keyPath,
+                    { unique: indexConfig.unique }
+                  );
+                  console.log(`Created index '${indexConfig.name}' on '${storeConfig.name}'`);
+                }
+              }
+            }
+          } else {
+            // Create new object store
+            const options: IDBObjectStoreParameters = {};
+            if (storeConfig.keyPath) {
+              options.keyPath = storeConfig.keyPath;
+            }
+            if (storeConfig.autoIncrement) {
+              options.autoIncrement = storeConfig.autoIncrement;
+            }
+
+            store = db.createObjectStore(storeConfig.name, options);
+            console.log(`Created object store '${storeConfig.name}'`);
+
+            // Create indexes
+            if (storeConfig.indexes) {
+              for (const indexConfig of storeConfig.indexes) {
+                store?.createIndex(
+                  indexConfig.name,
+                  indexConfig.keyPath,
+                  { unique: indexConfig.unique }
+                );
+                console.log(`Created index '${indexConfig.name}' on '${storeConfig.name}'`);
+              }
+            }
+          }
+
+          // Perform data migration for files database
+          if (config.name === 'stirling-pdf-files' && storeConfig.name === 'files' && store) {
+            this.migrateFileHistoryFields(store, oldVersion);
+          }
+        }
+      };
     });
-    this.databases.clear();
-    this.initPromises.clear();
   }
 
   /**

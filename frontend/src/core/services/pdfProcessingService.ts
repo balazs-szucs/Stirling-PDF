@@ -152,22 +152,24 @@ export class PDFProcessingService {
     return new Map(this.processing);
   }
 
-  private notifyListeners(): void {
-    this.processingListeners.forEach(callback => callback(this.processing));
+  // Cleanup method for activeFiles changes
+  cleanup(removedFiles: File[]): void {
+    for (const file of removedFiles) {
+      const key = this.generateFileKey(file);
+      this.cache.delete(key);
+      this.processing.delete(key);
+    }
+    this.notifyListeners();
   }
 
   generateFileKey(file: File): string {
     return `${file.name}-${file.size}-${file.lastModified}`;
   }
 
-  // Cleanup method for activeFiles changes
-  cleanup(removedFiles: File[]): void {
-    removedFiles.forEach(file => {
-      const key = this.generateFileKey(file);
-      this.cache.delete(key);
-      this.processing.delete(key);
-    });
-    this.notifyListeners();
+  private notifyListeners(): void {
+    for (const callback of this.processingListeners) {
+      callback(this.processing);
+    }
   }
 
   // Get cache stats (for debugging)

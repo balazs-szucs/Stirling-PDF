@@ -14,15 +14,15 @@ export default function AuthLayout({ children }: AuthLayoutProps) {
   // Force light mode on auth pages
   useEffect(() => {
     const htmlElement = document.documentElement;
-    const previousColorScheme = htmlElement.getAttribute('data-mantine-color-scheme');
+    const previousColorScheme = htmlElement.dataset.mantineColorScheme;
 
     // Set light mode
-    htmlElement.setAttribute('data-mantine-color-scheme', 'light');
+    htmlElement.dataset.mantineColorScheme = 'light';
 
     // Cleanup: restore previous theme when leaving auth pages
     return () => {
       if (previousColorScheme) {
-        htmlElement.setAttribute('data-mantine-color-scheme', previousColorScheme);
+        htmlElement.dataset.mantineColorScheme = previousColorScheme;
       }
     };
   }, []);

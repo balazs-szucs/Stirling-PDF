@@ -27,18 +27,20 @@ export function useRightRailButtons(buttons: readonly RightRailButtonWithAction[
     // DEV warnings for duplicate ids or missing handlers
     if (process.env.NODE_ENV === 'development') {
       const idSet = new Set<string>();
-      buttons.forEach(b => {
+      for (const b of buttons) {
         if (!b.onClick && !b.render) console.warn('[RightRail] Missing onClick/render for id:', b.id);
         if (idSet.has(b.id)) console.warn('[RightRail] Duplicate id in buttons array:', b.id);
         idSet.add(b.id);
-      });
+      }
     }
 
     // Register visual button configs (idempotent merge by id)
     registerButtons(configs);
 
     // Bind/update actions independent of registration
-    buttons.forEach(({ id, onClick }) => setAction(id, onClick));
+    for (const { id, onClick } of buttons) {
+      setAction(id, onClick);
+    }
 
     // Cleanup unregisters by ids present in this call
     return () => unregisterButtons(ids);

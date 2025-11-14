@@ -41,7 +41,9 @@ export class TauriBackendService {
       return;
     }
     this.backendStatus = status;
-    this.statusListeners.forEach(listener => listener(status));
+    for (const listener of this.statusListeners) {
+      listener(status);
+    }
   }
 
   async startBackend(backendUrl?: string): Promise<void> {

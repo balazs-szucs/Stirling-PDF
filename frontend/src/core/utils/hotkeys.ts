@@ -50,9 +50,18 @@ export const isMacLike = (): boolean => {
   if (typeof navigator === 'undefined') {
     return false;
   }
-  const platform = navigator.platform?.toLowerCase() ?? '';
+
+  if ('userAgentData' in navigator && navigator.userAgentData) {
+    const userAgentData = navigator.userAgentData as { platform?: string };
+    const platform = userAgentData.platform?.toLowerCase() ?? '';
+    if (platform) {
+      return /mac/i.test(platform);
+    }
+  }
+
+  // Fallback to userAgent string
   const userAgent = navigator.userAgent?.toLowerCase() ?? '';
-  return /mac|iphone|ipad|ipod/.test(platform) || /mac|iphone|ipad|ipod/.test(userAgent);
+  return /mac|iphone|ipad|ipod/.test(userAgent);
 };
 
 export const isModifierCode = (code: string): boolean => MODIFIER_CODES.has(code);

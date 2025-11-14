@@ -71,12 +71,12 @@ export const usePageEditorExport = ({
   const getSourceFiles = useCallback((): Map<FileId, File> | null => {
     const sourceFiles = new Map<FileId, File>();
 
-    selectedFileIds.forEach((fileId) => {
+    for (const fileId of selectedFileIds) {
       const file = selectors.getFile(fileId);
       if (file) {
         sourceFiles.set(fileId, file);
       }
-    });
+    }
 
     const hasInsertedFiles = false;
     const hasMultipleOriginalFiles = selectedFileIds.length > 1;
@@ -197,9 +197,9 @@ export const usePageEditorExport = ({
         const JSZip = await import("jszip");
         const zip = new JSZip.default();
 
-        files.forEach((file) => {
+        for (const file of files) {
           zip.file(file.name, file);
-        });
+        }
 
         const zipBlob = await zip.generateAsync({ type: "blob" });
         const zipFilename = exportFilename.replace(/\.pdf$/i, ".zip");

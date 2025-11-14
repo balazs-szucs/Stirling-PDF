@@ -72,7 +72,7 @@ export default function OnboardingTour() {
 
   // Helper to add glow to multiple elements
   const addGlowToElements = (selectors: string[]) => {
-    selectors.forEach(selector => {
+    for (const selector of selectors) {
       const element = document.querySelector(selector);
       if (element) {
         if (selector === '[data-tour="settings-content-area"]') {
@@ -81,13 +81,17 @@ export default function OnboardingTour() {
           element.classList.add('tour-nav-glow');
         }
       }
-    });
+    }
   };
 
   // Helper to remove all glows
   const removeAllGlows = () => {
-    document.querySelectorAll('.tour-content-glow').forEach(el => el.classList.remove('tour-content-glow'));
-    document.querySelectorAll('.tour-nav-glow').forEach(el => el.classList.remove('tour-nav-glow'));
+    for (const el of document.querySelectorAll('.tour-content-glow')) {
+      el.classList.remove('tour-content-glow');
+    }
+    for (const el of document.querySelectorAll('.tour-nav-glow')) {
+      el.classList.remove('tour-nav-glow');
+    }
   };
 
   // Cleanup glows when tour closes

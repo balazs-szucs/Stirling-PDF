@@ -15,7 +15,9 @@ function createImperativeApi() {
   return {
     provide(instance: ToastContextApi) {
       api = instance;
-      subscribers.splice(0).forEach(cb => cb(instance));
+      for (const cb of subscribers.splice(0)) {
+        cb(instance);
+      }
     },
     get(): ToastContextApi | null {
       return api;

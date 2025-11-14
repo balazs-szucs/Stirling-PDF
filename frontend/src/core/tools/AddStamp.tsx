@@ -82,10 +82,7 @@ const AddStamp = ({ onPreviewFile, onComplete, onError }: BaseToolProps) => {
           disabled={endpointLoading}
         />
       ),
-    });
-
-    // Step 2: Formatting & Position
-    steps.push({
+    }, {
       title: t("AddStampRequest.positionAndFormatting", "Position & Formatting"),
       isCollapsed: accordion.getCollapsedState(AddStampStep.POSITION_FORMATTING),
       onCollapsedClick: () => accordion.handleStepToggle(AddStampStep.POSITION_FORMATTING),
@@ -102,8 +99,8 @@ const AddStamp = ({ onPreviewFile, onComplete, onError }: BaseToolProps) => {
                 setCustomPositionModeSelected(!isQuick);
               }}
               options={[
-                { value: 'quick', label: t('quickPosition', 'Quick Position') },
-                { value: 'custom', label: t('customPosition', 'Custom Position') },
+                {value: 'quick', label: t('quickPosition', 'Quick Position')},
+                {value: 'custom', label: t('customPosition', 'Custom Position')},
               ]}
               disabled={endpointLoading}
               buttonClassName={styles.modeToggleButton}
@@ -113,12 +110,14 @@ const AddStamp = ({ onPreviewFile, onComplete, onError }: BaseToolProps) => {
 
           {params.parameters.stampType === 'image' && customPositionModeSelected && (
             <div className={styles.informationContainer}>
-              <Text className={styles.informationText}>{t('AddStampRequest.customPosition', 'Drag the stamp to the desired location in the preview window.')}</Text>
+              <Text
+                className={styles.informationText}>{t('AddStampRequest.customPosition', 'Drag the stamp to the desired location in the preview window.')}</Text>
             </div>
           )}
           {params.parameters.stampType === 'image' && !customPositionModeSelected && (
             <div className={styles.informationContainer}>
-              <Text className={styles.informationText}>{t('AddStampRequest.quickPosition', 'Select a position on the page to place the stamp.')}</Text>
+              <Text
+                className={styles.informationText}>{t('AddStampRequest.quickPosition', 'Select a position on the page to place the stamp.')}</Text>
             </div>
           )}
 
@@ -133,7 +132,7 @@ const AddStamp = ({ onPreviewFile, onComplete, onError }: BaseToolProps) => {
             obscured={
               accordion.currentStep === AddStampStep.POSITION_FORMATTING &&
               ((params.parameters.stampType === 'text' && params.parameters.stampText.trim().length === 0) ||
-               (params.parameters.stampType === 'image' && !params.parameters.stampImage))
+                (params.parameters.stampType === 'image' && !params.parameters.stampImage))
             }
             overlayMessage={
               <Text size="sm" c="white" fw={600}>

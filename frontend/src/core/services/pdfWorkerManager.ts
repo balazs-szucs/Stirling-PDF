@@ -125,9 +125,9 @@ class PDFWorkerManager {
    */
   destroyAllDocuments(): void {
     const documentsToDestroy = Array.from(this.activeDocuments);
-    documentsToDestroy.forEach(pdf => {
+    for (const pdf of documentsToDestroy) {
       this.destroyDocument(pdf);
-    });
+    }
 
     this.activeDocuments.clear();
     this.workerCount = 0;
@@ -165,13 +165,13 @@ class PDFWorkerManager {
    */
   emergencyCleanup(): void {
     // Force destroy all documents
-    this.activeDocuments.forEach(pdf => {
+    for (const pdf of this.activeDocuments) {
       try {
         pdf.destroy();
       } catch {
         // Ignore errors
       }
-    });
+    }
 
     this.activeDocuments.clear();
     this.workerCount = 0;

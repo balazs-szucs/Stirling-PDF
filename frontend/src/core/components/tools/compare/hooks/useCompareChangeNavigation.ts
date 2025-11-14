@@ -96,13 +96,13 @@ export const useCompareChangeNavigation = (
           let maxBottom = Number.NEGATIVE_INFINITY;
           let maxRight = Number.NEGATIVE_INFINITY;
   
-          nodes.forEach((element) => {
+          for (const element of nodes) {
             const rect = element.getBoundingClientRect();
             minTop = Math.min(minTop, rect.top);
             minLeft = Math.min(minLeft, rect.left);
             maxBottom = Math.max(maxBottom, rect.bottom);
             maxRight = Math.max(maxRight, rect.right);
-          });
+          }
   
           const boxHeight = Math.max(1, maxBottom - minTop);
           const boxWidth = Math.max(1, maxRight - minLeft);
@@ -157,20 +157,20 @@ export const useCompareChangeNavigation = (
         }
 
         const groupsByInner = new Map<HTMLElement, HTMLElement[]>();
-        nodes.forEach((element) => {
+        for (const element of nodes) {
           const inner = element.closest('.compare-diff-page__inner') as HTMLElement | null;
-          if (!inner) return;
+          if (!inner) continue;
           const list = groupsByInner.get(inner) ?? [];
           list.push(element);
           groupsByInner.set(inner, list);
-        });
+        }
 
-        groupsByInner.forEach((elements, inner) => {
+        for (const [inner, elements] of groupsByInner) {
           let minL = 100;
           let minT = 100;
           let maxR = 0;
           let maxB = 0;
-          elements.forEach((element) => {
+          for (const element of elements) {
             const leftPercent = Number.parseFloat(element.style.left) || 0;
             const topPercent = Number.parseFloat(element.style.top) || 0;
             const widthPercent = Number.parseFloat(element.style.width) || 0;
@@ -179,7 +179,7 @@ export const useCompareChangeNavigation = (
             minT = Math.min(minT, topPercent);
             maxR = Math.max(maxR, leftPercent + widthPercent);
             maxB = Math.max(maxB, topPercent + heightPercent);
-          });
+          }
           const overlay = document.createElement('span');
           overlay.className = 'compare-diff-flash-overlay';
           overlay.style.position = 'absolute';
@@ -189,16 +189,16 @@ export const useCompareChangeNavigation = (
           overlay.style.height = `${Math.max(0.1, maxB - minT)}%`;
           inner.appendChild(overlay);
           window.setTimeout(() => overlay.remove(), 1600);
-        });
+        }
 
-        nodes.forEach((element) => {
+        for (const element of nodes) {
           element.classList.remove('compare-diff-highlight--flash');
-        });
+        }
         void container.clientWidth; // Force reflow
-        nodes.forEach((element) => {
+        for (const element of nodes) {
           element.classList.add('compare-diff-highlight--flash');
           window.setTimeout(() => element.classList.remove('compare-diff-highlight--flash'), 1600);
-        });
+        }
       };
 
       const nodes = findNodes();

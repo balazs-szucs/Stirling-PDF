@@ -22,11 +22,11 @@ export function useFileColorMap(fileIds: FileId[]): Map<FileId, number> {
     }
 
     // Assign colors to any new files
-    fileIds.forEach((id) => {
+    for (const id of fileIds) {
       if (!assignments.has(id)) {
         assignments.set(id, assignments.size);
       }
-    });
+    }
 
     return assignments;
   }, [serializedIds, fileIds]);

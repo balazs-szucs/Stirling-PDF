@@ -58,7 +58,7 @@ const CompareNavigationDropdown = ({
 
   const isMeaningful = (s: string) => {
     const t = sanitize(s);
-  
+
     // Build a unicode-aware regex if supported; otherwise fall back to a plain ASCII class.
     const rx =
       (() => {
@@ -70,12 +70,12 @@ const CompareNavigationDropdown = ({
           return /[A-Za-z0-9.,!?;:(){}"'`~@#$%^&*+=|<>/[\]]/;
         }
       })();
-  
+
     if (!rx.test(t)) return false;
     return t.length > 0;
   };
 
-  
+
   const [query, setQuery] = useState('');
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const [stickyPage, setStickyPage] = useState<number | null>(null);
@@ -88,7 +88,7 @@ const CompareNavigationDropdown = ({
     const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const stripNewLine = (s: string) =>
       s
-        .replace(new RegExp(`\\b${esc(newLineLabel)}\\b`, 'gi'), ' ')
+        .replaceAll(new RegExp(`\\b${esc(newLineLabel)}\\b`, 'gi'), ' ')
         .replace(/\s+/g, ' ')
         .trim();
 
@@ -108,7 +108,7 @@ const CompareNavigationDropdown = ({
     const headers = Array.from(viewport.querySelectorAll('.compare-dropdown-group')) as HTMLElement[];
     groupOffsetsRef.current = headers.map((el) => {
       const text = el.textContent || '';
-      const page = parseInt(text.replace(/[^0-9]/g, ''), 10) || 0;
+      const page = Number.parseInt(text.replace(/[^0-9]/g, ''), 10) || 0;
       return { top: el.offsetTop, page };
     });
     // Update sticky based on current scroll position

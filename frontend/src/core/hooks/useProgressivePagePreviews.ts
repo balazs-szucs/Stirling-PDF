@@ -156,7 +156,9 @@ export const useProgressivePagePreviews = ({
       if (!signal.aborted) {
         setState(prev => {
           const newLoadingPages = new Set(prev.loadingPages);
-          pagesToLoad.forEach(p => newLoadingPages.delete(p - 1));
+          for (const p of pagesToLoad) {
+            newLoadingPages.delete(p - 1);
+          }
           return { ...prev, loadingPages: newLoadingPages };
         });
       }

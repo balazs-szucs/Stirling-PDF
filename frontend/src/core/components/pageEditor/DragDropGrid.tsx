@@ -75,11 +75,11 @@ function resolveDropHint(
   const rows: ItemRect[][] = [];
   const rowTolerance = items[0].rect.height / 2;
 
-  items.forEach((item) => {
+  for (const item of items) {
     const currentRow = rows[rows.length - 1];
     if (!currentRow) {
       rows.push([item]);
-      return;
+      continue;
     }
 
     const isSameRow = Math.abs(item.rect.top - currentRow[0].rect.top) <= rowTolerance;
@@ -88,14 +88,14 @@ function resolveDropHint(
     } else {
       rows.push([item]);
     }
-  });
+  }
 
   let targetRow: ItemRect[] | undefined;
   let smallestRowDistance = Infinity;
 
-  rows.forEach((row) => {
+  for (const row of rows) {
     if (row.length === 0) {
-      return;
+      continue;
     }
     const top = row[0].rect.top;
     const bottom = row[0].rect.bottom;
@@ -105,7 +105,7 @@ function resolveDropHint(
       smallestRowDistance = distance;
       targetRow = row;
     }
-  });
+  }
 
   if (!targetRow || targetRow.length === 0) {
     return { hoveredId: null, dropSide: null };
@@ -114,14 +114,14 @@ function resolveDropHint(
   let hoveredItem = targetRow[0];
   let smallestHorizontalDistance = Infinity;
 
-  targetRow.forEach((item) => {
+  for (const item of targetRow) {
     const midpoint = item.rect.left + item.rect.width / 2;
     const distance = Math.abs(cursorX - midpoint);
     if (distance < smallestHorizontalDistance) {
       smallestHorizontalDistance = distance;
       hoveredItem = item;
     }
-  });
+  }
 
   const firstItem = targetRow[0];
   const lastItem = targetRow[targetRow.length - 1];
@@ -273,33 +273,33 @@ const DragDropGrid = <T extends DragDropItem>({
     const selectedIds =
       selectedFileIds && selectedFileIds.length > 0 ? new Set(selectedFileIds) : null;
 
-    items.forEach((item, index) => {
+    for (const [index, item] of items.entries()) {
       const isPlaceholder = Boolean(item.isPlaceholder);
       if (isPlaceholder) {
-        return;
+        continue;
       }
 
       const belongsToVisibleFile =
         !selectedIds || !item.originalFileId || selectedIds.has(item.originalFileId);
 
       if (!belongsToVisibleFile) {
-        return;
+        continue;
       }
 
       filtered.push(item);
       indexMap.push(index);
-    });
+    }
 
     return { filteredItems: filtered, filteredToOriginalIndex: indexMap };
   }, [items, selectedFileIds]);
 
   useEffect(() => {
     const visibleIdSet = new Set(visibleItems.map(item => item.id));
-    itemRefs.current.forEach((_, pageId) => {
+    for (const [pageId] of itemRefs.current) {
       if (!visibleIdSet.has(pageId)) {
         itemRefs.current.delete(pageId);
       }
-    });
+    }
   }, [visibleItems]);
 
   // Box selection state
@@ -446,11 +446,11 @@ const DragDropGrid = <T extends DragDropItem>({
     const clickTarget = e.target as Node;
     let clickedPageId: string | null = null;
 
-    itemRefs.current.forEach((element, pageId) => {
+    for (const [pageId, element] of itemRefs.current) {
       if (element.contains(clickTarget)) {
         clickedPageId = pageId;
       }
-    });
+    }
 
     if (clickedPageId) {
       // Clicking directly on a page shouldn't initiate box selection
@@ -485,7 +485,7 @@ const DragDropGrid = <T extends DragDropItem>({
     const boxBottom = Math.max(boxSelectStart.y, e.clientY - rect.top);
 
     const selectedIds: string[] = [];
-    itemRefs.current.forEach((pageEl, pageId) => {
+    for (const [pageId, pageEl] of itemRefs.current) {
       const pageRect = pageEl.getBoundingClientRect();
       const pageLeft = pageRect.left - rect.left;
       const pageRight = pageRect.right - rect.left;
@@ -503,7 +503,7 @@ const DragDropGrid = <T extends DragDropItem>({
       if (intersects) {
         selectedIds.push(pageId);
       }
-    });
+    }
 
     setBoxSelectedPageIds(selectedIds);
   }, [isBoxSelecting, boxSelectStart]);

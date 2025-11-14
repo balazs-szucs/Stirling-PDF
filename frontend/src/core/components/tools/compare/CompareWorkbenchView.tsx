@@ -76,7 +76,7 @@ const CompareWorkbenchView = ({ data }: CompareWorkbenchViewProps) => {
     isPanMode,
     setIsPanMode,
     baseZoom,
-    setBaseZoom,  
+    setBaseZoom,
     comparisonZoom,
     setComparisonZoom,
     setPanToTopLeft,
@@ -281,7 +281,7 @@ const CompareWorkbenchView = ({ data }: CompareWorkbenchViewProps) => {
   // Clamp the displayed input if max changes smaller than current
   useEffect(() => {
     if (!pageInputValue) return;
-    const n = Math.max(1, parseInt(pageInputValue, 10) || 1);
+    const n = Math.max(1, Number.parseInt(pageInputValue, 10) || 1);
     if (maxSharedPages > 0 && n > maxSharedPages) {
       setPageInputValue(String(maxSharedPages));
     }
@@ -320,7 +320,7 @@ const CompareWorkbenchView = ({ data }: CompareWorkbenchViewProps) => {
 
   const handleTypingChange = useCallback((next: string) => {
     // Only digits; allow empty while editing
-    const digits = next.replace(/[^0-9]/g, '');
+    const digits = next.replaceAll(/[^0-9]/g, '');
     if (digits.length === 0) {
       setPageInputValue('');
       if (typingTimerRef.current != null) {

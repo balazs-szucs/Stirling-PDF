@@ -89,7 +89,7 @@ export function usePageDocument(): PageDocumentHook {
     const insertionMap = new Map<string, FileId[]>(); // insertAfterPageId -> fileIds
     const originalFileIds: FileId[] = [];
 
-    activeFileIds.forEach(fileId => {
+    for (const fileId of activeFileIds) {
       const record = selectors.getStirlingFileStub(fileId);
       if (record?.insertAfterPageId !== undefined) {
         if (!insertionMap.has(record.insertAfterPageId)) {
@@ -99,7 +99,7 @@ export function usePageDocument(): PageDocumentHook {
       } else {
         originalFileIds.push(fileId);
       }
-    });
+    }
 
     // Build pages by interleaving original pages with insertions
     let pages: PDFPage[] = [];
@@ -174,11 +174,11 @@ export function usePageDocument(): PageDocumentHook {
     });
 
     const originalFilePages: PDFPage[] = [];
-    sortedOriginalFileIds.forEach(fileId => {
+    for (const fileId of sortedOriginalFileIds) {
       const isSelected = selectedFileIdsSet.has(fileId);
       const filePages = createPagesFromFile(fileId, 1, isSelected); // Temporary numbering
       originalFilePages.push(...filePages);
-    });
+    }
 
     // Start with all original pages numbered sequentially
     pages = originalFilePages.map((page, index) => ({
@@ -194,19 +194,19 @@ export function usePageDocument(): PageDocumentHook {
 
       // Collect all pages to insert
       const allNewPages: PDFPage[] = [];
-      fileIds.forEach(fileId => {
+      for (const fileId of fileIds) {
         const isSelected = selectedFileIdsSet.has(fileId);
         const insertedPages = createPagesFromFile(fileId, 1, isSelected);
         allNewPages.push(...insertedPages);
-      });
+      }
 
       // Insert all new pages after the target page
       pages.splice(targetPageIndex + 1, 0, ...allNewPages);
 
       // Renumber all pages after insertion
-      pages.forEach((page, index) => {
+      for (const [index, page] of pages.entries()) {
         page.pageNumber = index + 1;
-      });
+      }
     }
 
     if (pages.length === 0) {

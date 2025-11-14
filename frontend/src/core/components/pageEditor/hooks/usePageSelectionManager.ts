@@ -73,15 +73,17 @@ export const usePageSelectionManager = ({
 
     const currentIds = new Set(displayDocument.pages.map((page) => page.id));
     const newlyAddedPageIds: string[] = [];
-    currentIds.forEach((id) => {
+    for (const id of currentIds) {
       if (!previousPageIdsRef.current.has(id)) {
         newlyAddedPageIds.push(id);
       }
-    });
+    }
 
     if (newlyAddedPageIds.length > 0) {
       const next = new Set(selectedPageIds);
-      newlyAddedPageIds.forEach((id) => next.add(id));
+      for (const id of newlyAddedPageIds) {
+        next.add(id);
+      }
       setSelectedPageIds(Array.from(next));
     }
 

@@ -44,11 +44,11 @@ const buildWordChanges = (
       return;
     }
     const first = currentRun[0];
-    const last = currentRun[currentRun.length - 1];
+    const last = currentRun.at(-1)!;
     const groupId = `${groupPrefix}-t${first.metaIndex}-t${last.metaIndex}`;
-    currentRun.forEach((token) => {
+    for (const token of currentRun) {
       metaIndexToGroupId.set(token.metaIndex, groupId);
-    });
+    }
     const pageNumber = first.page ?? last.page ?? 1;
     items.push({ value: groupId, label, pageNumber });
     currentRun = [];

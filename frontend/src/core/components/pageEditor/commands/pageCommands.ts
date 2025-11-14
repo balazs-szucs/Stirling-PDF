@@ -120,9 +120,9 @@ export class DeletePagesCommand extends DOMCommand {
     }
 
     // Renumber remaining pages
-    remainingPages.forEach((page, index) => {
+    for (const [index, page] of remainingPages.entries()) {
       page.pageNumber = index + 1;
-    });
+    }
 
     // Update document
     const updatedDocument: PDFDocument = {
@@ -134,11 +134,11 @@ export class DeletePagesCommand extends DOMCommand {
     // Adjust split positions
     const currentSplitPositions = this.getSplitPositions();
     const newPositions = new Set<number>();
-    currentSplitPositions.forEach(pos => {
+    for (const pos of currentSplitPositions) {
       if (pos < remainingPages.length - 1) {
         newPositions.add(pos);
       }
-    });
+    }
 
     // Apply changes
     this.setDocument(updatedDocument);
@@ -206,9 +206,9 @@ export class ReorderPagesCommand extends DOMCommand {
       const remainingPages = newPages.filter(page => !this.selectedPages!.includes(page.pageNumber));
       remainingPages.splice(this.targetIndex, 0, ...selectedPageObjects);
 
-      remainingPages.forEach((page, index) => {
+      for (const [index, page] of remainingPages.entries()) {
         page.pageNumber = index + 1;
-      });
+      }
 
       newPages.splice(0, newPages.length, ...remainingPages);
     } else {
@@ -222,9 +222,9 @@ export class ReorderPagesCommand extends DOMCommand {
 
       newPages.splice(adjustedTargetIndex, 0, movedPage);
 
-      newPages.forEach((page, index) => {
+      for (const [index, page] of newPages.entries()) {
         page.pageNumber = index + 1;
-      });
+      }
     }
 
     const reorderedDocument: PDFDocument = {
@@ -311,7 +311,7 @@ export class BulkRotateCommand extends DOMCommand {
   }
 
   execute(): void {
-    this.pageIds.forEach(pageId => {
+    for (const pageId of this.pageIds) {
       const pageElement = document.querySelector(`[data-page-id="${pageId}"]`);
       if (pageElement) {
         const img = pageElement.querySelector('img');
@@ -332,11 +332,11 @@ export class BulkRotateCommand extends DOMCommand {
           img.style.transform = `rotate(${newRotation}deg)`;
         }
       }
-    });
+    }
   }
 
   undo(): void {
-    this.pageIds.forEach(pageId => {
+    for (const pageId of this.pageIds) {
       const pageElement = document.querySelector(`[data-page-id="${pageId}"]`);
       if (pageElement) {
         const img = pageElement.querySelector('img');
@@ -344,7 +344,7 @@ export class BulkRotateCommand extends DOMCommand {
           img.style.transform = `rotate(${this.originalRotations.get(pageId)}deg)`;
         }
       }
-    });
+    }
   }
 
   get description(): string {
@@ -371,13 +371,13 @@ export class BulkSplitCommand extends DOMCommand {
 
     // Toggle each position
     const currentPositions = new Set(this.getSplitPositions());
-    this.positions.forEach(position => {
+    for (const position of this.positions) {
       if (currentPositions.has(position)) {
         currentPositions.delete(position);
       } else {
         currentPositions.add(position);
       }
-    });
+    }
 
     this.setSplitPositions(currentPositions);
   }
@@ -467,7 +467,7 @@ export class PageBreakCommand extends DOMCommand {
     this.insertedPages = [];
     let pageNumberCounter = 1;
 
-    currentDoc.pages.forEach((page, index) => {
+    for (const [index, page] of currentDoc.pages.entries()) {
       // Add the current page
       const updatedPage = { ...page, pageNumber: pageNumberCounter++ };
       newPages.push(updatedPage);
@@ -488,7 +488,7 @@ export class PageBreakCommand extends DOMCommand {
         newPages.push(blankPage);
         this.insertedPages.push(blankPage);
       }
-    });
+    }
 
     // Update document
     const updatedDocument: PDFDocument = {
@@ -544,7 +544,7 @@ export class BulkPageBreakCommand extends DOMCommand {
     this.insertedPages = [];
     let pageNumberCounter = 1;
 
-    currentDoc.pages.forEach((page, index) => {
+    for (const [index, page] of currentDoc.pages.entries()) {
       // Add the current page
       const updatedPage = { ...page, pageNumber: pageNumberCounter++ };
       newPages.push(updatedPage);
@@ -564,7 +564,7 @@ export class BulkPageBreakCommand extends DOMCommand {
         newPages.push(blankPage);
         this.insertedPages.push(blankPage);
       }
-    });
+    }
 
     // Update document
     const updatedDocument: PDFDocument = {
@@ -577,7 +577,7 @@ export class BulkPageBreakCommand extends DOMCommand {
 
     // Maintain existing selection by mapping original selected pages to their new positions
     const updatedSelection: number[] = [];
-    this.originalSelectedPages.forEach(originalPageNum => {
+    for (const originalPageNum of this.originalSelectedPages) {
       // Find the original page by matching the page ID from the original document
       const originalPage = this.originalDocument?.pages[originalPageNum - 1];
       if (originalPage) {
@@ -586,7 +586,7 @@ export class BulkPageBreakCommand extends DOMCommand {
           updatedSelection.push(foundPage.pageNumber);
         }
       }
-    });
+    }
     this.setSelectedPages(updatedSelection);
   }
 
@@ -704,7 +704,7 @@ export class InsertFilesCommand extends DOMCommand {
       const originalSelection = this.getSelectedPages();
       const updatedSelection: number[] = [];
 
-      originalSelection.forEach(originalPageNum => {
+      for (const originalPageNum of originalSelection) {
         if (originalPageNum <= this.insertAfterPageNumber) {
           // Pages before insertion point keep same number
           updatedSelection.push(originalPageNum);
@@ -712,7 +712,7 @@ export class InsertFilesCommand extends DOMCommand {
           // Pages after insertion point are shifted by number of inserted pages
           updatedSelection.push(originalPageNum + allNewPages.length);
         }
-      });
+      }
 
       this.setSelectedPages(updatedSelection);
 

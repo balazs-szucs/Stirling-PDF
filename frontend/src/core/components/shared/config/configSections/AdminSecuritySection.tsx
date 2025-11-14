@@ -68,18 +68,18 @@ export default function AdminSecuritySection() {
       const systemData = systemResponse.data || {};
 
       console.log('[AdminSecuritySection] Raw backend data:');
-      console.log('Security:', JSON.parse(JSON.stringify(securityData)));
-      console.log('Premium:', JSON.parse(JSON.stringify(premiumData)));
-      console.log('System:', JSON.parse(JSON.stringify(systemData)));
+      console.log('Security:', structuredClone(securityData));
+      console.log('Premium:', structuredClone(premiumData));
+      console.log('System:', structuredClone(systemData));
 
       const { _pending: securityPending, ...securityActive } = securityData;
       const { _pending: premiumPending, ...premiumActive } = premiumData;
       const { _pending: systemPending, ...systemActive } = systemData;
 
       console.log('[AdminSecuritySection] Extracted pending blocks:', {
-        securityPending: JSON.parse(JSON.stringify(securityPending || {})),
-        premiumPending: JSON.parse(JSON.stringify(premiumPending || {})),
-        systemPending: JSON.parse(JSON.stringify(systemPending || {}))
+        securityPending: structuredClone(securityPending || {}),
+        premiumPending: structuredClone(premiumPending || {}),
+        systemPending: structuredClone(systemPending || {})
       });
 
       const combined: any = {

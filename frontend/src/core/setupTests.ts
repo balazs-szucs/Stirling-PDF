@@ -120,7 +120,7 @@ Object.defineProperty(window, 'matchMedia', {
 });
 
 // Provide a minimal DOMMatrix implementation for pdf.js in the test environment
-if (typeof globalThis.DOMMatrix === 'undefined') {
+if (globalThis.DOMMatrix === undefined) {
   class DOMMatrixStub {
     a = 1;
     b = 0;

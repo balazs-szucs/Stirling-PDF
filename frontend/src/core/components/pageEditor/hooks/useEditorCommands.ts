@@ -210,14 +210,14 @@ export const usePageEditorCommands = ({
 
     const selectedPageNumbers = getPageNumbersFromIds(selectedPageIds);
     const selectedPositions: number[] = [];
-    selectedPageNumbers.forEach((pageNum) => {
+    for (const pageNum of selectedPageNumbers) {
       const pageIndex = displayDocument.pages.findIndex(
         (p) => p.pageNumber === pageNum
       );
       if (pageIndex !== -1 && pageIndex < displayDocument.pages.length - 1) {
         selectedPositions.push(pageIndex);
       }
-    });
+    }
 
     if (selectedPositions.length === 0) return;
 
@@ -230,9 +230,13 @@ export const usePageEditorCommands = ({
     const newSplitPositions = new Set(splitPositions);
 
     if (shouldRemoveSplits) {
-      selectedPositions.forEach((pos) => newSplitPositions.delete(pos));
+      for (const pos of selectedPositions) {
+        newSplitPositions.delete(pos);
+      }
     } else {
-      selectedPositions.forEach((pos) => newSplitPositions.add(pos));
+      for (const pos of selectedPositions) {
+        newSplitPositions.add(pos);
+      }
     }
 
     const smartSplitCommand = {
@@ -340,9 +344,9 @@ export const usePageEditorCommands = ({
             const updatedPages = [...workingDocument.pages];
             updatedPages.splice(targetIndex + 1, 0, ...newPages);
 
-            updatedPages.forEach((page, index) => {
+            for (const [index, page] of updatedPages.entries()) {
               page.pageNumber = index + 1;
-            });
+            }
 
             setEditedDocument({
               ...workingDocument,

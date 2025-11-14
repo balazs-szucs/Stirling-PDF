@@ -115,7 +115,9 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 
   const dismissAll = useCallback<ToastApi['dismissAll']>(() => {
     setToasts([]);
-    Object.values(timers.current).forEach(t => window.clearTimeout(t));
+    for (const t of Object.values(timers.current)) {
+      window.clearTimeout(t);
+    }
     timers.current = {};
   }, []);
 

@@ -136,7 +136,7 @@ export default function RightRail() {
     }
 
     const filesToDownload = selectedFiles.length > 0 ? selectedFiles : activeFiles;
-    filesToDownload.forEach(file => {
+    for (const file of filesToDownload) {
       const link = document.createElement('a');
       link.href = URL.createObjectURL(file);
       link.download = file.name;
@@ -144,7 +144,7 @@ export default function RightRail() {
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(link.href);
-    });
+    }
   }, [
     currentView,
     selectedFiles,

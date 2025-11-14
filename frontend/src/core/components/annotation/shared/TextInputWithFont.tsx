@@ -77,8 +77,8 @@ export const TextInputWithFont: React.FC<TextInputWithFontProps> = ({
         <Combobox
           onOptionSubmit={(optionValue) => {
             setFontSizeInput(optionValue);
-            const size = parseInt(optionValue);
-            if (!isNaN(size)) {
+            const size = Number.parseInt(optionValue, 10);
+            if (!Number.isNaN(size)) {
               onFontSizeChange(size);
             }
             fontSizeCombobox.closeDropdown();
@@ -96,8 +96,8 @@ export const TextInputWithFont: React.FC<TextInputWithFontProps> = ({
                 setFontSizeInput(value);
 
                 // Parse and validate the typed value in real-time
-                const size = parseInt(value);
-                if (!isNaN(size) && size >= 8 && size <= 200) {
+                const size = Number.parseInt(value, 10);
+                if (!Number.isNaN(size) && size >= 8 && size <= 200) {
                   onFontSizeChange(size);
                 }
 
@@ -109,8 +109,8 @@ export const TextInputWithFont: React.FC<TextInputWithFontProps> = ({
               onBlur={() => {
                 fontSizeCombobox.closeDropdown();
                 // Clean up invalid values on blur
-                const size = parseInt(fontSizeInput);
-                if (isNaN(size) || size < 8 || size > 200) {
+                const size = Number.parseInt(fontSizeInput, 10);
+                if (Number.isNaN(size) || size < 8 || size > 200) {
                   setFontSizeInput(fontSize.toString());
                 } else {
                   onFontSizeChange(size);

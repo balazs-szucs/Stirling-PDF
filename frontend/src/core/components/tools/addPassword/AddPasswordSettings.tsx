@@ -38,7 +38,7 @@ const AddPasswordSettings = ({ parameters, onParameterChange, disabled = false }
           value={parameters.keyLength.toString()}
           onChange={(value) => {
             if (value) {
-              onParameterChange('keyLength', parseInt(value));
+              onParameterChange('keyLength', Number.parseInt(value));
             }
           }}
           disabled={disabled}

@@ -28,11 +28,11 @@ export default function ProviderCard({
     if (!isConfigured && !expanded) {
       // First time opening an unconfigured provider - initialize with defaults
       const defaultSettings: Record<string, any> = {};
-      provider.fields.forEach((field) => {
+      for (const field of provider.fields) {
         if (field.defaultValue !== undefined) {
           defaultSettings[field.key] = field.defaultValue;
         }
-      });
+      }
       setLocalSettings(defaultSettings);
     }
     setExpanded(!expanded);

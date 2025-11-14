@@ -40,7 +40,7 @@ export const useToolManagement = (): ToolManagementResult => {
 
   const toolRegistry: Partial<ToolRegistry> = useMemo(() => {
     const availableToolRegistry: Partial<ToolRegistry> = {};
-    (Object.keys(baseRegistry) as ToolId[]).forEach(toolKey => {
+    for (const toolKey of Object.keys(baseRegistry) as ToolId[]) {
       if (isToolAvailable(toolKey)) {
         const baseTool = baseRegistry[toolKey];
         if (baseTool) {
@@ -51,7 +51,7 @@ export const useToolManagement = (): ToolManagementResult => {
           };
         }
       }
-    });
+    }
     return availableToolRegistry;
   }, [isToolAvailable, baseRegistry]);
 

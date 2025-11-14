@@ -12,10 +12,10 @@ export class DocumentManipulationService {
   applyDOMChangesToDocument(pdfDocument: PDFDocument, currentDisplayOrder?: PDFDocument, splitPositions?: Set<number>): PDFDocument | PDFDocument[] {
     // Use current display order (from React state) if provided, otherwise use original order
     const baseDocument = currentDisplayOrder || pdfDocument;
-    
+
     // Apply DOM changes to each page (rotation only now, splits are position-based)
     let updatedPages = baseDocument.pages.map(page => this.applyPageChanges(page));
-    
+
     // Convert position-based splits to page-based splits for export
     if (splitPositions && splitPositions.size > 0) {
       updatedPages = updatedPages.map((page, index) => ({
@@ -23,7 +23,7 @@ export class DocumentManipulationService {
         splitAfter: splitPositions.has(index)
       }));
     }
-    
+
     // Create final document with reordered pages and applied changes
     const finalDocument = {
       ...pdfDocument, // Use original document metadata but updated pages
@@ -34,7 +34,7 @@ export class DocumentManipulationService {
     if (splitPositions && splitPositions.size > 0) {
       return this.createSplitDocuments(finalDocument);
     }
-    
+
     return finalDocument;
   }
 
@@ -46,45 +46,21 @@ export class DocumentManipulationService {
   }
 
   /**
-   * Create multiple documents from split markers
+   * Reset all DOM changes (useful for "discard changes" functionality)
    */
-  private createSplitDocuments(document: PDFDocument): PDFDocument[] {
-    const documents: PDFDocument[] = [];
-    const splitPoints: number[] = [];
+  resetDOMToDocumentState(pdfDocument: PDFDocument): void {
+    console.log('DocumentManipulationService: Resetting DOM to match document state');
 
-    // Find split points
-    document.pages.forEach((page, index) => {
-      if (page.splitAfter) {
-        splitPoints.push(index + 1);
+    for (const page of pdfDocument.pages) {
+      const pageElement = document.querySelector(`[data-page-id="${page.id}"]`);
+      if (pageElement) {
+        const img = pageElement.querySelector('img');
+        if (img) {
+          // Reset rotation to match document state
+          img.style.transform = `rotate(${page.rotation}deg)`;
+        }
       }
-    });
-
-    // Add end point if not already there
-    if (splitPoints.length === 0 || splitPoints[splitPoints.length - 1] !== document.pages.length) {
-      splitPoints.push(document.pages.length);
     }
-
-    let startIndex = 0;
-    let partNumber = 1;
-
-    for (const endIndex of splitPoints) {
-      const segmentPages = document.pages.slice(startIndex, endIndex);
-
-      if (segmentPages.length > 0) {
-        documents.push({
-          ...document,
-          id: `${document.id}_part_${partNumber}`,
-          name: `${document.name.replace(/\.pdf$/i, '')}_part_${partNumber}.pdf`,
-          pages: segmentPages,
-          totalPages: segmentPages.length
-        });
-        partNumber++;
-      }
-
-      startIndex = endIndex;
-    }
-
-    return documents;
   }
 
   /**
@@ -129,21 +105,45 @@ export class DocumentManipulationService {
   }
 
   /**
-   * Reset all DOM changes (useful for "discard changes" functionality)
+   * Create multiple documents from split markers
    */
-  resetDOMToDocumentState(pdfDocument: PDFDocument): void {
-    console.log('DocumentManipulationService: Resetting DOM to match document state');
-    
-    pdfDocument.pages.forEach(page => {
-      const pageElement = document.querySelector(`[data-page-id="${page.id}"]`);
-      if (pageElement) {
-        const img = pageElement.querySelector('img');
-        if (img) {
-          // Reset rotation to match document state
-          img.style.transform = `rotate(${page.rotation}deg)`;
-        }
+  private createSplitDocuments(document: PDFDocument): PDFDocument[] {
+    const documents: PDFDocument[] = [];
+    const splitPoints: number[] = [];
+
+    // Find split points
+    for (const [index, page] of document.pages.entries()) {
+      if (page.splitAfter) {
+        splitPoints.push(index + 1);
       }
-    });
+    }
+
+    // Add end point if not already there
+    if (splitPoints.length === 0 || splitPoints[splitPoints.length - 1] !== document.pages.length) {
+      splitPoints.push(document.pages.length);
+    }
+
+    let startIndex = 0;
+    let partNumber = 1;
+
+    for (const endIndex of splitPoints) {
+      const segmentPages = document.pages.slice(startIndex, endIndex);
+
+      if (segmentPages.length > 0) {
+        documents.push({
+          ...document,
+          id: `${document.id}_part_${partNumber}`,
+          name: `${document.name.replace(/\.pdf$/i, '')}_part_${partNumber}.pdf`,
+          pages: segmentPages,
+          totalPages: segmentPages.length
+        });
+        partNumber++;
+      }
+
+      startIndex = endIndex;
+    }
+
+    return documents;
   }
 
   /**

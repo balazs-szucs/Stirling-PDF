@@ -330,7 +330,8 @@ export function computeSearchMatches(
   }
   const q = query.toLowerCase();
   const list: Array<{ line: number; start: number; end: number }> = [];
-  lines.forEach((toks, ln) => {
+  for (let ln = 0; ln < lines.length; ln++) {
+    const toks = lines[ln];
     const raw = toks.map((t) => t.text).join("");
     let idx = 0;
     while (true) {
@@ -345,7 +346,7 @@ export function computeSearchMatches(
       });
       idx = pos + Math.max(1, q.length);
     }
-  });
+  }
   return list;
 }
 

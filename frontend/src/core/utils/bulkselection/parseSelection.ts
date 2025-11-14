@@ -81,10 +81,10 @@ function parseCsvFallback(input: string, max: number): Set<number> {
   const result = new Set<number>();
   const parts = input.split(',').map(p => p.trim()).filter(Boolean);
   for (const part of parts) {
-    const rangeMatch = part.match(/^(\d+)\s*-\s*(\d+)$/);
+    const rangeMatch = RegExp(/^(\d+)\s*-\s*(\d+)$/).exec(part);
     if (rangeMatch) {
-      const start = clampToRange(parseInt(rangeMatch[1], 10), 1, max);
-      const end = clampToRange(parseInt(rangeMatch[2], 10), 1, max);
+      const start = clampToRange(Number.parseInt(rangeMatch[1], 10), 1, max);
+      const end = clampToRange(Number.parseInt(rangeMatch[2], 10), 1, max);
       if (Number.isFinite(start) && Number.isFinite(end)) {
         const [lo, hi] = start <= end ? [start, end] : [end, start];
         for (let i = lo; i <= hi; i++) result.add(i);
@@ -93,7 +93,7 @@ function parseCsvFallback(input: string, max: number): Set<number> {
     }
     // Accept only pure positive integers (no signs, no letters)
     if (/^\d+$/.test(part)) {
-      const n = parseInt(part, 10);
+      const n = Number.parseInt(part, 10);
       if (Number.isFinite(n) && n >= 1 && n <= max) result.add(n);
     }
   }
@@ -101,7 +101,7 @@ function parseCsvFallback(input: string, max: number): Set<number> {
 }
 
 function clampToRange(v: number, min: number, max: number): number {
-  if (!Number.isFinite(v)) return NaN as unknown as number;
+  if (!Number.isFinite(v)) return Number.NaN as unknown as number;
   return Math.min(Math.max(v, min), max);
 }
 
@@ -320,7 +320,7 @@ class ExpressionParser {
     const m = this.src.slice(this.idx).match(/^(\d+)/);
     if (!m) return null;
     this.consume(m[1].length);
-    const num = parseInt(m[1], 10);
+    const num = Number.parseInt(m[1], 10);
     return Number.isFinite(num) ? num : null;
   }
 
@@ -332,7 +332,7 @@ class ExpressionParser {
 
   private readWord(): string | null {
     this.skipWs();
-    const m = this.src.slice(this.idx).match(/^([A-Za-z]+)/);
+    const m = RegExp(/^([A-Za-z]+)/).exec(this.src.slice(this.idx));
     if (!m) return null;
     this.consume(m[1].length);
     return m[1];

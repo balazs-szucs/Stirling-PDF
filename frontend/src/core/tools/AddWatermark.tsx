@@ -119,10 +119,7 @@ const AddWatermark = ({ onPreviewFile, onComplete, onError }: BaseToolProps) => 
               disabled={endpointLoading}
             />
           ),
-        });
-
-        // Step 3: Style
-        steps.push({
+        }, {
           title: t("watermark.steps.textStyle", "Style"),
           isCollapsed: hasResults ? true : collapsedStyle,
           onCollapsedClick: hasResults ? handleSettingsReset : () => setCollapsedStyle(!collapsedStyle),
@@ -134,10 +131,7 @@ const AddWatermark = ({ onPreviewFile, onComplete, onError }: BaseToolProps) => 
               disabled={endpointLoading}
             />
           ),
-        });
-
-        // Step 4: Formatting
-        steps.push({
+        }, {
           title: t("watermark.steps.formatting", "Formatting"),
           isCollapsed: hasResults ? true : collapsedFormatting,
           onCollapsedClick: hasResults ? handleSettingsReset : () => setCollapsedFormatting(!collapsedFormatting),
@@ -166,10 +160,7 @@ const AddWatermark = ({ onPreviewFile, onComplete, onError }: BaseToolProps) => 
               disabled={endpointLoading}
             />
           ),
-        });
-
-        // Step 3: Formatting
-        steps.push({
+        }, {
           title: t("watermark.steps.formatting", "Formatting"),
           isCollapsed: hasResults ? true : collapsedFormatting,
           onCollapsedClick: hasResults ? handleSettingsReset : () => setCollapsedFormatting(!collapsedFormatting),

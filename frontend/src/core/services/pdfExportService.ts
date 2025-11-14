@@ -199,11 +199,11 @@ export class PDFExportService {
    * Download multiple files as a ZIP
    */
   async downloadAsZip(blobs: Blob[], filenames: string[]): Promise<void> {
-    blobs.forEach((blob, index) => {
+    for (const [index, blob] of blobs.entries()) {
       setTimeout(() => {
         this.downloadFile(blob, filenames[index]);
       }, index * 500); // Stagger downloads
-    });
+    }
   }
 
   /**

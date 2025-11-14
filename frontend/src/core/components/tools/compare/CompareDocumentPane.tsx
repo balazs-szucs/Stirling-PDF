@@ -81,7 +81,7 @@ const CompareDocumentPane = ({
           <Text fw={600} size="lg">
             {title}
           </Text>
-          <Group justify="flex-end" align="center" gap="sm" wrap="nowrap"> 
+          <Group justify="flex-end" align="center" gap="sm" wrap="nowrap">
             {(changes.length > 0 || Boolean(dropdownPlaceholder)) && (
               <CompareNavigationDropdown
                 changes={changes}
@@ -120,7 +120,7 @@ const CompareDocumentPane = ({
               const dist = Math.abs(center - mid);
               if (dist < bestDist) {
                 bestDist = dist;
-                const attr = el.getAttribute('data-page-number');
+                const attr = el.dataset.pageNumber;
                 const pn = attr ? parseInt(attr, 10) : NaN;
                 if (!Number.isNaN(pn)) bestPage = pn;
               }

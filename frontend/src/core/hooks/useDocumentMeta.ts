@@ -21,10 +21,10 @@ export const useDocumentMeta = (meta: MetaOptions) => {
     const ogProperties = ['og:site_name', 'og:locale', 'og:title', 'og:description', 'og:image', 'og:image:width', 'og:image:height', 'og:url', 'og:type'];
     const originalOgValues = new Map<string, string | null>();
     
-    ogProperties.forEach(property => {
+    for (const property of ogProperties) {
       const element = document.querySelector(`meta[property="${property}"]`);
       originalOgValues.set(property, element?.getAttribute('content') || null);
-    });
+    }
     
     // Update title
     if (meta.title) {
@@ -86,7 +86,7 @@ export const useDocumentMeta = (meta: MetaOptions) => {
       }
       
       // Restore or remove OpenGraph tags
-      originalOgValues.forEach((originalValue, property) => {
+      for (const [property, originalValue] of originalOgValues) {
         const element = document.querySelector(`meta[property="${property}"]`) as HTMLMetaElement;
         if (element) {
           if (originalValue !== null) {
@@ -95,7 +95,7 @@ export const useDocumentMeta = (meta: MetaOptions) => {
             element.remove();
           }
         }
-      });
+      }
     };
   }, [meta.title, meta.description, meta.ogTitle, meta.ogDescription, meta.ogImage, meta.ogUrl, i18n.language]);
 };

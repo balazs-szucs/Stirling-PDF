@@ -761,7 +761,7 @@ export default function PeopleSection() {
                   placeholder={t('workspace.people.addMember.teamPlaceholder')}
                   data={teamOptions}
                   value={inviteLinkForm.teamId?.toString()}
-                  onChange={(value) => setInviteLinkForm({ ...inviteLinkForm, teamId: value ? parseInt(value) : undefined })}
+                  onChange={(value) => setInviteLinkForm({ ...inviteLinkForm, teamId: value ? Number.parseInt(value, 10) : undefined })}
                   clearable
                   comboboxProps={{ withinPortal: true, zIndex: Z_INDEX_OVER_CONFIG_MODAL }}
                 />
@@ -769,7 +769,7 @@ export default function PeopleSection() {
                   label={t('workspace.people.inviteLink.expiryHours', 'Link expires in (hours)')}
                   type="number"
                   value={inviteLinkForm.expiryHours}
-                  onChange={(e) => setInviteLinkForm({ ...inviteLinkForm, expiryHours: parseInt(e.currentTarget.value) || 72 })}
+                  onChange={(e) => setInviteLinkForm({ ...inviteLinkForm, expiryHours: Number.parseInt(e.currentTarget.value, 10) || 72 })}
                   min={1}
                   max={720}
                 />
@@ -846,7 +846,7 @@ export default function PeopleSection() {
                   placeholder={t('workspace.people.addMember.teamPlaceholder')}
                   data={teamOptions}
                   value={emailInviteForm.teamId?.toString()}
-                  onChange={(value) => setEmailInviteForm({ ...emailInviteForm, teamId: value ? parseInt(value) : undefined })}
+                  onChange={(value) => setEmailInviteForm({ ...emailInviteForm, teamId: value ? Number.parseInt(value, 10) : undefined })}
                   clearable
                   comboboxProps={{ withinPortal: true, zIndex: Z_INDEX_OVER_CONFIG_MODAL }}
                 />
@@ -884,7 +884,7 @@ export default function PeopleSection() {
                   placeholder={t('workspace.people.addMember.teamPlaceholder')}
                   data={teamOptions}
                   value={inviteForm.teamId?.toString()}
-                  onChange={(value) => setInviteForm({ ...inviteForm, teamId: value ? parseInt(value) : undefined })}
+                  onChange={(value) => setInviteForm({ ...inviteForm, teamId: value ? Number.parseInt(value, 10) : undefined })}
                   clearable
                   comboboxProps={{ withinPortal: true, zIndex: Z_INDEX_OVER_CONFIG_MODAL }}
                 />
@@ -959,7 +959,7 @@ export default function PeopleSection() {
               placeholder={t('workspace.people.editMember.teamPlaceholder')}
               data={teamOptions}
               value={editForm.teamId?.toString()}
-              onChange={(value) => setEditForm({ ...editForm, teamId: value ? parseInt(value) : undefined })}
+              onChange={(value) => setEditForm({ ...editForm, teamId: value ? Number.parseInt(value, 10) : undefined })}
               clearable
               comboboxProps={{ withinPortal: true, zIndex: Z_INDEX_OVER_CONFIG_MODAL }}
             />

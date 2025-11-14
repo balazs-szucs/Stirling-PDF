@@ -204,7 +204,9 @@ export const FileManagerProvider: React.FC<FileManagerProviderProps> = ({
         );
 
         // Add all files in this lineage as candidates for deletion
-        chainFiles.forEach(file => filesToDelete.add(file.id));
+        for (const file of chainFiles) {
+          filesToDelete.add(file.id);
+        }
       }
     }
 
@@ -220,7 +222,9 @@ export const FileManagerProvider: React.FC<FileManagerProviderProps> = ({
         );
 
         // Mark all files in this preserved lineage as must-preserve
-        preservedChainFiles.forEach(chainFile => filesToPreserve.add(chainFile.id));
+        for (const chainFile of preservedChainFiles) {
+          filesToPreserve.add(chainFile.id);
+        }
       }
     }
 
@@ -276,7 +280,9 @@ export const FileManagerProvider: React.FC<FileManagerProviderProps> = ({
     // Clear from expanded state to prevent ghost entries
     setExpandedFileIds(prev => {
       const newExpanded = new Set(prev);
-      filesToDelete.forEach(id => newExpanded.delete(id));
+      for (const id of filesToDelete) {
+        newExpanded.delete(id);
+      }
       return newExpanded;
     });
 
@@ -285,7 +291,9 @@ export const FileManagerProvider: React.FC<FileManagerProviderProps> = ({
       const newCache = new Map(prev);
 
       // Remove cache entries for all deleted files
-      filesToDelete.forEach(id => newCache.delete(id as FileId));
+      for (const id of filesToDelete) {
+        newCache.delete(id as FileId);
+      }
 
       // Also remove deleted files from any other file's history cache
       for (const [mainFileId, historyFiles] of newCache.entries()) {
@@ -499,7 +507,9 @@ export const FileManagerProvider: React.FC<FileManagerProviderProps> = ({
 
           // Build a map for fast parent lookups
           const fileIdMap = new Map<FileId, StirlingFileStub>();
-          allFiles.forEach(f => fileIdMap.set(f.id, f));
+          for (const f of allFiles) {
+            fileIdMap.set(f.id, f);
+          }
 
           // Trace back from current file through parent chain
           let currentFile = fileIdMap.get(fileId);
@@ -588,9 +598,9 @@ export const FileManagerProvider: React.FC<FileManagerProviderProps> = ({
   useEffect(() => {
     return () => {
       // Clean up all created blob URLs
-      createdBlobUrls.current.forEach(url => {
+      for (const url of createdBlobUrls.current) {
         URL.revokeObjectURL(url);
-      });
+      }
       createdBlobUrls.current.clear();
     };
   }, []);

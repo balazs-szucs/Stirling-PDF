@@ -60,10 +60,10 @@ export const useEditedDocumentState = ({
     const neighborCache = pageNeighborCacheRef.current;
     const pages = editedDocument.pages;
 
-    pages.forEach((page, index) => {
+    for (const [index, page] of pages.entries()) {
       positionCache.set(page.id, index);
       neighborCache.set(page.id, index > 0 ? pages[index - 1].id : null);
-    });
+    }
   }, [editedDocument]);
 
   const fileOrderKey = useMemo(() => fileOrder.join(","), [fileOrder]);
@@ -125,11 +125,11 @@ export const useEditedDocumentState = ({
           pages = [...prev.pages];
 
           const placeholderPositions = new Map<FileId, number>();
-          pages.forEach((page, index) => {
+          for (const [index, page] of pages.entries()) {
             if (page.isPlaceholder && page.originalFileId) {
               placeholderPositions.set(page.originalFileId, index);
             }
-          });
+          }
 
           const nextInsertIndexByFile = new Map(placeholderPositions);
 
@@ -141,9 +141,9 @@ export const useEditedDocumentState = ({
 
           if (hasAdditions) {
             const mergedIndexMap = new Map<string, number>();
-            sourcePages.forEach((page, index) =>
-              mergedIndexMap.set(page.id, index)
-            );
+            for (const [index, page] of sourcePages.entries()) {
+              mergedIndexMap.set(page.id, index);
+            }
 
             const additions = newPages
               .map((page) => ({
@@ -159,9 +159,9 @@ export const useEditedDocumentState = ({
                 return a.mergedIndex - b.mergedIndex;
               });
 
-            additions.forEach(({ page, neighborId, cachedIndex, mergedIndex }) => {
+            for (const { page, neighborId, cachedIndex, mergedIndex } of additions) {
               if (pages.some((existing) => existing.id === page.id)) {
-                return;
+                continue;
               }
 
               let insertIndex: number;
@@ -191,7 +191,7 @@ export const useEditedDocumentState = ({
 
               const clonedPage = { ...page };
               pages.splice(insertIndex, 0, clonedPage);
-            });
+            }
           }
 
           pages = pages.map((page, index) => ({

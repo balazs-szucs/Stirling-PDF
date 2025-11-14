@@ -879,7 +879,7 @@ const displayToOcrMap = new Map<string, string>();
 const ocrToBrowserMap = new Map<string, string[]>();
 
 // Populate lookup maps
-languageDefinitions.forEach(lang => {
+for (const lang of languageDefinitions) {
   // OCR code to display name
   ocrToDisplayMap.set(lang.ocrCode, lang.displayName);
   
@@ -890,10 +890,10 @@ languageDefinitions.forEach(lang => {
   ocrToBrowserMap.set(lang.ocrCode, lang.browserCodes);
   
   // Browser codes to OCR code
-  lang.browserCodes.forEach(browserCode => {
+  for (const browserCode of lang.browserCodes) {
     browserToOcrMap.set(browserCode.toLowerCase(), lang.ocrCode);
-  });
-});
+  }
+}
 
 /**
  * Maps a browser language code to an OCR language code

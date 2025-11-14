@@ -100,7 +100,9 @@ async function processRequestQueue() {
         } catch (error) {
           console.warn(`Batch thumbnail generation failed for ${requests.length} pages:`, error);
           // Reject all requests in this batch
-          requests.forEach(request => request.reject(error as Error));
+          for (const request of requests) {
+            request.reject(error as Error);
+          }
         }
       }
     }

@@ -21,7 +21,7 @@ export default function AdjustContrastPreview({ file, parameters }: Props) {
   useEffect(() => {
     let active = true;
     const load = async () => {
-      if (!file || file.type !== 'application/pdf') { setThumb(null); return; }
+      if (file?.type !== 'application/pdf') { setThumb(null); return; }
       const id = `${file.name}:${file.size}:${file.lastModified}:page:1`;
       const tUrl = await requestThumbnail(id, file, 1);
       if (active) setThumb(tUrl || null);

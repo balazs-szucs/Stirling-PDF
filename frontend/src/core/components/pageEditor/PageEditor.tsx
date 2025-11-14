@@ -82,7 +82,7 @@ const PageEditor = ({
     const cache = fileObjectsRef.current;
     const newFiles: any[] = [];
 
-    fileOrder.forEach(fileId => {
+    for (const fileId of fileOrder) {
       const stub = selectors.getStirlingFileStub(fileId);
       const isSelected = state.ui.selectedFileIds.includes(fileId);
       const isPdf = stub?.name?.toLowerCase().endsWith('.pdf') ?? false;
@@ -110,7 +110,7 @@ const PageEditor = ({
         cache.set(fileId, newFile);
         newFiles.push(newFile);
       }
-    });
+    }
 
     // Clean up removed files from cache
     const activeIds = new Set(newFiles.map(f => f.fileId));

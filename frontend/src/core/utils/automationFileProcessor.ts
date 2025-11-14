@@ -175,19 +175,23 @@ export class AutomationFileProcessor {
 
     // Add files
     if (Array.isArray(files)) {
-      files.forEach(file => formData.append(fileFieldName, file));
+      for (const file of files) {
+        formData.append(fileFieldName, file);
+      }
     } else {
       formData.append(fileFieldName, files);
     }
 
     // Add parameters
-    Object.entries(parameters).forEach(([key, value]) => {
+    for (const [key, value] of Object.entries(parameters)) {
       if (Array.isArray(value)) {
-        value.forEach(item => formData.append(key, item));
+        for (const item of value) {
+          formData.append(key, item);
+        }
       } else if (value !== undefined && value !== null) {
         formData.append(key, value);
       }
-    });
+    }
 
     return formData;
   }

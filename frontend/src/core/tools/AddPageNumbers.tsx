@@ -75,10 +75,7 @@ const AddPageNumbers = ({ onPreviewFile, onComplete, onError }: BaseToolProps) =
           showQuickGrid={true}
         />
       ),
-    });
-
-    // Step 2: Customize Appearance
-    steps.push({
+    }, {
       title: t("addPageNumbers.customize", "Customize Appearance"),
       isCollapsed: accordion.getCollapsedState(AddPageNumbersStep.CUSTOMIZE),
       onCollapsedClick: () => accordion.handleStepToggle(AddPageNumbersStep.CUSTOMIZE),

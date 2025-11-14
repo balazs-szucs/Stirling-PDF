@@ -29,8 +29,8 @@ const PenSizeSelector = ({
   return (
     <Combobox
       onOptionSubmit={(optionValue) => {
-        const penSize = parseInt(optionValue);
-        if (!isNaN(penSize)) {
+        const penSize = Number.parseInt(optionValue, 10);
+        if (!Number.isNaN(penSize)) {
           onValueChange(penSize);
           onInputChange(optionValue);
         }
@@ -48,8 +48,8 @@ const PenSizeSelector = ({
             const inputVal = event.currentTarget.value;
             onInputChange(inputVal);
 
-            const penSize = parseInt(inputVal);
-            if (!isNaN(penSize) && penSize >= 1 && penSize <= 200) {
+            const penSize = Number.parseInt(inputVal, 10);
+            if (!Number.isNaN(penSize) && penSize >= 1 && penSize <= 200) {
               onValueChange(penSize);
             }
 
@@ -60,8 +60,8 @@ const PenSizeSelector = ({
           onFocus={() => combobox.openDropdown()}
           onBlur={() => {
             combobox.closeDropdown();
-            const penSize = parseInt(inputValue);
-            if (isNaN(penSize) || penSize < 1 || penSize > 200) {
+            const penSize = Number.parseInt(inputValue, 10);
+            if (Number.isNaN(penSize) || penSize < 1 || penSize > 200) {
               onInputChange(value.toString());
             }
           }}

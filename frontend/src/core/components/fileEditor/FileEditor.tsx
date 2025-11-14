@@ -210,8 +210,8 @@ const FileEditor = ({
     const currentIds = activeStirlingFileStubs.map(r => r.id);
 
     // Find indices
-    const sourceIndex = currentIds.findIndex(id => id === sourceFileId);
-    const targetIndex = currentIds.findIndex(id => id === targetFileId);
+    const sourceIndex = currentIds.indexOf(sourceFileId);
+    const targetIndex = currentIds.indexOf(targetFileId);
 
     if (sourceIndex === -1 || targetIndex === -1) {
       console.warn('Could not find source or target file for reordering');
@@ -227,15 +227,15 @@ const FileEditor = ({
     const newOrder = [...currentIds];
 
     // Remove files to move from their current positions (in reverse order to maintain indices)
-    const sourceIndices = filesToMove.map(id => newOrder.findIndex(nId => nId === id))
+    const sourceIndices = filesToMove.map(id => newOrder.indexOf(id))
       .sort((a, b) => b - a); // Sort descending
 
-    sourceIndices.forEach(index => {
+    for (const index of sourceIndices) {
       newOrder.splice(index, 1);
-    });
+    }
 
     // Calculate insertion index after removals
-    let insertIndex = newOrder.findIndex(id => id === targetFileId);
+    let insertIndex = newOrder.indexOf(targetFileId);
     if (insertIndex !== -1) {
       // Determine if moving forward or backward
       const isMovingForward = sourceIndex < targetIndex;

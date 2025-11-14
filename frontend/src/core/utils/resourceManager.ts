@@ -31,7 +31,9 @@ export class ResourceManager {
    * Revoke all tracked blob URLs
    */
   static revokeAllBlobUrls(): void {
-    this.blobUrls.forEach(url => URL.revokeObjectURL(url));
+    for (const url of this.blobUrls) {
+      URL.revokeObjectURL(url);
+    }
     this.blobUrls.clear();
   }
 

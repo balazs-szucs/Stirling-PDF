@@ -19,23 +19,23 @@ export function ThumbnailSidebar({ visible, onToggle: _onToggle, activeFileIndex
   // Clear thumbnails when active file changes
   useEffect(() => {
     // Revoke old blob URLs to prevent memory leaks
-    Object.values(thumbnails).forEach((thumbUrl) => {
+    for (const thumbUrl of Object.values(thumbnails)) {
       if (typeof thumbUrl === 'string' && thumbUrl.startsWith('blob:')) {
         URL.revokeObjectURL(thumbUrl);
       }
-    });
+    }
     setThumbnails({});
   }, [activeFileIndex]);
 
   // Clear thumbnails when sidebar closes and revoke blob URLs to prevent memory leaks
   useEffect(() => {
     if (!visible) {
-      Object.values(thumbnails).forEach((thumbUrl) => {
+      for (const thumbUrl of Object.values(thumbnails)) {
         // Only revoke if it's a blob URL (not 'error')
         if (typeof thumbUrl === 'string' && thumbUrl.startsWith('blob:')) {
           URL.revokeObjectURL(thumbUrl);
         }
-      });
+      }
       setThumbnails({});
     }
   }, [visible]); // Remove thumbnails from dependency to prevent infinite loop

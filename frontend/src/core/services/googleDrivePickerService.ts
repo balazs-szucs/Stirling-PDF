@@ -34,17 +34,17 @@ function fileInputToGooglePickerMimeTypes(accept?: string): string | null {
   }
 
   const mimeTypes: string[] = [];
-  accept.split(',').forEach((part) => {
+  for (const part of accept.split(',')) {
     const trimmedPart = part.trim();
     if (!(trimmedPart in expandableMimeTypes)) {
       mimeTypes.push(trimmedPart);
-      return;
+      continue;
     }
 
-    expandableMimeTypes[trimmedPart].forEach((mimeType) => {
+    for (const mimeType of expandableMimeTypes[trimmedPart]) {
       mimeTypes.push(mimeType);
-    });
-  });
+    }
+  }
 
   return mimeTypes.join(',').replace(/\s+/g, '');
 }

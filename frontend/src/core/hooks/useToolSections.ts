@@ -40,13 +40,13 @@ export function useToolSections(
     }
 
     const grouped = {} as GroupedTools;
-    filteredTools.forEach(({ item: [id, tool] }) => {
+    for (const { item: [id, tool] } of filteredTools) {
       const categoryId = tool.categoryId;
       const subcategoryId = tool.subcategoryId;
       if (!grouped[categoryId]) grouped[categoryId] = {} as SubcategoryIdMap;
       if (!grouped[categoryId][subcategoryId]) grouped[categoryId][subcategoryId] = [];
       grouped[categoryId][subcategoryId].push({ id, tool });
-    });
+    }
     return grouped;
   }, [filteredTools]);
 
@@ -59,17 +59,17 @@ export function useToolSections(
     const quick = {} as SubcategoryIdMap;
     const all = {} as SubcategoryIdMap;
 
-    Object.entries(groupedTools).forEach(([c, subs]) => {
+    for (const [c, subs] of Object.entries(groupedTools)) {
       const categoryId = c as ToolCategoryId;
 
-      Object.entries(subs).forEach(([s, tools]) => {
+      for (const [s, tools] of Object.entries(subs)) {
         const subcategoryId = s as SubcategoryId;
         if (!all[subcategoryId]) all[subcategoryId] = [];
         all[subcategoryId].push(...tools);
-      });
+      }
 
       if (categoryId === ToolCategoryId.RECOMMENDED_TOOLS) {
-        Object.entries(subs).forEach(([s, tools]) => {
+        for (const [s, tools] of Object.entries(subs)) {
           const subcategoryId = s as SubcategoryId;
           if (!quick[subcategoryId]) quick[subcategoryId] = [];
           // Only include ready tools (have a component or external link) in Quick Access
@@ -78,9 +78,9 @@ export function useToolSections(
             tool.component !== null || !!tool.link || id === 'read' || id === 'multiTool'
           );
           quick[subcategoryId].push(...readyTools);
-        });
+        }
       }
-    });
+    }
 
     const sortSubs = (obj: SubcategoryIdMap) =>
       Object.entries(obj)
@@ -109,24 +109,24 @@ export function useToolSections(
 
     const subMap = {} as SubcategoryIdMap;
     const seen = new Set<ToolId>();
-    filteredTools.forEach(({ item: [id, tool] }) => {
+    for (const { item: [id, tool] } of filteredTools) {
       const toolId = id as ToolId;
-      if (seen.has(toolId)) return;
+      if (seen.has(toolId)) continue;
       seen.add(toolId);
       const sub = tool.subcategoryId;
       if (!subMap[sub]) subMap[sub] = [];
       subMap[sub].push({ id: toolId as ToolId, tool });
-    });
+    }
     const entries = Object.entries(subMap);
 
     // If a search query is present, always order subcategories by first occurrence in
     // the ranked filteredTools list so the top-ranked tools' subcategory appears first.
     if (searchQuery && searchQuery.trim()) {
       const order: SubcategoryId[] = [];
-      filteredTools.forEach(({ item: [_, tool] }) => {
+      for (const { item: [_, tool] } of filteredTools) {
         const sc = tool.subcategoryId;
         if (!order.includes(sc)) order.push(sc);
-      });
+      }
       return entries
         .sort(([a], [b]) => {
           const ai = order.indexOf(a as SubcategoryId);

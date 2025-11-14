@@ -176,7 +176,9 @@ export function useMultipleEndpointsEnabled(endpoints: string[]): {
       console.debug('[useEndpointConfig] JWT available event - clearing cache for refetch with auth');
       // Clear the global cache to allow refetch with JWT
       globalFetchedSets.clear();
-      Object.keys(globalEndpointCache).forEach(key => delete globalEndpointCache[key]);
+      for (const key of Object.keys(globalEndpointCache)) {
+        delete globalEndpointCache[key];
+      }
       fetchAllEndpointStatuses(true);
     };
 
