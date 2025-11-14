@@ -170,7 +170,7 @@ export function computeStampPreviewStyle(
   let yPx = yPts * scaleY;
   if (parameters.stampType === 'text') {
     try {
-      const rootFontSizePx = parseFloat(getComputedStyle(document.documentElement).fontSize || '16') || 16;
+      const rootFontSizePx = Number.parseFloat(getComputedStyle(document.documentElement).fontSize || '16') || 16;
       const rowIndex = Math.floor((position - 1) / 3); // 0 top, 1 middle, 2 bottom
       const offsets = (ALPHABET_PREVIEW_TWEAKS as any)[parameters.alphabet]?.rowOffsetRem ?? [0, 0, 0];
       const offsetRem = offsets[rowIndex] ?? 0;

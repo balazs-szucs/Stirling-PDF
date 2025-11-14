@@ -119,7 +119,7 @@ const CropSettings = ({ parameters, disabled = false }: CropSettingsProps) => {
 
   // Handle manual coordinate input changes
   const handleCoordinateChange = (field: keyof Rectangle, value: number | string) => {
-    const numValue = typeof value === 'string' ? parseFloat(value) : value;
+    const numValue = typeof value === 'string' ? Number.parseFloat(value) : value;
     if (isNaN(numValue)) return;
 
     const newCropArea = { ...cropArea, [field]: numValue };

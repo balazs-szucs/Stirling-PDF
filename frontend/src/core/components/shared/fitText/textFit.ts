@@ -24,7 +24,7 @@ export function adjustFontSizeToFit(
   if (!element) return () => {};
 
   const computed = window.getComputedStyle(element);
-  const baseFontPx = options.maxFontSizePx ?? parseFloat(computed.fontSize || '16');
+  const baseFontPx = options.maxFontSizePx ?? Number.parseFloat(computed.fontSize || '16');
   const minScale = Math.max(0.1, options.minFontScale ?? 0.7);
   const stepScale = Math.max(0.005, options.stepScale ?? 0.05);
   const singleLine = options.singleLine ?? false;
@@ -52,7 +52,7 @@ export function adjustFontSizeToFit(
     let maxHeight = Number.POSITIVE_INFINITY;
     if (typeof maxLines === 'number' && maxLines > 0) {
       const cs = window.getComputedStyle(element);
-      const lineHeight = parseFloat(cs.lineHeight) || baseFontPx * 1.2;
+      const lineHeight = Number.parseFloat(cs.lineHeight) || baseFontPx * 1.2;
       maxHeight = lineHeight * maxLines + 0.1; // small epsilon
     }
 

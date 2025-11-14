@@ -51,11 +51,11 @@ const PageEditor = ({
       return 16;
     }
     const computed = getComputedStyle(document.documentElement).fontSize;
-    const parsed = parseFloat(computed);
+    const parsed = Number.parseFloat(computed);
     return Number.isNaN(parsed) ? 16 : parsed;
   }, []);
   const itemGapPx = useMemo(() => {
-    return parseFloat(GRID_CONSTANTS.ITEM_GAP) * rootFontSize * zoomLevel;
+    return Number.parseFloat(GRID_CONSTANTS.ITEM_GAP) * rootFontSize * zoomLevel;
   }, [rootFontSize, zoomLevel]);
 
   // Zoom actions

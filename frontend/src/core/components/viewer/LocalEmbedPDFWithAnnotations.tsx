@@ -65,7 +65,7 @@ export function LocalEmbedPDFWithAnnotations({
     if (!pdfUrl) return [];
 
     // Calculate 3.5rem in pixels dynamically based on root font size
-    const rootFontSize = parseFloat(getComputedStyle(document.documentElement).fontSize);
+    const rootFontSize = Number.parseFloat(getComputedStyle(document.documentElement).fontSize);
     const viewportGap = rootFontSize * 3.5;
 
     return [

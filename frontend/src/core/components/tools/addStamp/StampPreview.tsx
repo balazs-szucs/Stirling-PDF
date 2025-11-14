@@ -115,7 +115,7 @@ export default function StampPreview({ parameters, onParameterChange, file, show
     const itemStyle = style.item as any;
     if (!itemStyle || containerSize.width <= 0 || containerSize.height <= 0) return;
 
-    const parse = (v: any) => parseFloat(String(v).replace('px', '')) || 0;
+    const parse = (v: any) => Number.parseFloat(String(v).replace('px', '')) || 0;
     const leftPx = parse(itemStyle.left);
     const bottomPx = parse(itemStyle.bottom);
     const widthPx = parse(itemStyle.width);
@@ -161,8 +161,8 @@ export default function StampPreview({ parameters, onParameterChange, file, show
 
     // Recompute current x,y from style (so that we start from visual position)
     const itemStyle = style.item as any;
-    const leftPx = parseFloat(String(itemStyle.left).replace('px', '')) || 0;
-    const bottomPx = parseFloat(String(itemStyle.bottom).replace('px', '')) || 0;
+    const leftPx = Number.parseFloat(String(itemStyle.left).replace('px', '')) || 0;
+    const bottomPx = Number.parseFloat(String(itemStyle.bottom).replace('px', '')) || 0;
     const widthPts = pageSize?.widthPts ?? 595.28;
     const heightPts = pageSize?.heightPts ?? 841.89;
     const scaleX = containerSize.width / widthPts;
@@ -178,10 +178,10 @@ export default function StampPreview({ parameters, onParameterChange, file, show
     ensureOverrides();
 
     const item = style.item as any;
-    const left = parseFloat(String(item.left).replace('px', '')) || 0;
-    const bottom = parseFloat(String(item.bottom).replace('px', '')) || 0;
-    const width = parseFloat(String(item.width).replace('px', '')) || parameters.fontSize;
-    const height = parseFloat(String(item.height).replace('px', '')) || parameters.fontSize;
+    const left = Number.parseFloat(String(item.left).replace('px', '')) || 0;
+    const bottom = Number.parseFloat(String(item.bottom).replace('px', '')) || 0;
+    const width = Number.parseFloat(String(item.width).replace('px', '')) || parameters.fontSize;
+    const height = Number.parseFloat(String(item.height).replace('px', '')) || parameters.fontSize;
 
     const rect = (e.currentTarget.parentElement as HTMLElement)?.getBoundingClientRect();
     const centerX = left + width / 2;

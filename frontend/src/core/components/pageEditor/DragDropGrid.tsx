@@ -373,9 +373,9 @@ const DragDropGrid = <T extends DragDropItem>({
     if (containerWidth === 0) return 4; // Container not measured yet
 
     // Convert rem to pixels for calculation
-    const remToPx = parseFloat(getComputedStyle(document.documentElement).fontSize);
-    const ITEM_WIDTH = parseFloat(GRID_CONSTANTS.ITEM_WIDTH) * remToPx * zoomLevel;
-    const ITEM_GAP = parseFloat(GRID_CONSTANTS.ITEM_GAP) * remToPx * zoomLevel;
+    const remToPx = Number.parseFloat(getComputedStyle(document.documentElement).fontSize);
+    const ITEM_WIDTH = Number.parseFloat(GRID_CONSTANTS.ITEM_WIDTH) * remToPx * zoomLevel;
+    const ITEM_GAP = Number.parseFloat(GRID_CONSTANTS.ITEM_GAP) * remToPx * zoomLevel;
 
     // Calculate how many items fit: (width - gap) / (itemWidth + gap)
     const availableWidth = containerWidth - ITEM_GAP; // Account for first gap
@@ -415,8 +415,8 @@ const DragDropGrid = <T extends DragDropItem>({
     count: Math.ceil(visibleItems.length / itemsPerRow),
     getScrollElement,
     estimateSize: () => {
-      const remToPx = parseFloat(getComputedStyle(document.documentElement).fontSize);
-      return parseFloat(GRID_CONSTANTS.ITEM_HEIGHT) * remToPx * zoomLevel;
+      const remToPx = Number.parseFloat(getComputedStyle(document.documentElement).fontSize);
+      return Number.parseFloat(GRID_CONSTANTS.ITEM_HEIGHT) * remToPx * zoomLevel;
     },
     overscan: OVERSCAN,
   });
@@ -616,9 +616,9 @@ const DragDropGrid = <T extends DragDropItem>({
   }, [boxSelectedPageIds, dropSide, hoveredItemId, visibleItems, filteredToOriginalIndex, items, onReorderPages, clearBoxSelection]);
 
   // Calculate optimal width for centering
-  const remToPx = parseFloat(getComputedStyle(document.documentElement).fontSize);
-  const itemWidth = parseFloat(GRID_CONSTANTS.ITEM_WIDTH) * remToPx * zoomLevel;
-  const itemGap = parseFloat(GRID_CONSTANTS.ITEM_GAP) * remToPx * zoomLevel;
+  const remToPx = Number.parseFloat(getComputedStyle(document.documentElement).fontSize);
+  const itemWidth = Number.parseFloat(GRID_CONSTANTS.ITEM_WIDTH) * remToPx * zoomLevel;
+  const itemGap = Number.parseFloat(GRID_CONSTANTS.ITEM_GAP) * remToPx * zoomLevel;
   const gridWidth = itemsPerRow * itemWidth + (itemsPerRow - 1) * itemGap;
 
   // Calculate selection box dimensions
