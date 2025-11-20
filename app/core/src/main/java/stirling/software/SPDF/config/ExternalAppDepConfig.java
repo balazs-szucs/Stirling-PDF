@@ -42,6 +42,7 @@ public class ExternalAppDepConfig {
                         put("pdftohtml", List.of("Pdftohtml"));
                         put(unoconvPath, List.of("Unoconvert"));
                         put("qpdf", List.of("qpdf"));
+                        put("node", List.of("PdfiumRedactor"));
                         put("tesseract", List.of("tesseract"));
                         put("rar", List.of("rar")); // Required for real CBR output
                     }
@@ -118,6 +119,7 @@ public class ExternalAppDepConfig {
         checkDependencyAndDisableGroup("tesseract");
         checkDependencyAndDisableGroup("soffice");
         checkDependencyAndDisableGroup("qpdf");
+        checkDependencyAndDisableGroup("node");
         checkDependencyAndDisableGroup(weasyprintPath);
         checkDependencyAndDisableGroup("pdftohtml");
         checkDependencyAndDisableGroup(unoconvPath);

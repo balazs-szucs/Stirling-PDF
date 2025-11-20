@@ -272,6 +272,7 @@ public class EndpointConfiguration {
         addEndpointToGroup("Security", "sanitize-pdf");
         addEndpointToGroup("Security", "auto-redact");
         addEndpointToGroup("Security", "redact");
+        addEndpointToGroup("PdfiumRedactor", "auto-redact");
         addEndpointToGroup("Security", "validate-signature");
         addEndpointToGroup("Security", "stamp");
         addEndpointToGroup("Security", "sign");

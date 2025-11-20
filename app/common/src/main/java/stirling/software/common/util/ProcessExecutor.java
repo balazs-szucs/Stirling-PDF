@@ -91,6 +91,11 @@ public class ProcessExecutor {
                                                 .getProcessExecutor()
                                                 .getSessionLimit()
                                                 .getGhostscriptSessionLimit();
+                                case PDFIUM_REDACTOR ->
+                                        applicationProperties
+                                                .getProcessExecutor()
+                                                .getSessionLimit()
+                                                .getPdfiumRedactorSessionLimit();
                                 case OCR_MY_PDF ->
                                         applicationProperties
                                                 .getProcessExecutor()
@@ -145,6 +150,11 @@ public class ProcessExecutor {
                                                 .getProcessExecutor()
                                                 .getTimeoutMinutes()
                                                 .getGhostscriptTimeoutMinutes();
+                                case PDFIUM_REDACTOR ->
+                                        applicationProperties
+                                                .getProcessExecutor()
+                                                .getTimeoutMinutes()
+                                                .getPdfiumRedactorTimeoutMinutes();
                                 case OCR_MY_PDF ->
                                         applicationProperties
                                                 .getProcessExecutor()
@@ -301,6 +311,7 @@ public class ProcessExecutor {
         CALIBRE,
         TESSERACT,
         QPDF,
+        PDFIUM_REDACTOR,
         GHOSTSCRIPT,
         OCR_MY_PDF
     }

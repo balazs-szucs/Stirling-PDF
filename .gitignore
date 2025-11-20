@@ -122,6 +122,7 @@ SwaggerDoc.json
 *.nar
 *.ear
 *.zip
+!app/core/src/main/resources/static/pdfium/*.zip
 *.tar.gz
 *.rar
 *.db

@@ -1,0 +1,7 @@
+{
+  "name": "pdfium-redactor",
+  "version": "1.0.0",
+  "description": "Embedded runtime for Stirling-PDF auto-redaction via EmbedPDF/PDFium",
+  "type": "module",
+  "private": true
+}
