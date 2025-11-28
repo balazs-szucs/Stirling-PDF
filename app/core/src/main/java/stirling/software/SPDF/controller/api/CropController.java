@@ -16,41 +16,49 @@ import org.apache.pdfbox.pdmodel.graphics.form.PDFormXObject;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ModelAttribute;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
 
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+import stirling.software.SPDF.config.EndpointConfiguration;
+import stirling.software.SPDF.config.swagger.StandardPdfResponse;
 import stirling.software.SPDF.model.api.general.CropPdfForm;
+import stirling.software.common.annotations.AutoJobPostMapping;
+import stirling.software.common.annotations.api.GeneralApi;
 import stirling.software.common.service.CustomPDFDocumentFactory;
 import stirling.software.common.util.GeneralUtils;
 import stirling.software.common.util.ProcessExecutor;
 import stirling.software.common.util.WebResponseUtils;
 
-@RestController
-@RequestMapping("/api/v1/general")
-@Tag(name = "General", description = "General APIs")
+@GeneralApi
 @RequiredArgsConstructor
 @Slf4j
 public class CropController {
 
     private final CustomPDFDocumentFactory pdfDocumentFactory;
+    private final EndpointConfiguration endpointConfiguration;
 
-    @PostMapping(value = "/crop", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    private boolean isGhostscriptEnabled() {
+        return endpointConfiguration.isGroupEnabled("Ghostscript");
+    }
+
+    @AutoJobPostMapping(value = "/crop", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @StandardPdfResponse
     @Operation(
             summary = "Crops a PDF document",
             description =
                     "This operation takes an input PDF file and crops it according to the given"
                             + " coordinates. Input:PDF Output:PDF Type:SISO")
     public ResponseEntity<byte[]> cropPdf(@ModelAttribute CropPdfForm request) throws IOException {
-        if (request.isRemoveDataOutsideCrop()) {
+        if (request.isRemoveDataOutsideCrop() && isGhostscriptEnabled()) {
             return cropWithGhostscript(request);
         } else {
+            if (request.isRemoveDataOutsideCrop()) {
+                log.warn(
+                        "Ghostscript not available - 'removeDataOutsideCrop' option requires Ghostscript. Falling back to visual crop only.");
+            }
             return cropWithPDFBox(request);
         }
     }

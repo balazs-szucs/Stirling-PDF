@@ -71,11 +71,6 @@ public class ProcessExecutor {
                                                 .getProcessExecutor()
                                                 .getSessionLimit()
                                                 .getInstallAppSessionLimit();
-                                case FFMPEG ->
-                                        applicationProperties
-                                                .getProcessExecutor()
-                                                .getSessionLimit()
-                                                .getFfmpegSessionLimit();
                                 case TESSERACT ->
                                         applicationProperties
                                                 .getProcessExecutor()
@@ -101,6 +96,7 @@ public class ProcessExecutor {
                                                 .getProcessExecutor()
                                                 .getSessionLimit()
                                                 .getOcrMyPdfSessionLimit();
+                                case CFF_CONVERTER -> 1;
                             };
 
                     long timeoutMinutes =
@@ -130,11 +126,6 @@ public class ProcessExecutor {
                                                 .getProcessExecutor()
                                                 .getTimeoutMinutes()
                                                 .getInstallAppTimeoutMinutes();
-                                case FFMPEG ->
-                                        applicationProperties
-                                                .getProcessExecutor()
-                                                .getTimeoutMinutes()
-                                                .getFfmpegTimeoutMinutes();
                                 case TESSERACT ->
                                         applicationProperties
                                                 .getProcessExecutor()
@@ -160,6 +151,7 @@ public class ProcessExecutor {
                                                 .getProcessExecutor()
                                                 .getTimeoutMinutes()
                                                 .getOcrMyPdfTimeoutMinutes();
+                                case CFF_CONVERTER -> 5L;
                             };
                     return new ProcessExecutor(semaphoreLimit, liveUpdates, timeoutMinutes);
                 });
@@ -313,7 +305,7 @@ public class ProcessExecutor {
         QPDF,
         GHOSTSCRIPT,
         OCR_MY_PDF,
-        FFMPEG
+        CFF_CONVERTER
     }
 
     @Setter

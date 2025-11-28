@@ -14,33 +14,32 @@ import org.apache.pdfbox.util.Matrix;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ModelAttribute;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+import stirling.software.SPDF.config.swagger.StandardPdfResponse;
 import stirling.software.SPDF.model.api.general.MergeMultiplePagesRequest;
+import stirling.software.common.annotations.AutoJobPostMapping;
+import stirling.software.common.annotations.api.GeneralApi;
 import stirling.software.common.service.CustomPDFDocumentFactory;
-import stirling.software.common.util.FormUtils;
 import stirling.software.common.util.GeneralUtils;
 import stirling.software.common.util.WebResponseUtils;
 
-@RestController
-@RequestMapping("/api/v1/general")
-@Tag(name = "General", description = "General APIs")
+@GeneralApi
 @RequiredArgsConstructor
 @Slf4j
 public class MultiPageLayoutController {
 
     private final CustomPDFDocumentFactory pdfDocumentFactory;
 
-    @PostMapping(value = "/multi-page-layout", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @AutoJobPostMapping(
+            value = "/multi-page-layout",
+            consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @StandardPdfResponse
     @Operation(
             summary = "Merge multiple pages of a PDF document into a single page",
             description =
@@ -136,26 +135,6 @@ public class MultiPageLayoutController {
         }
 
         contentStream.close();
-
-        // If any source page is rotated, skip form copying/transformation entirely
-        boolean hasRotation = FormUtils.hasAnyRotatedPage(sourceDocument);
-        if (hasRotation) {
-            log.info("Source document has rotated pages; skipping form field copying.");
-        } else {
-            try {
-                FormUtils.copyAndTransformFormFields(
-                        sourceDocument,
-                        newDocument,
-                        totalPages,
-                        pagesPerSheet,
-                        cols,
-                        rows,
-                        cellWidth,
-                        cellHeight);
-            } catch (Exception e) {
-                log.warn("Failed to copy and transform form fields: {}", e.getMessage(), e);
-            }
-        }
 
         sourceDocument.close();
 
