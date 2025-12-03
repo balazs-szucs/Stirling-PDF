@@ -6,6 +6,7 @@ import { MantineProvider } from '@mantine/core';
 import Login from '@app/routes/Login';
 import { useAuth } from '@app/auth/UseSession';
 import { springAuth } from '@app/auth/springAuthClient';
+import { PreferencesProvider } from '@app/contexts/PreferencesContext';
 
 // Mock i18n to return fallback text
 vi.mock('react-i18next', () => ({
@@ -39,6 +40,20 @@ vi.mock('@app/hooks/useDocumentMeta', () => ({
 global.fetch = vi.fn();
 
 const mockNavigate = vi.fn();
+const mockBackendProbeState = {
+  status: 'up' as const,
+  loginDisabled: false,
+  loading: false,
+};
+const mockProbe = vi.fn().mockResolvedValue(mockBackendProbeState);
+
+vi.mock('@app/hooks/useBackendProbe', () => ({
+  useBackendProbe: () => ({
+    ...mockBackendProbeState,
+    probe: mockProbe,
+  }),
+}));
+
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual('react-router-dom');
   return {
@@ -49,12 +64,20 @@ vi.mock('react-router-dom', async () => {
 
 // Test wrapper with MantineProvider
 const TestWrapper = ({ children }: { children: React.ReactNode }) => (
-  <MantineProvider>{children}</MantineProvider>
+  <MantineProvider>
+    <PreferencesProvider>
+      {children}
+    </PreferencesProvider>
+  </MantineProvider>
 );
 
 describe('Login', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockBackendProbeState.status = 'up';
+    mockBackendProbeState.loginDisabled = false;
+    mockBackendProbeState.loading = false;
+    mockProbe.mockResolvedValue(mockBackendProbeState);
 
     // Default auth state - not logged in
     vi.mocked(useAuth).mockReturnValue({
@@ -327,13 +350,15 @@ describe('Login', () => {
       </TestWrapper>
     );
 
-    waitFor(() => {
+    return waitFor(() => {
       const emailInput = document.getElementById('email') as HTMLInputElement;
       expect(emailInput.value).toBe(email);
     });
   });
 
   it('should redirect to home when login disabled', async () => {
+    mockBackendProbeState.loginDisabled = true;
+    mockProbe.mockResolvedValueOnce({ status: 'up', loginDisabled: true, loading: false });
     vi.mocked(fetch).mockResolvedValueOnce({
       ok: true,
       json: async () => ({
@@ -351,7 +376,7 @@ describe('Login', () => {
     );
 
     await waitFor(() => {
-      expect(mockNavigate).toHaveBeenCalledWith('/');
+      expect(mockNavigate).toHaveBeenCalledWith('/', { replace: true });
     });
   });
 

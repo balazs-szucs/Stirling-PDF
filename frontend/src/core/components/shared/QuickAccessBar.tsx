@@ -1,5 +1,5 @@
 import React, { useState, useRef, forwardRef, useEffect } from "react";
-import { ActionIcon, Stack, Divider, Menu } from "@mantine/core";
+import { ActionIcon, Stack, Divider, Menu, Indicator } from "@mantine/core";
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useLocation } from 'react-router-dom';
 import LocalIcon from '@app/components/shared/LocalIcon';
@@ -15,7 +15,8 @@ import AllToolsNavButton from '@app/components/shared/AllToolsNavButton';
 import ActiveToolButton from "@app/components/shared/quickAccessBar/ActiveToolButton";
 import AppConfigModal from '@app/components/shared/AppConfigModal';
 import { useAppConfig } from '@app/contexts/AppConfigContext';
-import { useOnboarding } from '@app/contexts/OnboardingContext';
+import { useLicenseAlert } from "@app/hooks/useLicenseAlert";
+import { requestStartTour } from '@app/constants/events';
 
 import {
   isNavButtonActive,
@@ -33,11 +34,13 @@ const QuickAccessBar = forwardRef<HTMLDivElement>((_, ref) => {
   const { handleReaderToggle, handleToolSelect, selectedToolKey, leftPanelView, toolRegistry, readerMode, resetTool } = useToolWorkflow();
   const { getToolNavigation } = useSidebarNavigation();
   const { config } = useAppConfig();
-  const { startTour } = useOnboarding();
+  const licenseAlert = useLicenseAlert();
   const [configModalOpen, setConfigModalOpen] = useState(false);
   const [activeButton, setActiveButton] = useState<string>('tools');
   const scrollableRef = useRef<HTMLDivElement>(null);
   const isOverflow = useIsOverflowing(scrollableRef);
+
+  const isRTL = typeof document !== 'undefined' && document.documentElement.dir === 'rtl';
 
   // Open modal if URL is at /settings/*
   useEffect(() => {
@@ -189,9 +192,6 @@ const QuickAccessBar = forwardRef<HTMLDivElement>((_, ref) => {
       ref={ref}
       data-sidebar="quick-access"
       className={`h-screen flex flex-col w-16 quick-access-bar-main ${isRainbowMode ? 'rainbow-mode' : ''}`}
-      style={{
-        borderRight: '1px solid var(--border-default)'
-      }}
     >
       {/* Fixed header outside scrollable area */}
       <div className="quick-access-header">
@@ -268,7 +268,7 @@ const QuickAccessBar = forwardRef<HTMLDivElement>((_, ref) => {
                     <div
                       key={buttonConfig.id}
                       data-tour="help-button"
-                      onClick={() => startTour('tools')}
+                      onClick={() => requestStartTour('tools')}
                     >
                       {renderNavButton(buttonConfig, index)}
                     </div>
@@ -278,14 +278,14 @@ const QuickAccessBar = forwardRef<HTMLDivElement>((_, ref) => {
                 // If admin, show menu with both options
                 return (
                   <div key={buttonConfig.id} data-tour="help-button">
-                    <Menu position="right" offset={10} zIndex={Z_INDEX_OVER_FULLSCREEN_SURFACE}>
+                    <Menu position={isRTL ? 'left' : 'right'} offset={10} zIndex={Z_INDEX_OVER_FULLSCREEN_SURFACE}>
                       <Menu.Target>
                         <div>{renderNavButton(buttonConfig, index)}</div>
                       </Menu.Target>
                       <Menu.Dropdown>
                         <Menu.Item
                           leftSection={<LocalIcon icon="view-carousel-rounded" width="1.25rem" height="1.25rem" />}
-                          onClick={() => startTour('tools')}
+                          onClick={() => requestStartTour('tools')}
                         >
                           <div>
                             <div style={{ fontWeight: 500 }}>
@@ -298,7 +298,7 @@ const QuickAccessBar = forwardRef<HTMLDivElement>((_, ref) => {
                         </Menu.Item>
                         <Menu.Item
                           leftSection={<LocalIcon icon="admin-panel-settings-rounded" width="1.25rem" height="1.25rem" />}
-                          onClick={() => startTour('admin')}
+                          onClick={() => requestStartTour('admin')}
                         >
                           <div>
                             <div style={{ fontWeight: 500 }}>
@@ -315,9 +315,27 @@ const QuickAccessBar = forwardRef<HTMLDivElement>((_, ref) => {
                 );
               }
 
+              const buttonNode = renderNavButton(buttonConfig, index);
+              const shouldShowSettingsBadge =
+                buttonConfig.id === 'config' &&
+                licenseAlert.active &&
+                licenseAlert.audience === 'admin';
+
               return (
                 <React.Fragment key={buttonConfig.id}>
-                  {renderNavButton(buttonConfig, index)}
+                  {shouldShowSettingsBadge ? (
+                    <Indicator
+                      inline
+                      size={12}
+                      color="orange"
+                      position="top-end"
+                      offset={4}
+                    >
+                      {buttonNode}
+                    </Indicator>
+                  ) : (
+                    buttonNode
+                  )}
                 </React.Fragment>
               );
             })}

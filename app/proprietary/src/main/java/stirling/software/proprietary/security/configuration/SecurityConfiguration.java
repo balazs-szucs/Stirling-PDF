@@ -84,6 +84,8 @@ public class SecurityConfiguration {
     private final GrantedAuthoritiesMapper oAuth2userAuthoritiesMapper;
     private final RelyingPartyRegistrationRepository saml2RelyingPartyRegistrations;
     private final OpenSaml4AuthenticationRequestResolver saml2AuthenticationRequestResolver;
+    private final stirling.software.proprietary.service.UserLicenseSettingsService
+            licenseSettingsService;
 
     public SecurityConfiguration(
             PersistentLoginRepository persistentLoginRepository,
@@ -103,7 +105,9 @@ public class SecurityConfiguration {
             @Autowired(required = false)
                     RelyingPartyRegistrationRepository saml2RelyingPartyRegistrations,
             @Autowired(required = false)
-                    OpenSaml4AuthenticationRequestResolver saml2AuthenticationRequestResolver) {
+                    OpenSaml4AuthenticationRequestResolver saml2AuthenticationRequestResolver,
+            stirling.software.proprietary.service.UserLicenseSettingsService
+                    licenseSettingsService) {
         this.userDetailsService = userDetailsService;
         this.userService = userService;
         this.loginEnabledValue = loginEnabledValue;
@@ -120,10 +124,11 @@ public class SecurityConfiguration {
         this.oAuth2userAuthoritiesMapper = oAuth2userAuthoritiesMapper;
         this.saml2RelyingPartyRegistrations = saml2RelyingPartyRegistrations;
         this.saml2AuthenticationRequestResolver = saml2AuthenticationRequestResolver;
+        this.licenseSettingsService = licenseSettingsService;
     }
 
     @Bean
-    public PasswordEncoder passwordEncoder() {
+    public static PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
     }
 
@@ -319,10 +324,14 @@ public class SecurityConfiguration {
                                     .authenticated());
             // Handle User/Password Logins
             if (securityProperties.isUserPass()) {
+                // v2: Authentication is handled via API (/api/v1/auth/login), not form login
+                // We configure form login to handle Spring Security redirects,
+                // but use /perform_login as the processing URL so /login remains a React route
                 http.formLogin(
                         formLogin ->
                                 formLogin
-                                        .loginPage("/login")
+                                        .loginPage("/login") // Redirect here when unauthenticated
+                                        .loginProcessingUrl("/perform_login") // Process form posts here (not /login)
                                         .successHandler(
                                                 new CustomAuthenticationSuccessHandler(
                                                         loginAttemptService,
@@ -354,7 +363,8 @@ public class SecurityConfiguration {
                                                     loginAttemptService,
                                                     securityProperties.getOauth2(),
                                                     userService,
-                                                    jwtService))
+                                                    jwtService,
+                                                    licenseSettingsService))
                                     .failureHandler(new CustomOAuth2AuthenticationFailureHandler())
                                     // Add existing Authorities from the database
                                     .userInfoEndpoint(
@@ -395,7 +405,8 @@ public class SecurityConfiguration {
                                                                 loginAttemptService,
                                                                 securityProperties.getSaml2(),
                                                                 userService,
-                                                                jwtService))
+                                                                jwtService,
+                                                                licenseSettingsService))
                                                 .failureHandler(
                                                         new CustomSaml2AuthenticationFailureHandler())
                                                 .authenticationRequestResolver(

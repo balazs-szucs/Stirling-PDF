@@ -43,6 +43,7 @@ export interface CheckoutSessionRequest {
   current_license_key?: string; // Current license key for upgrades
   requires_seats?: boolean; // Whether to add adjustable seat pricing
   seat_count?: number;      // Initial number of seats for enterprise plans (user can adjust in Stripe UI)
+  email?: string;           // Customer email for checkout pre-fill
   successUrl?: string;
   cancelUrl?: string;
 }
@@ -69,7 +70,7 @@ export interface LicenseKeyResponse {
 }
 
 export interface LicenseInfo {
-  licenseType: 'NORMAL' | 'PRO' | 'ENTERPRISE';
+  licenseType: 'NORMAL' | 'SERVER' | 'ENTERPRISE';
   enabled: boolean;
   maxUsers: number;
   hasKey: boolean;
@@ -79,6 +80,10 @@ export interface LicenseInfo {
 export interface LicenseSaveResponse {
   success: boolean;
   licenseType?: string;
+  filename?: string;
+  filePath?: string;
+  enabled?: boolean;
+  maxUsers?: number;
   message?: string;
   error?: string;
 }
@@ -109,7 +114,7 @@ const licenseService = {
   /**
    * Get available plans with pricing for the specified currency
    */
-  async getPlans(currency: string = 'gbp'): Promise<PlansResponse> {
+  async getPlans(currency: string = 'usd'): Promise<PlansResponse> {
     try {
       // Check if Supabase is configured
       if (!isSupabaseConfigured || !supabase) {
@@ -320,6 +325,7 @@ const licenseService = {
         current_license_key: request.current_license_key,
         requires_seats: request.requires_seats,
         seat_count: request.seat_count || 1,
+        email: request.email,
         callback_base_url: baseUrl,
         ui_mode: checkoutMode,
         // For hosted checkout, provide success/cancel URLs
@@ -418,6 +424,29 @@ const licenseService = {
   },
 
   /**
+   * Upload license certificate file for offline activation
+   * @param file - The .lic or .cert file to upload
+   * @returns Promise with upload result
+   */
+  async saveLicenseFile(file: File): Promise<LicenseSaveResponse> {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await apiClient.post('/api/v1/admin/license-file', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      return response.data;
+    } catch (error) {
+      console.error('Error uploading license file:', error);
+      throw error;
+    }
+  },
+
+  /**
    * Get current license information from backend
    */
   async getLicenseInfo(): Promise<LicenseInfo> {
@@ -443,6 +472,42 @@ const licenseService = {
       throw error;
     }
   },
+
+  /**
+   * Update enterprise seat count
+   * Creates a Stripe billing portal session for confirming seat changes
+   * @param newSeatCount - New number of seats
+   * @param licenseKey - Current license key for authentication
+   * @returns Billing portal URL for confirming the change
+   */
+  async updateEnterpriseSeats(newSeatCount: number, licenseKey: string): Promise<string> {
+    // Check if Supabase is configured
+    if (!isSupabaseConfigured || !supabase) {
+      throw new Error('Supabase is not configured. Seat updates are not available.');
+    }
+
+    const baseUrl = window.location.origin;
+    const returnUrl = `${baseUrl}/settings/adminPlan?seats_updated=true`;
+
+    const { data, error } = await supabase.functions.invoke('manage-billing', {
+      body: {
+        return_url: returnUrl,
+        license_key: licenseKey,
+        self_hosted: true,
+        new_seat_count: newSeatCount,
+      },
+    });
+
+    if (error) {
+      throw new Error(`Failed to update seat count: ${error.message}`);
+    }
+
+    if (!data || !data.url) {
+      throw new Error('No billing portal URL returned');
+    }
+
+    return data.url;
+  },
 };
 
 /**
@@ -458,8 +523,8 @@ export const mapLicenseToTier = (licenseInfo: LicenseInfo | null): 'free' | 'ser
     return 'free';
   }
 
-  // PRO type (no seats) = Server tier
-  if (licenseInfo.licenseType === 'PRO') {
+  // SERVER type (unlimited users) = Server tier
+  if (licenseInfo.licenseType === 'SERVER') {
     return 'server';
   }
 

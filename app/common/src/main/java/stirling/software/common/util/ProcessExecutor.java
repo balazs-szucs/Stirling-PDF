@@ -96,6 +96,7 @@ public class ProcessExecutor {
                                                 .getProcessExecutor()
                                                 .getSessionLimit()
                                                 .getOcrMyPdfSessionLimit();
+                                case CFF_CONVERTER -> 1;
                                 case PDFIUM_REDACTOR ->
                                         applicationProperties
                                                 .getProcessExecutor()
@@ -160,6 +161,7 @@ public class ProcessExecutor {
                                                 .getProcessExecutor()
                                                 .getTimeoutMinutes()
                                                 .getPdfiumRedactorTimeoutMinutes();
+                                case CFF_CONVERTER -> 5L;
                             };
                     return new ProcessExecutor(semaphoreLimit, liveUpdates, timeoutMinutes);
                 });
@@ -313,7 +315,8 @@ public class ProcessExecutor {
         QPDF,
         GHOSTSCRIPT,
         OCR_MY_PDF,
-        PDFIUM_REDACTOR
+        PDFIUM_REDACTOR,
+        CFF_CONVERTER
     }
 
     @Setter
