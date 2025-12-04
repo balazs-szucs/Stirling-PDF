@@ -177,10 +177,17 @@ public class TextFinder extends PDFTextStripper {
         float height = bounds.maxY - bounds.minY;
 
         foundTexts.add(
-                new PDFText(pageIndex, bounds.minX, bounds.minY, bounds.maxX, bounds.maxY, text));
+                new PDFText(
+                        pageIndex,
+                        bounds.minX,
+                        bounds.minY,
+                        bounds.maxX,
+                        bounds.maxY,
+                        text,
+                        bounds.maxFontSize));
 
         log.info(
-                "TextFinder found match on page {}: text='{}' | Bounds: minX={}, minY={}, maxX={}, maxY={} | Dimensions: width={}, height={}",
+                "TextFinder found match on page {}: text='{}' | Bounds: minX={}, minY={}, maxX={}, maxY={} | Dimensions: width={}, height={} | FontSize={}",
                 pageIndex + 1,
                 text,
                 bounds.minX,
@@ -188,7 +195,8 @@ public class TextFinder extends PDFTextStripper {
                 bounds.maxX,
                 bounds.maxY,
                 width,
-                height);
+                height,
+                bounds.maxFontSize);
     }
 
     private record PatternContext(Pattern pattern, String regex) {}
@@ -198,12 +206,14 @@ public class TextFinder extends PDFTextStripper {
         private final float minY;
         private final float maxX;
         private final float maxY;
+        private final float maxFontSize;
 
-        private Bounds(float minX, float minY, float maxX, float maxY) {
+        private Bounds(float minX, float minY, float maxX, float maxY, float maxFontSize) {
             this.minX = minX;
             this.minY = minY;
             this.maxX = maxX;
             this.maxY = maxY;
+            this.maxFontSize = maxFontSize;
         }
     }
 
@@ -216,6 +226,7 @@ public class TextFinder extends PDFTextStripper {
         private float totalHeight = 0;
         private float totalWidth = 0;
         private float totalFontSize = 0;
+        private float maxFontSize = 0;
 
         void include(TextPosition pos) {
             posCount++;
@@ -232,6 +243,7 @@ public class TextFinder extends PDFTextStripper {
             totalHeight += posHeight;
             totalWidth += posWidth;
             totalFontSize += fontSize;
+            maxFontSize = Math.max(maxFontSize, fontSize);
 
             // Calculate the actual bottom position
             float calculatedBottom = posY - posHeight;
@@ -242,7 +254,7 @@ public class TextFinder extends PDFTextStripper {
             minY = Math.min(minY, calculatedBottom);
             maxY = Math.max(maxY, calculatedTop);
 
-            log.info(
+            log.debug(
                     "TextPosition[{}]: char='{}' | Position: x={}, y={} (baseline) | Dimensions: width={}, height={} | Font: size={}, sizePt={}, scale=({},{}) font={} | Calculated bounds: bottom={}, top={} | Running bounds: minY={}, maxY={}",
                     posCount,
                     pos.getUnicode(),
@@ -271,11 +283,12 @@ public class TextFinder extends PDFTextStripper {
                 float avgWidth = totalWidth / posCount;
                 float avgFontSize = totalFontSize / posCount;
                 log.info(
-                        "BoundsAccumulator summary: {} positions analyzed | Avg: height={}, width={}, fontSize={} | Final bounds: ({},{}) to ({},{}) | Dimensions: {}x{}",
+                        "BoundsAccumulator summary: {} positions analyzed | Avg: height={}, width={}, fontSize={} | MaxFontSize={} | Final bounds: ({},{}) to ({},{}) | Dimensions: {}x{}",
                         posCount,
                         avgHeight,
                         avgWidth,
                         avgFontSize,
+                        maxFontSize,
                         minX,
                         minY,
                         maxX,
@@ -283,7 +296,7 @@ public class TextFinder extends PDFTextStripper {
                         maxX - minX,
                         maxY - minY);
             }
-            return new Bounds(minX, minY, maxX, maxY);
+            return new Bounds(minX, minY, maxX, maxY, maxFontSize);
         }
     }
 }

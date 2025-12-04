@@ -1,6 +1,8 @@
 package stirling.software.SPDF.controller.api.security;
 
 import java.awt.Color;
+import java.awt.geom.Point2D;
+import java.awt.geom.Rectangle2D;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.*;
@@ -49,6 +51,11 @@ public class RedactController {
     private static final float DEFAULT_TEXT_PADDING_MULTIPLIER = 0.6f;
     private static final float REDACTION_WIDTH_REDUCTION_FACTOR = 0.9f;
     private static final int MAX_CONCURRENT_SEARCHES = 4; // Maximum parallel search threads
+    private static final int MAX_PDFIUM_RETRY_ATTEMPTS = 3; // Max retries for PDFium text removal
+    // Minimum horizontal padding for redaction boxes to handle text reflow in tables
+    private static final float MIN_HORIZONTAL_PADDING = 0.5f;
+    private static final float PDFIUM_VERTICAL_PADDING_MULTIPLIER = 0.35f;
+    private static final float PDFIUM_FONT_SIZE_PADDING_MULTIPLIER = 0.15f;
 
     private final CustomPDFDocumentFactory pdfDocumentFactory;
     private final PdfiumRedactionService pdfiumRedactionService;
@@ -249,11 +256,10 @@ public class RedactController {
                 try {
                     contentStream.setNonStrokingColor(redactColor);
                     PDRectangle pageBox = page.getBBox();
+                    PDRectangle cropBox = page.getCropBox() != null ? page.getCropBox() : pageBox;
 
                     for (PDFText block : pageBlocks) {
-                        float padding =
-                                (block.getY2() - block.getY1()) * DEFAULT_TEXT_PADDING_MULTIPLIER
-                                        + customPadding;
+                        float padding = resolveVerticalPadding(block, customPadding);
 
                         float originalWidth = block.getX2() - block.getX1();
                         float boxWidth;
@@ -278,14 +284,20 @@ public class RedactController {
                         float rectWidth = boxWidth;
                         float rectHeight = block.getY2() - block.getY1() + 2 * padding;
 
+                        Rectangle2D.Float adjustedRect =
+                                clampToCropBox(
+                                        applyPageRotation(
+                                                page, rectX, rectY, rectWidth, rectHeight),
+                                        cropBox);
+
                         log.debug(
                                 "Drawing box for text='{}' at rect=({:.2f},{:.2f},{:.2f},{:.2f}) "
                                         + "textBounds=({:.2f},{:.2f},{:.2f},{:.2f}) padding={:.2f} widthReduction={}",
                                 block.getText(),
-                                rectX,
-                                rectY,
-                                rectWidth,
-                                rectHeight,
+                                adjustedRect.x,
+                                adjustedRect.y,
+                                adjustedRect.width,
+                                adjustedRect.height,
                                 block.getX1(),
                                 block.getY1(),
                                 block.getX2(),
@@ -293,7 +305,11 @@ public class RedactController {
                                 padding,
                                 isTextRemovalMode ? "applied" : "none");
 
-                        contentStream.addRect(rectX, rectY, rectWidth, rectHeight);
+                        contentStream.addRect(
+                                adjustedRect.x,
+                                adjustedRect.y,
+                                adjustedRect.width,
+                                adjustedRect.height);
                     }
 
                     contentStream.fill();
@@ -372,116 +388,117 @@ public class RedactController {
             boolean anyPdfiumApplied = false;
             AtomicInteger totalMatchesFound = new AtomicInteger(0);
 
-            // Process search terms sequentially (required due to document state dependencies)
-            // but use multi-threading for the text search phase within each term
             for (String searchTerm : listOfText) {
                 String trimmedTerm = searchTerm.trim();
                 if (trimmedTerm.isEmpty()) continue;
 
                 log.debug("Processing search term: '{}'", trimmedTerm);
 
-                // Process matches one by one with document reopen for each redaction
-                boolean foundMatchForTerm = true;
-                while (foundMatchForTerm) {
-                    foundMatchForTerm = false;
+                try (PDDocument document = pdfDocumentFactory.load(currentBytes)) {
+                    // Find ALL matches for the term
+                    Map<Integer, List<PDFText>> termMatches =
+                            findTextToRedactParallel(
+                                    document,
+                                    new String[] {trimmedTerm},
+                                    useRegex,
+                                    wholeWordSearchBool);
 
-                    // Open document fresh for each iteration
-                    try (PDDocument document = pdfDocumentFactory.load(currentBytes)) {
+                    if (termMatches.isEmpty()) {
+                        log.debug("No matches found for term '{}'", trimmedTerm);
+                        continue;
+                    }
 
-                        // Use multi-threaded search for better performance
-                        Map<Integer, List<PDFText>> termMatches =
-                                findTextToRedactParallel(
-                                        document,
-                                        new String[] {trimmedTerm},
-                                        useRegex,
-                                        wholeWordSearchBool);
+                    int matchesCount = termMatches.values().stream().mapToInt(List::size).sum();
+                    totalMatchesFound.addAndGet(matchesCount);
+                    log.info("Found {} matches for term '{}'", matchesCount, trimmedTerm);
 
-                        if (termMatches.isEmpty()) {
-                            log.debug("No more matches found for term '{}'", trimmedTerm);
-                            break;
-                        }
+                    if (pdfiumAvailable) {
+                        // PDFium text removal with retry loop to handle text reflow in tables
+                        Map<Integer, List<PDFText>> currentMatches = termMatches;
+                        byte[] workingBytes = currentBytes;
+                        int attempt = 0;
 
-                        // Get the first match only
-                        PDFText firstMatch = getFirstMatch(termMatches);
-                        if (firstMatch == null) {
-                            log.debug("No valid first match for term '{}'", trimmedTerm);
-                            break;
-                        }
+                        while (!currentMatches.isEmpty() && attempt < MAX_PDFIUM_RETRY_ATTEMPTS) {
+                            attempt++;
+                            log.debug(
+                                    "PDFium attempt {} for term '{}': {} matches to process",
+                                    attempt,
+                                    trimmedTerm,
+                                    currentMatches.values().stream().mapToInt(List::size).sum());
 
-                        totalMatchesFound.incrementAndGet();
-                        log.debug(
-                                "Processing match #{} for term '{}' on page {}",
-                                totalMatchesFound.get(),
-                                trimmedTerm,
-                                firstMatch.getPageIndex() + 1);
+                            try (PDDocument workingDoc = pdfDocumentFactory.load(workingBytes)) {
+                                Optional<byte[]> pdfiumResult =
+                                        tryPdfiumTextRemoval(
+                                                workingBytes,
+                                                request.getFileInput().getOriginalFilename(),
+                                                workingDoc,
+                                                currentMatches,
+                                                request.getCustomPadding(),
+                                                drawBlackBoxes);
 
-                        // Create a map with only the first match
-                        Map<Integer, List<PDFText>> singleMatchMap = new HashMap<>();
-                        singleMatchMap.put(
-                                firstMatch.getPageIndex(), Collections.singletonList(firstMatch));
+                                if (pdfiumResult.isPresent()) {
+                                    workingBytes = pdfiumResult.get();
+                                    anyPdfiumApplied = true;
+                                    log.debug(
+                                            "PDFium attempt {} processed term '{}'",
+                                            attempt,
+                                            trimmedTerm);
 
-                        // Try PDFium redaction for this single match
-                        if (pdfiumAvailable) {
-                            Optional<byte[]> pdfiumResult =
-                                    tryPdfiumTextRemoval(
-                                            currentBytes,
-                                            request.getFileInput().getOriginalFilename(),
-                                            document,
-                                            singleMatchMap,
-                                            request.getCustomPadding(),
-                                            drawBlackBoxes);
+                                    // Verify if matches are gone
+                                    try (PDDocument verifyDoc =
+                                            pdfDocumentFactory.load(workingBytes)) {
+                                        currentMatches =
+                                                findTextToRedactParallel(
+                                                        verifyDoc,
+                                                        new String[] {trimmedTerm},
+                                                        useRegex,
+                                                        wholeWordSearchBool);
 
-                            if (pdfiumResult.isPresent()) {
-                                byte[] processedBytes = pdfiumResult.get();
-                                currentBytes = processedBytes;
-                                anyPdfiumApplied = true;
-                                foundMatchForTerm = true;
-                                log.debug(
-                                        "PDFium successfully processed match for term '{}'; reopening document for next iteration",
-                                        trimmedTerm);
-
-                                // Verify if the match was removed
-                                try (PDDocument verifyDoc =
-                                        pdfDocumentFactory.load(processedBytes)) {
-                                    Map<Integer, List<PDFText>> remainingCheck =
-                                            findTextToRedactParallel(
-                                                    verifyDoc,
-                                                    new String[] {trimmedTerm},
-                                                    useRegex,
-                                                    wholeWordSearchBool);
-
-                                    // Check if the specific match still exists
-                                    boolean matchStillExists = false;
-                                    for (List<PDFText> pageMatches : remainingCheck.values()) {
-                                        for (PDFText match : pageMatches) {
-                                            if (isSameMatch(match, firstMatch)) {
-                                                matchStillExists = true;
-                                                break;
-                                            }
+                                        if (!currentMatches.isEmpty()) {
+                                            int remainingCount =
+                                                    currentMatches.values().stream()
+                                                            .mapToInt(List::size)
+                                                            .sum();
+                                            log.debug(
+                                                    "Term '{}': {} matches remain after PDFium attempt {}. Will retry.",
+                                                    trimmedTerm,
+                                                    remainingCount,
+                                                    attempt);
+                                        } else {
+                                            log.debug(
+                                                    "Term '{}': All matches successfully redacted by PDFium after {} attempt(s).",
+                                                    trimmedTerm,
+                                                    attempt);
                                         }
-                                        if (matchStillExists) break;
                                     }
-
-                                    if (matchStillExists) {
-                                        log.warn(
-                                                "Match for term '{}' still exists after PDFium; will apply overlay",
-                                                trimmedTerm);
-                                        mergeTextMaps(overlayTargets, singleMatchMap);
-                                        foundMatchForTerm = false; // Stop trying this match
-                                    }
+                                } else {
+                                    log.warn(
+                                            "PDFium returned no output for term '{}' on attempt {}; stopping retries",
+                                            trimmedTerm,
+                                            attempt);
+                                    break;
                                 }
-                            } else {
-                                log.warn(
-                                        "PDFium returned no output for match of term '{}'; will use overlay",
-                                        trimmedTerm);
-                                mergeTextMaps(overlayTargets, singleMatchMap);
-                                foundMatchForTerm = false; // Stop trying this match
                             }
-                        } else {
-                            mergeTextMaps(overlayTargets, singleMatchMap);
-                            foundMatchForTerm = false; // Stop trying this match
                         }
-                    } // Document closed here, will reopen in next iteration if needed
+
+                        // Update currentBytes with the final result
+                        currentBytes = workingBytes;
+
+                        // If matches still remain after all retries, add to overlays
+                        if (!currentMatches.isEmpty()) {
+                            int remainingCount =
+                                    currentMatches.values().stream().mapToInt(List::size).sum();
+                            log.warn(
+                                    "Term '{}': {} matches remained after {} PDFium attempts. Applying overlays as fallback.",
+                                    trimmedTerm,
+                                    remainingCount,
+                                    MAX_PDFIUM_RETRY_ATTEMPTS);
+                            mergeTextMaps(overlayTargets, currentMatches);
+                        }
+                    } else {
+                        // No PDFium, just add to overlays
+                        mergeTextMaps(overlayTargets, termMatches);
+                    }
                 }
             }
 
@@ -512,7 +529,7 @@ public class RedactController {
             // Apply overlays for any remaining text that PDFium couldn't remove
             if (!overlayTargets.isEmpty()) {
                 int overlayCount = overlayTargets.values().stream().mapToInt(List::size).sum();
-                log.error(
+                log.warn(
                         "Residual text remains after PDFium processing; applying PDFBox overlays to cover {} matches (example='{}')",
                         overlayCount,
                         describeResidualMatch(overlayTargets));
@@ -557,132 +574,75 @@ public class RedactController {
                 Executors.newFixedThreadPool(
                         Math.min(MAX_CONCURRENT_SEARCHES, Math.max(1, pageCount)));
 
-        List<Future<?>> futures = new ArrayList<>();
+        try {
+            List<Future<?>> futures = new ArrayList<>();
 
-        for (String text : listOfText) {
-            String trimmedText = text.trim();
-            if (trimmedText.isEmpty()) continue;
+            for (String text : listOfText) {
+                String trimmedText = text.trim();
+                if (trimmedText.isEmpty()) continue;
 
-            log.debug(
-                    "Searching for text: '{}' (regex: {}, wholeWord: {})",
-                    trimmedText,
-                    useRegex,
-                    wholeWordSearch);
+                log.debug(
+                        "Searching for text: '{}' (regex: {}, wholeWord: {})",
+                        trimmedText,
+                        useRegex,
+                        wholeWordSearch);
 
-            // Submit search task
-            Future<?> future =
-                    executor.submit(
-                            () -> {
-                                try {
-                                    TextFinder textFinder =
-                                            new TextFinder(trimmedText, useRegex, wholeWordSearch);
-                                    textFinder.getText(document);
+                // Submit search task
+                Future<?> future =
+                        executor.submit(
+                                () -> {
+                                    try {
+                                        TextFinder textFinder =
+                                                new TextFinder(
+                                                        trimmedText, useRegex, wholeWordSearch);
+                                        textFinder.getText(document);
 
-                                    List<PDFText> foundTexts = textFinder.getFoundTexts();
-                                    log.debug(
-                                            "TextFinder found {} instances of '{}'",
-                                            foundTexts.size(),
-                                            trimmedText);
-
-                                    for (PDFText found : foundTexts) {
-                                        allFoundTextsByPage
-                                                .computeIfAbsent(
-                                                        found.getPageIndex(),
-                                                        k ->
-                                                                Collections.synchronizedList(
-                                                                        new ArrayList<>()))
-                                                .add(found);
+                                        List<PDFText> foundTexts = textFinder.getFoundTexts();
                                         log.debug(
-                                                "Added match on page {} at ({},{},{},{}): '{}'",
-                                                found.getPageIndex(),
-                                                found.getX1(),
-                                                found.getY1(),
-                                                found.getX2(),
-                                                found.getY2(),
-                                                found.getText());
+                                                "TextFinder found {} instances of '{}'",
+                                                foundTexts.size(),
+                                                trimmedText);
+
+                                        for (PDFText found : foundTexts) {
+                                            allFoundTextsByPage
+                                                    .computeIfAbsent(
+                                                            found.getPageIndex(),
+                                                            k ->
+                                                                    Collections.synchronizedList(
+                                                                            new ArrayList<>()))
+                                                    .add(found);
+                                            log.debug(
+                                                    "Added match on page {} at ({},{},{},{}): '{}'",
+                                                    found.getPageIndex(),
+                                                    found.getX1(),
+                                                    found.getY1(),
+                                                    found.getX2(),
+                                                    found.getY2(),
+                                                    found.getText());
+                                        }
+                                    } catch (Exception e) {
+                                        log.error(
+                                                "Error processing search term '{}': {}",
+                                                trimmedText,
+                                                e.getMessage());
                                     }
-                                } catch (Exception e) {
-                                    log.error(
-                                            "Error processing search term '{}': {}",
-                                            trimmedText,
-                                            e.getMessage());
-                                }
-                            });
-            futures.add(future);
-        }
-
-        // Wait for all searches to complete
-        for (Future<?> future : futures) {
-            try {
-                future.get();
-            } catch (Exception e) {
-                log.error("Error waiting for search completion: {}", e.getMessage());
+                                });
+                futures.add(future);
             }
+
+            // Wait for all searches to complete
+            for (Future<?> future : futures) {
+                try {
+                    future.get();
+                } catch (Exception e) {
+                    log.error("Error waiting for search completion: {}", e.getMessage());
+                }
+            }
+        } finally {
+            executor.shutdown();
         }
 
-        executor.shutdown();
         return new HashMap<>(allFoundTextsByPage);
-    }
-
-    /**
-     * Extracts the first match from a map of page-indexed matches.
-     *
-     * @param matches Map of page indices to lists of PDFText matches
-     * @return The first PDFText match found, or null if none exist
-     */
-    private PDFText getFirstMatch(Map<Integer, List<PDFText>> matches) {
-        if (matches == null || matches.isEmpty()) {
-            return null;
-        }
-
-        // Get the lowest page index
-        Integer firstPageIndex = matches.keySet().stream().min(Integer::compareTo).orElse(null);
-
-        List<PDFText> pageMatches = matches.get(firstPageIndex);
-        if (pageMatches == null || pageMatches.isEmpty()) {
-            return null;
-        }
-
-        return pageMatches.get(0);
-    }
-
-    /**
-     * Checks if two PDFText matches refer to the same location and text.
-     *
-     * @param match1 First PDFText match
-     * @param match2 Second PDFText match
-     * @return true if matches are the same, false otherwise
-     */
-    private boolean isSameMatch(PDFText match1, PDFText match2) {
-        if (match1 == null || match2 == null) {
-            return false;
-        }
-
-        // Compare page index
-        if (match1.getPageIndex() != match2.getPageIndex()) {
-            return false;
-        }
-
-        // Compare coordinates with a small tolerance for floating-point precision
-        float tolerance = 0.1f;
-        boolean sameX1 = Math.abs(match1.getX1() - match2.getX1()) < tolerance;
-        boolean sameY1 = Math.abs(match1.getY1() - match2.getY1()) < tolerance;
-        boolean sameX2 = Math.abs(match1.getX2() - match2.getX2()) < tolerance;
-        boolean sameY2 = Math.abs(match1.getY2() - match2.getY2()) < tolerance;
-
-        if (!sameX1 || !sameY1 || !sameX2 || !sameY2) {
-            return false;
-        }
-
-        // Compare text content
-        String text1 = match1.getText();
-        String text2 = match2.getText();
-
-        if (text1 == null && text2 == null) {
-            return true;
-        }
-
-        return text1 != null && text1.equals(text2);
     }
 
     private String[] parseListOfText(String rawText, boolean isRegexMode) {
@@ -716,6 +676,33 @@ public class RedactController {
         if (!trimmed.isEmpty()) {
             target.add(trimmed);
         }
+    }
+
+    private float resolveVerticalPadding(PDFText block, float customPadding) {
+        return computeVerticalPadding(block, DEFAULT_TEXT_PADDING_MULTIPLIER, customPadding);
+    }
+
+    private float resolvePdfiumVerticalPadding(PDFText block, float customPadding) {
+        return computeVerticalPadding(block, PDFIUM_VERTICAL_PADDING_MULTIPLIER, customPadding);
+    }
+
+    private float computeVerticalPadding(PDFText block, float multiplier, float customPadding) {
+        float blockHeight =
+                Math.max(block.getY2() - block.getY1(), Math.max(block.getFontSize(), 0.5f));
+        float normalizedPadding = Math.max(customPadding, 0f);
+        return blockHeight * multiplier + normalizedPadding;
+    }
+
+    private float resolvePdfiumHorizontalPadding(PDFText block, float customPadding) {
+        return computeHorizontalPadding(
+                block, PDFIUM_FONT_SIZE_PADDING_MULTIPLIER, MIN_HORIZONTAL_PADDING, customPadding);
+    }
+
+    private float computeHorizontalPadding(
+            PDFText block, float multiplier, float minPadding, float customPadding) {
+        float fontAwarePadding = Math.max(block.getFontSize() * multiplier, minPadding);
+        float normalizedPadding = Math.max(customPadding, 0f);
+        return Math.max(fontAwarePadding, normalizedPadding);
     }
 
     private Optional<byte[]> tryPdfiumTextRemoval(
@@ -763,9 +750,6 @@ public class RedactController {
                 allFoundTextsByPage.size(),
                 customPadding);
 
-        float appliedPaddingX = Math.max(customPadding, 0f);
-        float appliedPaddingY = Math.max(customPadding, 0f);
-
         for (Map.Entry<Integer, List<PDFText>> entry : allFoundTextsByPage.entrySet()) {
             int pageIndex = entry.getKey();
             if (pageIndex < 0 || pageIndex >= pages.getCount()) {
@@ -788,10 +772,11 @@ public class RedactController {
             for (PDFText block : entry.getValue()) {
                 float width = block.getX2() - block.getX1();
                 float height = block.getY2() - block.getY1();
+                float fontSize = block.getFontSize();
 
                 // Log detailed information about the text block
-                log.info(
-                        "⚠️ REDACT PROCESSING: Page {} (0-indexed={}), text='{}' | RAW COORDINATES from PDFText: x1={}, y1={}, x2={}, y2={} | COMPUTED: width={}, height={} | PAGE BOUNDS (cropBox): minX={}, minY={}, maxX={}, maxY={}",
+                log.debug(
+                        "⚠️ REDACT PROCESSING: Page {} (0-indexed={}), text='{}' | RAW COORDINATES from PDFText: x1={}, y1={}, x2={}, y2={} | COMPUTED: width={}, height={} | FONT: size={} | PAGE BOUNDS (cropBox): minX={}, minY={}, maxX={}, maxY={}",
                         pageIndex + 1,
                         pageIndex,
                         block.getText(),
@@ -801,6 +786,7 @@ public class RedactController {
                         block.getY2(),
                         width,
                         height,
+                        fontSize,
                         minX,
                         minY,
                         maxX,
@@ -819,51 +805,38 @@ public class RedactController {
                 // In PDFBox coordinates: Y1 is bottom (minY), Y2 is top (maxY)
                 // CRITICAL: block.getY1() should be the BOTTOM of the text (minY)
                 //          block.getY2() should be the TOP of the text (maxY)
-                float textBottom = block.getY1();
-                float textTop = block.getY2();
+                // Update: TextFinder returns tight bounds around glyphs. If the text is all
+                // lowercase (x-height), height might be smaller than fontSize.
+                // To guarantee removal by PDFium, we should cover the full font height.
 
-                // Apply conservative padding to ensure full coverage
-                // For vertical padding, we need to be more careful to avoid adjacent lines
-                // But also ensure we cover the ENTIRE text including any descenders
-                float verticalPaddingReduction = 0.5f; // Use 50% of horizontal padding for vertical
-                float effectivePaddingY = appliedPaddingY * verticalPaddingReduction;
+                // Use the same padding logic as redactFoundText (Visual Redaction)
+                // This ensures PDFium attempts to remove the text in the exact same area where the
+                // black box will be drawn.
 
-                // Add extra margin above the text to ensure full coverage
-                // Some fonts have glyphs that extend above the reported height
-                float topMargin = Math.max(1.0f, height * 0.1f); // 10% of height or minimum 1pt
+                float padding = resolvePdfiumVerticalPadding(block, customPadding);
+                float horizontalPadding = resolvePdfiumHorizontalPadding(block, customPadding);
 
-                // Calculate the redaction box to fully cover the text
-                // Start slightly below the textBottom to catch any descenders or rendering
-                // artifacts
-                float originX = block.getX1() - appliedPaddingX;
-                float originY = textBottom - effectivePaddingY;
+                // Calculate the final redaction box (PDFium uses Bottom-Left origin)
+                // originY = textBottom - padding
+                float originX = block.getX1() - horizontalPadding;
+                float originY = block.getY1() - padding;
 
-                // Extend the height to cover from bottom padding to top with extra margin
-                float finalWidth = width + (appliedPaddingX * 2);
-                float finalHeight = height + effectivePaddingY + topMargin;
+                float finalWidth = width + (horizontalPadding * 2);
+                float finalHeight = height + (2 * padding);
 
-                log.info(
-                        "📐 CALCULATION: textBottom={} (from y1), textTop={} (from y2), textHeight={} | Padding: effectiveY={} ({}%), topMargin={} | originY={} (bottom - padding)",
-                        textBottom,
-                        textTop,
+                log.debug(
+                        "📐 CALCULATION (Synced): textBottom={} textTop={} height={} | Padding: {} | Final Box: origin=({}, {}) size=({}, {})",
+                        block.getY1(),
+                        block.getY2(),
                         height,
-                        effectivePaddingY,
-                        (verticalPaddingReduction * 100),
-                        topMargin,
-                        originY);
-
-                log.info(
-                        "📦 FINAL BOX: origin=({}, {}), size=({}, {}) | Coverage: Y[{} to {}] should cover text Y[{} to {}] | Margins: bottom={}, top={}",
+                        padding,
                         originX,
                         originY,
                         finalWidth,
-                        finalHeight,
-                        originY,
-                        originY + finalHeight,
-                        textBottom,
-                        textTop,
-                        textBottom - originY,
-                        (originY + finalHeight) - textTop);
+                        finalHeight);
+
+                // Validation and clamping
+
                 if (originX < minX) {
                     float adjustment = minX - originX;
                     originX = minX;
@@ -894,23 +867,42 @@ public class RedactController {
                     continue;
                 }
 
+                Rectangle2D.Float adjustedRect =
+                        clampToCropBox(
+                                applyPageRotation(page, originX, originY, finalWidth, finalHeight),
+                                cropBox);
+
+                if (adjustedRect.width <= 0 || adjustedRect.height <= 0) {
+                    log.warn(
+                            "Discarding rotated/clamped region on page {} for text='{}' : width={} height={}",
+                            pageIndex,
+                            block.getText(),
+                            adjustedRect.width,
+                            adjustedRect.height);
+                    continue;
+                }
+
                 PdfiumRedactionRegion region =
                         new PdfiumRedactionRegion(
-                                pageIndex, originX, originY, finalWidth, finalHeight);
+                                pageIndex,
+                                adjustedRect.x,
+                                adjustedRect.y,
+                                adjustedRect.width,
+                                adjustedRect.height);
                 regions.add(region);
-                log.info(
+                log.debug(
                         "✓ Created PDFium region #{}: page={} text='{}' | FINAL: origin=({}, {}) size=({}, {}) | Coverage: x[{} to {}] y[{} to {}]",
                         regions.size(),
                         pageIndex + 1,
                         block.getText(),
-                        originX,
-                        originY,
-                        finalWidth,
-                        finalHeight,
-                        originX,
-                        originX + finalWidth,
-                        originY,
-                        originY + finalHeight);
+                        adjustedRect.x,
+                        adjustedRect.y,
+                        adjustedRect.width,
+                        adjustedRect.height,
+                        adjustedRect.x,
+                        adjustedRect.x + adjustedRect.width,
+                        adjustedRect.y,
+                        adjustedRect.y + adjustedRect.height);
             }
         }
 
@@ -1027,5 +1019,95 @@ public class RedactController {
         } catch (Exception e) {
             log.warn("Failed to clean document metadata: {}", e.getMessage());
         }
+    }
+
+    private Rectangle2D.Float applyPageRotation(
+            PDPage page, float x, float y, float width, float height) {
+        PDRectangle cropBox = page.getCropBox();
+        if (cropBox == null) {
+            return new Rectangle2D.Float(x, y, width, height);
+        }
+
+        int rotation = normalizeRotation(page.getRotation());
+        if (rotation == 0) {
+            return new Rectangle2D.Float(x, y, width, height);
+        }
+
+        float[][] corners = {
+            {x, y},
+            {x + width, y},
+            {x, y + height},
+            {x + width, y + height}
+        };
+
+        float minX = Float.POSITIVE_INFINITY;
+        float minY = Float.POSITIVE_INFINITY;
+        float maxX = Float.NEGATIVE_INFINITY;
+        float maxY = Float.NEGATIVE_INFINITY;
+
+        for (float[] corner : corners) {
+            Point2D.Float rotated = rotatePoint(corner[0], corner[1], cropBox, rotation);
+            minX = Math.min(minX, rotated.x);
+            minY = Math.min(minY, rotated.y);
+            maxX = Math.max(maxX, rotated.x);
+            maxY = Math.max(maxY, rotated.y);
+        }
+
+        return new Rectangle2D.Float(
+                minX, minY, Math.max(0, maxX - minX), Math.max(0, maxY - minY));
+    }
+
+    private Rectangle2D.Float clampToCropBox(Rectangle2D.Float rect, PDRectangle cropBox) {
+        if (rect == null || cropBox == null) {
+            return rect;
+        }
+
+        float minX = Math.max(rect.x, cropBox.getLowerLeftX());
+        float minY = Math.max(rect.y, cropBox.getLowerLeftY());
+        float maxX = Math.min(rect.x + rect.width, cropBox.getUpperRightX());
+        float maxY = Math.min(rect.y + rect.height, cropBox.getUpperRightY());
+
+        float width = Math.max(0, maxX - minX);
+        float height = Math.max(0, maxY - minY);
+
+        return new Rectangle2D.Float(minX, minY, width, height);
+    }
+
+    private Point2D.Float rotatePoint(float x, float y, PDRectangle cropBox, int rotation) {
+        float llx = cropBox.getLowerLeftX();
+        float lly = cropBox.getLowerLeftY();
+        float normalizedX = x - llx;
+        float normalizedY = y - lly;
+        float width = cropBox.getWidth();
+        float height = cropBox.getHeight();
+
+        float rotatedX;
+        float rotatedY;
+
+        switch (rotation) {
+            case 90 -> {
+                rotatedX = height - normalizedY;
+                rotatedY = normalizedX;
+            }
+            case 180 -> {
+                rotatedX = width - normalizedX;
+                rotatedY = height - normalizedY;
+            }
+            case 270 -> {
+                rotatedX = normalizedY;
+                rotatedY = width - normalizedX;
+            }
+            default -> {
+                rotatedX = normalizedX;
+                rotatedY = normalizedY;
+            }
+        }
+
+        return new Point2D.Float(rotatedX + llx, rotatedY + lly);
+    }
+
+    private int normalizeRotation(int rotation) {
+        int normalized = rotation % 360;
+        return normalized < 0 ? normalized + 360 : normalized;
     }
 }

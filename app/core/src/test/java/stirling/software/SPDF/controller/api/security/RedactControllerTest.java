@@ -1088,7 +1088,7 @@ class RedactControllerTest {
         @DisplayName("Should convert PDFBox coordinates to PDFium device space")
         void shouldConvertPdfboxCoordinatesToPdfiumDeviceSpace() throws Exception {
             Map<Integer, List<PDFText>> matches = new HashMap<>();
-            PDFText block = new PDFText(0, 25f, 55f, 125f, 95f, "Lorem");
+            PDFText block = new PDFText(0, 25f, 55f, 125f, 95f, "Lorem", 12.0f);
             matches.put(0, Collections.singletonList(block));
 
             Method method =
@@ -1104,17 +1104,22 @@ class RedactControllerTest {
             assertEquals(1, regions.size());
             PdfiumRedactionRegion region = regions.get(0);
 
-            // Test basic coordinates
+            // Test basic coordinates with dynamic padding applied in controller
             assertEquals(block.getPageIndex(), region.getPageIndex());
-            assertEquals(block.getX1(), region.getX(), 0.001);
-            assertEquals(block.getY1(), region.getY(), 0.001);
-            assertEquals(block.getX2() - block.getX1(), region.getWidth(), 0.001);
 
-            // The implementation adds a top margin for full coverage
-            // topMargin = Math.max(1.0f, height * 0.1f)
-            float height = block.getY2() - block.getY1();
-            float topMargin = Math.max(1.0f, height * 0.1f);
-            float expectedHeight = height + topMargin; // No padding since customPadding=0
+            float expectedHorizontalPadding = Math.max(block.getFontSize() * 0.15f, 0.5f);
+            float expectedVerticalPadding =
+                    Math.max(block.getY2() - block.getY1(), Math.max(block.getFontSize(), 0.5f))
+                            * 0.35f;
+
+            assertEquals(block.getX1() - expectedHorizontalPadding, region.getX(), 0.001);
+            assertEquals(block.getY1() - expectedVerticalPadding, region.getY(), 0.001);
+            assertEquals(
+                    (block.getX2() - block.getX1()) + (expectedHorizontalPadding * 2),
+                    region.getWidth(),
+                    0.001);
+
+            float expectedHeight = (block.getY2() - block.getY1()) + (expectedVerticalPadding * 2);
             assertEquals(expectedHeight, region.getHeight(), 0.001);
         }
     }

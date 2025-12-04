@@ -204,7 +204,7 @@ public class PdfiumRedactionService {
             rect.size = new Size(region.getWidth(), region.getHeight());
             page.rects.add(rect);
 
-            log.info(
+            log.debug(
                     "Grouped region for PDFium: page={} origin=({},{}) size=({},{})",
                     region.getPageIndex(),
                     region.getX(),
