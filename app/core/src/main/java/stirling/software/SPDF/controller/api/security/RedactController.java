@@ -48,8 +48,8 @@ import stirling.software.common.util.propertyeditor.StringToArrayListPropertyEdi
 @RequiredArgsConstructor
 public class RedactController {
 
-    private static final float DEFAULT_TEXT_PADDING_MULTIPLIER = 0.6f;
-    private static final float REDACTION_WIDTH_REDUCTION_FACTOR = 0.9f;
+    private static final float DEFAULT_TEXT_PADDING_MULTIPLIER = 0.25f;
+    private static final float REDACTION_WIDTH_REDUCTION_FACTOR = 0.85f;
     private static final int MAX_CONCURRENT_SEARCHES = 4; // Maximum parallel search threads
     private static final int MAX_PDFIUM_RETRY_ATTEMPTS = 3; // Max retries for PDFium text removal
     // Minimum horizontal padding for redaction boxes to handle text reflow in tables
