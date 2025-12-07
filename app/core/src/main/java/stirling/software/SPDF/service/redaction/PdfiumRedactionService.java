@@ -89,7 +89,7 @@ public class PdfiumRedactionService {
             outputFile = tempFileManager.createTempFile(".pdf");
             configFile = tempFileManager.createTempFile(".json");
 
-            log.info(
+            log.debug(
                     "PDFium redact: writing {} bytes to temp input file: {}",
                     inputPdf.length,
                     inputFile.getAbsolutePath());
@@ -119,7 +119,7 @@ public class PdfiumRedactionService {
                             "--config",
                             configFile.getAbsolutePath());
 
-            log.info(
+            log.debug(
                     "PDFium redact: executing command in directory: {}",
                     environment.frontendDir.toFile().getAbsolutePath());
 
@@ -134,7 +134,7 @@ public class PdfiumRedactionService {
             }
 
             byte[] processed = Files.readAllBytes(outputFile.toPath());
-            log.info(
+            log.debug(
                     "PDFium redact: read {} bytes from output file (input was {} bytes)",
                     processed.length,
                     inputPdf.length);
@@ -144,15 +144,15 @@ public class PdfiumRedactionService {
                 return Optional.empty();
             }
 
-            log.info("PDFium redact: SUCCESS - returning {} bytes", processed.length);
+            log.debug("PDFium redact: SUCCESS - returning {} bytes", processed.length);
             return Optional.of(processed);
         } catch (IOException e) {
-            log.warn("PDFium redaction failed: {}", e.getMessage());
+            log.debug("PDFium redaction failed: {}", e.getMessage());
             log.debug("PDFium redaction exception", e);
             return Optional.empty();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            log.warn("PDFium redaction interrupted: {}", e.getMessage());
+            log.debug("PDFium redaction interrupted: {}", e.getMessage());
             return Optional.empty();
         } finally {
             tempFileManager.deleteTempFile(inputFile);
@@ -215,7 +215,7 @@ public class PdfiumRedactionService {
 
         grouped.values().removeIf(page -> page.rects == null || page.rects.isEmpty());
 
-        log.info(
+        log.debug(
                 "PDFium region grouping: {} input regions -> {} page operations ({} skipped)",
                 regions.size(),
                 grouped.size(),

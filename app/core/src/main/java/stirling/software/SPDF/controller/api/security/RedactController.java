@@ -390,7 +390,7 @@ public class RedactController {
             AtomicInteger totalMatchesFound = new AtomicInteger(0);
 
             if (convertToImage) {
-                log.info(
+                log.debug(
                         "PDF to image conversion enabled - skipping PDFium text removal, will use PDFBox overlays + image conversion");
             }
 
@@ -416,7 +416,7 @@ public class RedactController {
 
                     int matchesCount = termMatches.values().stream().mapToInt(List::size).sum();
                     totalMatchesFound.addAndGet(matchesCount);
-                    log.info("Found {} matches for term '{}'", matchesCount, trimmedTerm);
+                    log.debug("Found {} matches for term '{}'", matchesCount, trimmedTerm);
 
                     if (pdfiumAvailable) {
                         // PDFium text removal with retry loop to handle text reflow in tables
@@ -526,7 +526,7 @@ public class RedactController {
                                 + "_redacted.pdf");
             }
 
-            log.info(
+            log.debug(
                     "Redaction complete: processed {} search terms, found {} total matches, PDFium applied: {}",
                     listOfText.length,
                     totalMatchesFound.get(),
@@ -535,7 +535,7 @@ public class RedactController {
             // Apply overlays for any remaining text that PDFium couldn't remove
             if (!overlayTargets.isEmpty()) {
                 int overlayCount = overlayTargets.values().stream().mapToInt(List::size).sum();
-                log.warn(
+                log.debug(
                         "Residual text remains after PDFium processing; applying PDFBox overlays to cover {} matches (example='{}')",
                         overlayCount,
                         describeResidualMatch(overlayTargets));
@@ -604,7 +604,7 @@ public class RedactController {
                                         textFinder.getText(document);
 
                                         List<PDFText> foundTexts = textFinder.getFoundTexts();
-                                        log.debug(
+                                        log.trace(
                                                 "TextFinder found {} instances of '{}'",
                                                 foundTexts.size(),
                                                 trimmedText);
@@ -981,7 +981,7 @@ public class RedactController {
 
             redactFoundText(document, allFoundTexts, customPadding, redactColor, isTextRemovalMode);
         } else {
-            log.warn("No text blocks to redact in finalization");
+            log.debug("No text blocks to redact in finalization");
         }
 
         cleanDocumentMetadata(document);

@@ -186,7 +186,7 @@ public class TextFinder extends PDFTextStripper {
                         text,
                         bounds.maxFontSize));
 
-        log.info(
+        log.debug(
                 "TextFinder found match on page {}: text='{}' | Bounds: minX={}, minY={}, maxX={}, maxY={} | Dimensions: width={}, height={} | FontSize={}",
                 pageIndex + 1,
                 text,
@@ -282,7 +282,7 @@ public class TextFinder extends PDFTextStripper {
                 float avgHeight = totalHeight / posCount;
                 float avgWidth = totalWidth / posCount;
                 float avgFontSize = totalFontSize / posCount;
-                log.info(
+                log.debug(
                         "BoundsAccumulator summary: {} positions analyzed | Avg: height={}, width={}, fontSize={} | MaxFontSize={} | Final bounds: ({},{}) to ({},{}) | Dimensions: {}x{}",
                         posCount,
                         avgHeight,
