@@ -54,8 +54,8 @@ public class RedactController {
     private static final int MAX_PDFIUM_RETRY_ATTEMPTS = 3; // Max retries for PDFium text removal
     // Minimum horizontal padding for redaction boxes to handle text reflow in tables
     private static final float MIN_HORIZONTAL_PADDING = 0.5f;
-    private static final float PDFIUM_VERTICAL_PADDING_MULTIPLIER = 0.35f;
-    private static final float PDFIUM_FONT_SIZE_PADDING_MULTIPLIER = 0.15f;
+    private static final float PDFIUM_VERTICAL_PADDING_MULTIPLIER = 0.3f;
+    private static final float PDFIUM_FONT_SIZE_PADDING_MULTIPLIER = 0.12f;
 
     private final CustomPDFDocumentFactory pdfDocumentFactory;
     private final PdfiumRedactionService pdfiumRedactionService;
@@ -375,6 +375,7 @@ public class RedactController {
         }
 
         byte[] originalBytes = request.getFileInput().getBytes();
+        boolean convertToImage = Boolean.TRUE.equals(request.getConvertPDFToImage());
 
         try (PDDocument initialDocument = pdfDocumentFactory.load(originalBytes)) {
             if (initialDocument == null) {
@@ -384,9 +385,14 @@ public class RedactController {
 
             Map<Integer, List<PDFText>> overlayTargets = new HashMap<>();
             byte[] currentBytes = originalBytes;
-            boolean pdfiumAvailable = ensurePdfiumAvailability();
+            boolean pdfiumAvailable = !convertToImage && ensurePdfiumAvailability();
             boolean anyPdfiumApplied = false;
             AtomicInteger totalMatchesFound = new AtomicInteger(0);
+
+            if (convertToImage) {
+                log.info(
+                        "PDF to image conversion enabled - skipping PDFium text removal, will use PDFBox overlays + image conversion");
+            }
 
             for (String searchTerm : listOfText) {
                 String trimmedTerm = searchTerm.trim();

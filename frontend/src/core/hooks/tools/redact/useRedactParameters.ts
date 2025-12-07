@@ -22,7 +22,7 @@ export const defaultParameters: RedactParameters = {
   wholeWordSearch: false,
   redactColor: '#000000',
   customPadding: 0.1,
-  convertPDFToImage: false,
+  convertPDFToImage: true,
 };
 
 export type RedactParametersHook = BaseParametersHook<RedactParameters>;

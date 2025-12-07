@@ -1107,10 +1107,10 @@ class RedactControllerTest {
             // Test basic coordinates with dynamic padding applied in controller
             assertEquals(block.getPageIndex(), region.getPageIndex());
 
-            float expectedHorizontalPadding = Math.max(block.getFontSize() * 0.15f, 0.5f);
+            float expectedHorizontalPadding = Math.max(block.getFontSize() * 0.12f, 0.5f);
             float expectedVerticalPadding =
                     Math.max(block.getY2() - block.getY1(), Math.max(block.getFontSize(), 0.5f))
-                            * 0.35f;
+                            * 0.3f;
 
             assertEquals(block.getX1() - expectedHorizontalPadding, region.getX(), 0.001);
             assertEquals(block.getY1() - expectedVerticalPadding, region.getY(), 0.001);
