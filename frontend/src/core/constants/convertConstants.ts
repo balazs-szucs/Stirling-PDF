@@ -31,6 +31,7 @@ export const CONVERSION_ENDPOINTS = {
   'pdf-html': '/api/v1/convert/pdf/html',
   'pdf-xml': '/api/v1/convert/pdf/xml',
   'pdf-pdfa': '/api/v1/convert/pdf/pdfa',
+  'pdf-pdfx': '/api/v1/convert/pdf/pdfx',
   'html-pdf': '/api/v1/convert/html/pdf',
   'markdown-pdf': '/api/v1/convert/markdown/pdf',
   'eml-pdf': '/api/v1/convert/eml/pdf',
@@ -52,6 +53,7 @@ export const ENDPOINT_NAMES = {
   'pdf-html': 'pdf-to-html',
   'pdf-xml': 'pdf-to-xml',
   'pdf-pdfa': 'pdf-to-pdfa',
+  'pdf-pdfx': 'pdf-to-pdfx',
   'html-pdf': 'html-to-pdf',
   'markdown-pdf': 'markdown-to-pdf',
   'eml-pdf': 'eml-to-pdf',
@@ -94,6 +96,7 @@ export const FROM_FORMAT_OPTIONS = [
 export const TO_FORMAT_OPTIONS = [
   { value: 'pdf', label: 'PDF', group: 'Document' },
   { value: 'pdfa', label: 'PDF/A', group: 'Document' },
+  { value: 'pdfx', label: 'PDF/X', group: 'Document' },
   { value: 'docx', label: 'DOCX', group: 'Document' },
   { value: 'odt', label: 'ODT', group: 'Document' },
   { value: 'cbz', label: 'CBZ', group: 'Archive' },
@@ -117,7 +120,7 @@ export const TO_FORMAT_OPTIONS = [
 export const CONVERSION_MATRIX: Record<string, string[]> = {
   'any': ['pdf'], // Mixed files always convert to PDF
   'image': ['pdf'], // Multiple images always convert to PDF
-  'pdf': ['png', 'jpg', 'gif', 'tiff', 'bmp', 'webp', 'docx', 'odt', 'pptx', 'odp', 'csv', 'txt', 'rtf', 'md', 'html', 'xml', 'pdfa', 'cbz'],
+  'pdf': ['png', 'jpg', 'gif', 'tiff', 'bmp', 'webp', 'docx', 'odt', 'pptx', 'odp', 'csv', 'txt', 'rtf', 'md', 'html', 'xml', 'pdfa', 'pdfx', 'cbz'],
   'cbz': ['pdf'],
   'docx': ['pdf'], 'doc': ['pdf'], 'odt': ['pdf'],
   'xlsx': ['pdf'], 'xls': ['pdf'], 'ods': ['pdf'],
@@ -142,6 +145,7 @@ export const EXTENSION_TO_ENDPOINT: Record<string, Record<string, string>> = {
     'txt': 'pdf-to-text', 'rtf': 'pdf-to-text', 'md': 'pdf-to-markdown',
     'html': 'pdf-to-html', 'xml': 'pdf-to-xml',
     'pdfa': 'pdf-to-pdfa',
+    'pdfx': 'pdf-to-pdfx',
     'cbz': 'pdf-to-cbz'
   },
   'cbz': { 'pdf': 'cbz-to-pdf' },
