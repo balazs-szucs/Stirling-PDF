@@ -35,7 +35,9 @@ export const CONVERSION_ENDPOINTS = {
   'markdown-pdf': '/api/v1/convert/markdown/pdf',
   'eml-pdf': '/api/v1/convert/eml/pdf',
   'pdf-text-editor': '/api/v1/convert/pdf/text-editor',
-  'text-editor-pdf': '/api/v1/convert/text-editor/pdf'
+  'text-editor-pdf': '/api/v1/convert/text-editor/pdf',
+  'pdf-vector': '/api/v1/convert/pdf/vector',
+  'vector-pdf': '/api/v1/convert/vector/pdf'
 } as const;
 
 export const ENDPOINT_NAMES = {
@@ -56,7 +58,9 @@ export const ENDPOINT_NAMES = {
   'markdown-pdf': 'markdown-to-pdf',
   'eml-pdf': 'eml-to-pdf',
   'pdf-text-editor': 'pdf-to-text-editor',
-  'text-editor-pdf': 'text-editor-to-pdf'
+  'text-editor-pdf': 'text-editor-to-pdf',
+  'pdf-vector': 'pdf-to-vector',
+  'vector-pdf': 'vector-to-pdf'
 } as const;
 
 
@@ -83,6 +87,11 @@ export const FROM_FORMAT_OPTIONS = [
   { value: 'tiff', label: 'TIFF', group: 'Image' },
   { value: 'webp', label: 'WEBP', group: 'Image' },
   { value: 'svg', label: 'SVG', group: 'Image' },
+  { value: 'ps', label: 'PS', group: 'Vector' },
+  { value: 'eps', label: 'EPS', group: 'Vector' },
+  { value: 'epsf', label: 'EPSF', group: 'Vector' },
+  { value: 'pcl', label: 'PCL', group: 'Vector' },
+  { value: 'xps', label: 'XPS', group: 'Vector' },
   { value: 'html', label: 'HTML', group: 'Web' },
   { value: 'zip', label: 'ZIP', group: 'Web' },
   { value: 'md', label: 'MD', group: 'Text' },
@@ -109,6 +118,10 @@ export const TO_FORMAT_OPTIONS = [
   { value: 'tiff', label: 'TIFF', group: 'Image' },
   { value: 'bmp', label: 'BMP', group: 'Image' },
   { value: 'webp', label: 'WEBP', group: 'Image' },
+  { value: 'eps', label: 'EPS', group: 'Vector' },
+  { value: 'ps', label: 'PS', group: 'Vector' },
+  { value: 'pcl', label: 'PCL', group: 'Vector' },
+  { value: 'xps', label: 'XPS', group: 'Vector' },
   { value: 'html', label: 'HTML', group: 'Web' },
   { value: 'xml', label: 'XML', group: 'Web' },
 ];
@@ -117,12 +130,13 @@ export const TO_FORMAT_OPTIONS = [
 export const CONVERSION_MATRIX: Record<string, string[]> = {
   'any': ['pdf'], // Mixed files always convert to PDF
   'image': ['pdf'], // Multiple images always convert to PDF
-  'pdf': ['png', 'jpg', 'gif', 'tiff', 'bmp', 'webp', 'docx', 'odt', 'pptx', 'odp', 'csv', 'txt', 'rtf', 'md', 'html', 'xml', 'pdfa', 'cbz'],
+  'pdf': ['png', 'jpg', 'gif', 'tiff', 'bmp', 'webp', 'docx', 'odt', 'pptx', 'odp', 'csv', 'txt', 'rtf', 'md', 'html', 'xml', 'pdfa', 'cbz', 'eps', 'ps', 'pcl', 'xps'],
   'cbz': ['pdf'],
   'docx': ['pdf'], 'doc': ['pdf'], 'odt': ['pdf'],
   'xlsx': ['pdf'], 'xls': ['pdf'], 'ods': ['pdf'],
   'pptx': ['pdf'], 'ppt': ['pdf'], 'odp': ['pdf'],
   'jpg': ['pdf'], 'jpeg': ['pdf'], 'png': ['pdf'], 'gif': ['pdf'], 'bmp': ['pdf'], 'tiff': ['pdf'], 'webp': ['pdf'], 'svg': ['pdf'],
+  'ps': ['pdf'], 'eps': ['pdf'], 'epsf': ['pdf'],
   'html': ['pdf'],
   'zip': ['pdf'],
   'md': ['pdf'],
@@ -142,7 +156,8 @@ export const EXTENSION_TO_ENDPOINT: Record<string, Record<string, string>> = {
     'txt': 'pdf-to-text', 'rtf': 'pdf-to-text', 'md': 'pdf-to-markdown',
     'html': 'pdf-to-html', 'xml': 'pdf-to-xml',
     'pdfa': 'pdf-to-pdfa',
-    'cbz': 'pdf-to-cbz'
+    'cbz': 'pdf-to-cbz',
+    'eps': 'pdf-to-vector', 'ps': 'pdf-to-vector', 'pcl': 'pdf-to-vector', 'xps': 'pdf-to-vector'
   },
   'cbz': { 'pdf': 'cbz-to-pdf' },
   'docx': { 'pdf': 'file-to-pdf' }, 'doc': { 'pdf': 'file-to-pdf' }, 'odt': { 'pdf': 'file-to-pdf' },
@@ -150,6 +165,7 @@ export const EXTENSION_TO_ENDPOINT: Record<string, Record<string, string>> = {
   'pptx': { 'pdf': 'file-to-pdf' }, 'ppt': { 'pdf': 'file-to-pdf' }, 'odp': { 'pdf': 'file-to-pdf' },
   'jpg': { 'pdf': 'img-to-pdf' }, 'jpeg': { 'pdf': 'img-to-pdf' }, 'png': { 'pdf': 'img-to-pdf' },
   'gif': { 'pdf': 'img-to-pdf' }, 'bmp': { 'pdf': 'img-to-pdf' }, 'tiff': { 'pdf': 'img-to-pdf' }, 'webp': { 'pdf': 'img-to-pdf' }, 'svg': { 'pdf': 'img-to-pdf' },
+  'ps': { 'pdf': 'vector-to-pdf' }, 'eps': { 'pdf': 'vector-to-pdf' }, 'epsf': { 'pdf': 'vector-to-pdf' },
   'html': { 'pdf': 'html-to-pdf' },
   'zip': { 'pdf': 'html-to-pdf' },
   'md': { 'pdf': 'markdown-to-pdf' },

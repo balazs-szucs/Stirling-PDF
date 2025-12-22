@@ -6328,3 +6328,23 @@ title = "Add Text Results"
 
 [addText.error]
 failed = "An error occurred while adding text to the PDF."
+
+[vectorConvert]
+title = "Vector Conversion"
+desc = "Convert between PDF and vector formats (EPS, PS, PCL, XPS)"
+settings = "Settings"
+convertFiles = "Convert Files"
+converting = "Converting..."
+conversionResults = "Conversion Results"
+outputFormat = "Output Format"
+prepress = "Apply Prepress Settings"
+prepressDescription = "Apply Ghostscript prepress settings for high-quality output"
+eps = "EPS"
+ps = "PS"
+pcl = "PCL"
+xps = "XPS"
+errorConversion = "An error occurred while converting the file."
+pdfToVector = "PDF to Vector"
+vectorToPdf = "Vector to PDF"
+pdfToVectorDesc = "Convert PDF files to vector formats (EPS, PS, PCL, XPS)"
+vectorToPdfDesc = "Convert vector formats (PS, EPS) to PDF"

@@ -8,6 +8,8 @@ export const CONVERT_SUPPORTED_FORMATS = [
   'txt', 'text', 'xml', 'rtf', 'html', 'lwp', 'md', 'json',
   // Images
   'bmp', 'gif', 'jpeg', 'jpg', 'png', 'tif', 'tiff', 'pbm', 'pgm', 'ppm', 'ras', 'xbm', 'xpm', 'svg', 'svm', 'wmf', 'webp',
+  // Vector formats
+  'eps', 'ps', 'epsf', 'pcl', 'xps',
   // StarOffice
   'sda', 'sdc', 'sdd', 'sdw', 'stc', 'std', 'sti', 'stw', 'sxd', 'sxg', 'sxi', 'sxw',
   // Email formats
@@ -15,7 +17,7 @@ export const CONVERT_SUPPORTED_FORMATS = [
   // Archive formats
   'zip', 'cbz',
   // Other
-  'dbf', 'fods', 'vsd', 'vor', 'vor3', 'vor4', 'uop', 'pct', 'ps', 'pdf',
+  'dbf', 'fods', 'vsd', 'vor', 'vor3', 'vor4', 'uop', 'pct', 'pdf',
 ];
 
 
