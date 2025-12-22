@@ -42,6 +42,9 @@ export interface ConvertParameters extends BaseParameters {
   cbzOutputOptions: {
     dpi: number;
   };
+  vectorOptions: {
+    prepress: boolean;
+  };
   isSmartDetection: boolean;
   smartDetectionType: 'mixed' | 'images' | 'web' | 'none';
 }
@@ -80,6 +83,9 @@ export const defaultParameters: ConvertParameters = {
   },
   cbzOutputOptions: {
     dpi: 150,
+  },
+  vectorOptions: {
+    prepress: false,
   },
   isSmartDetection: false,
   smartDetectionType: 'none',

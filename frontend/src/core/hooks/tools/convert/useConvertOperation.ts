@@ -43,7 +43,7 @@ export const buildConvertFormData = (parameters: ConvertParameters, selectedFile
     formData.append("fileInput", file);
   });
 
-  const { fromExtension, toExtension, imageOptions, htmlOptions, emailOptions, pdfaOptions, cbzOptions, cbzOutputOptions } = parameters;
+  const { fromExtension, toExtension, imageOptions, htmlOptions, emailOptions, pdfaOptions, cbzOptions, cbzOutputOptions, vectorOptions } = parameters;
 
   if (isImageFormat(toExtension)) {
     formData.append("imageFormat", toExtension);
@@ -75,6 +75,11 @@ export const buildConvertFormData = (parameters: ConvertParameters, selectedFile
     formData.append("optimizeForEbook", (cbzOptions?.optimizeForEbook ?? false).toString());
   } else if (fromExtension === 'pdf' && toExtension === 'cbz') {
     formData.append("dpi", (cbzOutputOptions?.dpi ?? 150).toString());
+  } else if (fromExtension === 'pdf' && ['eps', 'ps', 'pcl', 'xps'].includes(toExtension)) {
+    // PDF to vector conversions - handled by pdf-vector endpoint
+  } else if (['ps', 'eps', 'epsf'].includes(fromExtension) && toExtension === 'pdf') {
+    // Vector to PDF conversions
+    formData.append("prepress", vectorOptions.prepress.toString());
   }
 
   return formData;

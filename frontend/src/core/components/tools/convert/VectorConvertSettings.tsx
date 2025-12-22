@@ -39,14 +39,15 @@ const VectorConvertSettings = ({
       )}
 
       {showPrepressOption && (
-        <Group>
+        <Group align="start" grow>
           <Switch
             label={t("vectorConvert.prepress", "Apply Prepress Settings")}
             checked={parameters.prepress}
             onChange={(event) => onParameterChange('prepress', event.currentTarget.checked)}
             disabled={disabled}
+            size="md"
           />
-          <Text size="sm" c="dimmed">
+          <Text size="sm" c="dimmed" mt="md">
             {t("vectorConvert.prepressDescription", "Apply Ghostscript prepress settings for high-quality output")}
           </Text>
         </Group>

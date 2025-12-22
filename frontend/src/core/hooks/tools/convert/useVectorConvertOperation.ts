@@ -81,7 +81,7 @@ export const vectorConvertProcessor = async (
 export const vectorConvertOperationConfig = {
   toolType: ToolType.custom,
   customProcessor: vectorConvertProcessor, // Can't use callback version here
-  operationType: 'vector-convert',
+  operationType: 'convert',
   defaultParameters,
 } as const;
 

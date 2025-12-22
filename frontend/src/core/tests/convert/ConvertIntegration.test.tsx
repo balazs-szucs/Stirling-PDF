@@ -157,6 +157,9 @@ describe('Convert Tool Integration Tests', () => {
         },
         cbzOutputOptions: {
           dpi: 150
+        },
+        vectorOptions: {
+          prepress: false
         }
       };
 
@@ -230,6 +233,9 @@ describe('Convert Tool Integration Tests', () => {
         },
         cbzOutputOptions: {
           dpi: 150
+        },
+        vectorOptions: {
+          prepress: false
         }
       };
 
@@ -281,6 +287,9 @@ describe('Convert Tool Integration Tests', () => {
         },
         cbzOutputOptions: {
           dpi: 150
+        },
+        vectorOptions: {
+          prepress: false
         }
       };
 
@@ -341,6 +350,9 @@ describe('Convert Tool Integration Tests', () => {
         },
         cbzOutputOptions: {
           dpi: 150
+        },
+        vectorOptions: {
+          prepress: false
         }
       };
 
@@ -405,6 +417,9 @@ describe('Convert Tool Integration Tests', () => {
         },
         cbzOutputOptions: {
           dpi: 150
+        },
+        vectorOptions: {
+          prepress: false
         }
       };
 
@@ -467,6 +482,9 @@ describe('Convert Tool Integration Tests', () => {
         },
         cbzOutputOptions: {
           dpi: 150
+        },
+        vectorOptions: {
+          prepress: false
         }
       };
 
@@ -525,6 +543,9 @@ describe('Convert Tool Integration Tests', () => {
         },
         cbzOutputOptions: {
           dpi: 150
+        },
+        vectorOptions: {
+          prepress: false
         }
       };
 
@@ -580,6 +601,9 @@ describe('Convert Tool Integration Tests', () => {
         },
         cbzOutputOptions: {
           dpi: 150
+        },
+        vectorOptions: {
+          prepress: false
         }
       };
 
@@ -637,6 +661,9 @@ describe('Convert Tool Integration Tests', () => {
         },
         cbzOutputOptions: {
           dpi: 150
+        },
+        vectorOptions: {
+          prepress: false
         }
       };
 
@@ -691,6 +718,9 @@ describe('Convert Tool Integration Tests', () => {
         },
         cbzOutputOptions: {
           dpi: 150
+        },
+        vectorOptions: {
+          prepress: false
         }
       };
 
@@ -751,6 +781,9 @@ describe('Convert Tool Integration Tests', () => {
         },
         cbzOutputOptions: {
           dpi: 150
+        },
+        vectorOptions: {
+          prepress: false
         }
       };
 
@@ -810,6 +843,9 @@ describe('Convert Tool Integration Tests', () => {
         },
         cbzOutputOptions: {
           dpi: 150
+        },
+        vectorOptions: {
+          prepress: false
         }
       };
 

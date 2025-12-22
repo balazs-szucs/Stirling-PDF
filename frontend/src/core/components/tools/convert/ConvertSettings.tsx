@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { Stack, Text, Group, Divider, UnstyledButton, useMantineTheme, useMantineColorScheme } from "@mantine/core";
+import { Stack, Text, Group, Divider, UnstyledButton, useMantineTheme, useMantineColorScheme, Checkbox } from "@mantine/core";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import { useTranslation } from "react-i18next";
 import { useMultipleEndpointsEnabled } from "@app/hooks/useEndpointConfig";
@@ -148,6 +148,9 @@ const ConvertSettings = ({
     onParameterChange('cbzOutputOptions', {
       dpi: 150,
     });
+    onParameterChange('vectorOptions', {
+      prepress: false,
+    });
     onParameterChange('isSmartDetection', false);
     onParameterChange('smartDetectionType', 'none');
   };
@@ -215,6 +218,9 @@ const ConvertSettings = ({
     });
     onParameterChange('cbzOutputOptions', {
       dpi: 150,
+    });
+    onParameterChange('vectorOptions', {
+      prepress: false,
     });
   };
 
@@ -361,6 +367,22 @@ const ConvertSettings = ({
             parameters={parameters}
             onParameterChange={onParameterChange}
             selectedFiles={selectedFiles}
+            disabled={disabled}
+          />
+        </>
+      )}
+
+      {/* Vector to PDF options */}
+      {['ps', 'eps', 'epsf'].includes(parameters.fromExtension) && parameters.toExtension === 'pdf' && (
+        <>
+          <Divider />
+          <Checkbox
+            label={t("vectorConvert.prepress", "Apply Prepress Settings")}
+            checked={parameters.vectorOptions.prepress}
+            onChange={(event) => onParameterChange('vectorOptions', {
+              ...parameters.vectorOptions,
+              prepress: event.currentTarget.checked
+            })}
             disabled={disabled}
           />
         </>
