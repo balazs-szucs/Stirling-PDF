@@ -1,31 +1,31 @@
 package stirling.software.common.util.misc;
 
 import java.awt.*;
+import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
-import java.util.List;
-import java.util.Set;
+
+import javax.imageio.ImageIO;
 
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
-import org.apache.pdfbox.pdmodel.PDPageTree;
-import org.apache.pdfbox.pdmodel.font.PDFont;
-import org.apache.pdfbox.pdmodel.font.PDFontFactory;
-import org.apache.pdfbox.pdmodel.font.PDType1Font;
-import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
-import org.apache.pdfbox.text.TextPosition;
+import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
+import org.apache.pdfbox.rendering.PDFRenderer;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.web.multipart.MultipartFile;
 
 import lombok.extern.slf4j.Slf4j;
 
+import stirling.software.common.model.ApplicationProperties;
 import stirling.software.common.model.api.misc.HighContrastColorCombination;
 import stirling.software.common.model.api.misc.ReplaceAndInvert;
+import stirling.software.common.util.ApplicationContextProvider;
+import stirling.software.common.util.ExceptionUtils;
 
 @Slf4j
 public class CustomColorReplaceStrategy extends ReplaceAndInvertColorStrategy {
@@ -59,99 +59,80 @@ public class CustomColorReplaceStrategy extends ReplaceAndInvertColorStrategy {
             this.backgroundColor = colors[1];
         }
 
+        // Parse the target colors
+        Color targetTextColor = Color.decode(this.textColor);
+        Color targetBackgroundColor = Color.decode(this.backgroundColor);
+
         // Create a temporary file, with the original filename from the multipart file
         File file = Files.createTempFile("temp", getFileInput().getOriginalFilename()).toFile();
 
-        // Transfer the content of the multipart file to the file
-        getFileInput().transferTo(file);
+        try {
+            // Transfer the content of the multipart file to the file
+            getFileInput().transferTo(file);
 
-        try (PDDocument document = Loader.loadPDF(file)) {
+            try (PDDocument document = Loader.loadPDF(file)) {
+                // Render each page and replace colors
+                PDFRenderer pdfRenderer = new PDFRenderer(document);
 
-            PDPageTree pages = document.getPages();
+                for (int pageIndex = 0; pageIndex < document.getNumberOfPages(); pageIndex++) {
+                    BufferedImage image;
 
-            for (PDPage page : pages) {
+                    // Use global maximum DPI setting, fallback to 300 if not set
+                    int renderDpi = 300; // Default fallback
+                    ApplicationProperties properties =
+                            ApplicationContextProvider.getBean(ApplicationProperties.class);
+                    if (properties != null && properties.getSystem() != null) {
+                        renderDpi = properties.getSystem().getMaxDPI();
+                    }
+                    final int dpi = renderDpi;
+                    final int pageNum = pageIndex;
 
-                PdfTextStripperCustom pdfTextStripperCustom = new PdfTextStripperCustom();
-                // Get text positions
-                List<List<TextPosition>> charactersByArticle =
-                        pdfTextStripperCustom.processPageCustom(page);
+                    image =
+                            ExceptionUtils.handleOomRendering(
+                                    pageNum + 1,
+                                    dpi,
+                                    () -> pdfRenderer.renderImageWithDPI(pageNum, dpi));
 
-                // Begin a new content stream
-                PDPageContentStream contentStream =
-                        new PDPageContentStream(
-                                document, page, PDPageContentStream.AppendMode.APPEND, true, true);
+                    // Replace colors in the image
+                    replaceColors(image, targetTextColor, targetBackgroundColor);
 
-                // Set the new text color
-                contentStream.setNonStrokingColor(Color.decode(this.textColor));
+                    // Create a new PDPage from the modified image
+                    PDPage pdPage = document.getPage(pageIndex);
+                    File tempImageFile = null;
+                    try {
+                        tempImageFile = convertToBufferedImageToFile(image);
+                        PDImageXObject pdImage =
+                                PDImageXObject.createFromFileByContent(tempImageFile, document);
 
-                // Draw the text with the new color
-                for (List<TextPosition> textPositions : charactersByArticle) {
-                    for (TextPosition text : textPositions) {
-                        // Move to the text position
-                        contentStream.beginText();
-                        contentStream.newLineAtOffset(
-                                text.getX(), page.getMediaBox().getHeight() - text.getY());
-                        PDFont font = null;
-                        String unicodeText = text.getUnicode();
-                        try {
-                            font = PDFontFactory.createFont(text.getFont().getCOSObject());
-                        } catch (IOException io) {
-                            log.info("Primary font not found, using fallback font.");
-                            font = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
+                        try (PDPageContentStream contentStream =
+                                new PDPageContentStream(
+                                        document,
+                                        pdPage,
+                                        PDPageContentStream.AppendMode.OVERWRITE,
+                                        true)) {
+                            contentStream.drawImage(
+                                    pdImage,
+                                    0,
+                                    0,
+                                    pdPage.getMediaBox().getWidth(),
+                                    pdPage.getMediaBox().getHeight());
                         }
-                        // if a character is not supported by font, then look for supported font
-                        try {
-                            byte[] bytes = font.encode(unicodeText);
-                        } catch (IOException io) {
-                            log.info("text could not be encoded ");
-                            font = checkSupportedFontForCharacter(unicodeText);
-                        } catch (IllegalArgumentException ie) {
-                            log.info("text not supported by font ");
-                            font = checkSupportedFontForCharacter(unicodeText);
-                        } catch (UnsupportedOperationException ue) {
-                            log.info(
-                                    "font does not support encoding operation: {} for text: '{}'",
-                                    font.getClass().getSimpleName(),
-                                    unicodeText);
-                            font = checkSupportedFontForCharacter(unicodeText);
-                        } finally {
-                            // if any other font is not supported, then replace default character *
-                            if (font == null) {
-                                font = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
-                                unicodeText = "*";
-                            }
+                    } finally {
+                        if (tempImageFile != null && tempImageFile.exists()) {
+                            Files.delete(tempImageFile.toPath());
                         }
-                        contentStream.setFont(font, text.getFontSize());
-                        contentStream.showText(unicodeText);
-                        contentStream.endText();
                     }
                 }
-                // Close the content stream
-                contentStream.close();
-                // Use a content stream to overlay the background color
-                try (PDPageContentStream contentStreamBg =
-                        new PDPageContentStream(
-                                document,
-                                page,
-                                PDPageContentStream.AppendMode.PREPEND,
-                                true,
-                                true)) {
-                    // Set background color (e.g., light yellow)
-                    contentStreamBg.setNonStrokingColor(Color.decode(this.backgroundColor));
-                    contentStreamBg.addRect(
-                            0, 0, page.getMediaBox().getWidth(), page.getMediaBox().getHeight());
-                    contentStreamBg.fill();
-                }
-            }
-            // Save the modified PDF to a ByteArrayOutputStream
-            ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-            document.save(byteArrayOutputStream);
 
-            // Prepare the modified PDF for download
-            ByteArrayInputStream inputStream =
-                    new ByteArrayInputStream(byteArrayOutputStream.toByteArray());
-            InputStreamResource resource = new InputStreamResource(inputStream);
-            return resource;
+                // Save the modified PDF to a ByteArrayOutputStream
+                ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+                document.save(byteArrayOutputStream);
+
+                // Prepare the modified PDF for download
+                ByteArrayInputStream inputStream =
+                        new ByteArrayInputStream(byteArrayOutputStream.toByteArray());
+                return new InputStreamResource(inputStream);
+            }
         } finally {
             try {
                 Files.deleteIfExists(file.toPath());
@@ -161,21 +142,54 @@ public class CustomColorReplaceStrategy extends ReplaceAndInvertColorStrategy {
         }
     }
 
-    private PDFont checkSupportedFontForCharacter(String unicodeText) {
+    /**
+     * Replace colors in the image by detecting dark/light pixels and replacing them with the target
+     * text/background colors.
+     */
+    private void replaceColors(BufferedImage image, Color textColor, Color backgroundColor) {
+        int width = image.getWidth();
+        int height = image.getHeight();
 
-        Set<String> fonts = Standard14Fonts.getNames();
-        for (String font : fonts) {
-            Standard14Fonts.FontName fontName = Standard14Fonts.getMappedFontName(font);
-            PDFont currentFont = new PDType1Font(fontName);
-            try {
-                byte[] bytes = currentFont.encode(unicodeText);
-                return currentFont;
-            } catch (IOException io) {
-                log.info("text could not be encoded ");
-            } catch (IllegalArgumentException ie) {
-                log.info("text not supported by font ");
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                int pixel = image.getRGB(x, y);
+
+                // Extract alpha and RGB components
+                int alpha = (pixel >> 24) & 0xff;
+                int red = (pixel >> 16) & 0xff;
+                int green = (pixel >> 8) & 0xff;
+                int blue = pixel & 0xff;
+
+                // Calculate brightness (perceived luminance)
+                double brightness = (0.299 * red + 0.587 * green + 0.114 * blue);
+
+                // Determine if this pixel is "dark" (text) or "light" (background)
+                // Using a threshold of 128 (middle gray)
+                Color replacementColor;
+                if (brightness < 128) {
+                    // Dark pixel -> replace with text color
+                    replacementColor = textColor;
+                } else {
+                    // Light pixel -> replace with background color
+                    replacementColor = backgroundColor;
+                }
+
+                // Preserve alpha channel
+                int newPixel =
+                        (alpha << 24)
+                                | (replacementColor.getRed() << 16)
+                                | (replacementColor.getGreen() << 8)
+                                | replacementColor.getBlue();
+
+                image.setRGB(x, y, newPixel);
             }
         }
-        return null;
+    }
+
+    // Helper method to convert BufferedImage to File
+    private File convertToBufferedImageToFile(BufferedImage image) throws IOException {
+        File file = File.createTempFile("image", ".png");
+        ImageIO.write(image, "png", file);
+        return file;
     }
 }
