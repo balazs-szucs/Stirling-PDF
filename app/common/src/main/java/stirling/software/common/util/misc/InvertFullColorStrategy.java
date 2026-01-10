@@ -6,14 +6,27 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.file.Files;
+import java.util.ArrayList;
+import java.util.List;
 
 import javax.imageio.ImageIO;
 
 import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.contentstream.operator.Operator;
+import org.apache.pdfbox.cos.COSFloat;
+import org.apache.pdfbox.cos.COSName;
+import org.apache.pdfbox.cos.COSNumber;
+import org.apache.pdfbox.pdfparser.PDFStreamParser;
+import org.apache.pdfbox.pdfwriter.ContentStreamWriter;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
+import org.apache.pdfbox.pdmodel.PDResources;
+import org.apache.pdfbox.pdmodel.common.PDStream;
+import org.apache.pdfbox.pdmodel.graphics.PDXObject;
+import org.apache.pdfbox.pdmodel.graphics.form.PDFormXObject;
 import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import org.apache.pdfbox.rendering.PDFRenderer;
 import org.springframework.core.io.InputStreamResource;
@@ -41,51 +54,41 @@ public class InvertFullColorStrategy extends ReplaceAndInvertColorStrategy {
 
             // Load the uploaded PDF
             try (PDDocument document = Loader.loadPDF(tempFile.getFile())) {
-                // Render each page and invert colors
                 PDFRenderer pdfRenderer = new PDFRenderer(document);
-                for (int page = 0; page < document.getNumberOfPages(); page++) {
-                    BufferedImage image;
+                for (int pageIndex = 0; pageIndex < document.getNumberOfPages(); pageIndex++) {
+                    PDPage page = document.getPage(pageIndex);
 
-                    // Use global maximum DPI setting, fallback to 300 if not set
-                    int renderDpi = 300; // Default fallback
+                    // Render the page to an image (captures everything including text)
+                    int renderDpi = 150;
                     ApplicationProperties properties =
                             ApplicationContextProvider.getBean(ApplicationProperties.class);
                     if (properties != null && properties.getSystem() != null) {
                         renderDpi = properties.getSystem().getMaxDPI();
                     }
-                    final int dpi = renderDpi;
-                    final int pageNum = page;
 
-                    image =
+                    final int finalPageIndex = pageIndex;
+                    final int finalRenderDpi = renderDpi;
+
+                    BufferedImage image =
                             ExceptionUtils.handleOomRendering(
-                                    pageNum + 1,
-                                    dpi,
-                                    () -> pdfRenderer.renderImageWithDPI(pageNum, dpi));
+                                    finalPageIndex + 1,
+                                    finalRenderDpi,
+                                    () ->
+                                            pdfRenderer.renderImageWithDPI(
+                                                    finalPageIndex, finalRenderDpi));
 
-                    // Invert the colors
+                    // Invert the colors of the rendered image (Background)
                     invertImageColors(image);
 
-                    // Create a new PDPage from the inverted image
-                    PDPage pdPage = document.getPage(page);
                     File tempImageFile = null;
                     try {
                         tempImageFile = convertToBufferedImageTpFile(image);
-                        PDImageXObject pdImage =
+                        PDImageXObject bgImage =
                                 PDImageXObject.createFromFileByContent(tempImageFile, document);
 
-                        try (PDPageContentStream contentStream =
-                                new PDPageContentStream(
-                                        document,
-                                        pdPage,
-                                        PDPageContentStream.AppendMode.OVERWRITE,
-                                        true)) {
-                            contentStream.drawImage(
-                                    pdImage,
-                                    0,
-                                    0,
-                                    pdPage.getMediaBox().getWidth(),
-                                    pdPage.getMediaBox().getHeight());
-                        }
+                        // Process the page: Filter original content (remove images, invert text)
+                        // and overlay on new background
+                        processPage(document, page, bgImage);
                     } finally {
                         if (tempImageFile != null && tempImageFile.exists()) {
                             Files.delete(tempImageFile.toPath());
@@ -102,6 +105,150 @@ public class InvertFullColorStrategy extends ReplaceAndInvertColorStrategy {
                         new ByteArrayInputStream(byteArrayOutputStream.toByteArray());
                 InputStreamResource resource = new InputStreamResource(inputStream);
                 return resource;
+            }
+        }
+    }
+
+    private void processPage(PDDocument document, PDPage page, PDImageXObject bgImage)
+            throws IOException {
+        PDResources resources = page.getResources();
+        processResources(document, resources);
+
+        // Parse and filter original tokens
+        PDFStreamParser parser = new PDFStreamParser(page);
+        List<Object> originalTokens = parser.parse();
+        List<Object> filteredTokens = filterTokens(originalTokens, resources);
+
+        // 1. Draw Background Image on cleared page
+        try (PDPageContentStream contentStream =
+                new PDPageContentStream(
+                        document, page, PDPageContentStream.AppendMode.OVERWRITE, true)) {
+            contentStream.drawImage(
+                    bgImage, 0, 0, page.getMediaBox().getWidth(), page.getMediaBox().getHeight());
+        }
+
+        // 2. Append filtered (text) tokens
+        // We get the current content stream (which now has just the image) and append our tokens
+
+        // Create a new stream that combines Background + Text Layer
+        PDStream combinedStream = new PDStream(document);
+        try (OutputStream out = combinedStream.createOutputStream()) {
+            ContentStreamWriter writer = new ContentStreamWriter(out);
+
+            // Write background ops
+            PDFStreamParser bgParser = new PDFStreamParser(page);
+            writer.writeTokens(bgParser.parse());
+
+            // Write filtered text/vector ops
+            writer.writeTokens(filteredTokens);
+        }
+
+        page.setContents(combinedStream);
+    }
+
+    private void processResources(PDDocument document, PDResources resources) throws IOException {
+        if (resources == null) return;
+        for (COSName name : resources.getXObjectNames()) {
+            PDXObject xObject;
+            try {
+                xObject = resources.getXObject(name);
+            } catch (IOException e) {
+                continue; // Skip if issues
+            }
+
+            if (xObject instanceof PDFormXObject) {
+                PDFormXObject form = (PDFormXObject) xObject;
+                processForm(document, form);
+            }
+        }
+    }
+
+    private void processForm(PDDocument document, PDFormXObject form) throws IOException {
+        processResources(document, form.getResources());
+
+        PDFStreamParser parser = new PDFStreamParser(form);
+        List<Object> tokens = parser.parse();
+        List<Object> newTokens = filterTokens(tokens, form.getResources());
+
+        try (OutputStream out = (form.getCOSObject()).createOutputStream()) {
+            ContentStreamWriter writer = new ContentStreamWriter(out);
+            writer.writeTokens(newTokens);
+        }
+    }
+
+    private List<Object> filterTokens(List<Object> tokens, PDResources resources)
+            throws IOException {
+        List<Object> newTokens = new ArrayList<>();
+
+        for (int i = 0; i < tokens.size(); i++) {
+            Object token = tokens.get(i);
+
+            if (token instanceof Operator) {
+                Operator op = (Operator) token;
+                String opName = op.getName();
+
+                // Remove Image XObjects
+                if ("Do".equals(opName)) {
+                    if (newTokens.size() > 0
+                            && newTokens.get(newTokens.size() - 1) instanceof COSName) {
+                        COSName xName = (COSName) newTokens.get(newTokens.size() - 1);
+                        PDXObject xObject =
+                                (resources != null) ? resources.getXObject(xName) : null;
+
+                        if (xObject instanceof PDImageXObject) {
+                            // Remove the operand (xName) we just added
+                            newTokens.remove(newTokens.size() - 1);
+                            continue; // Skip adding the 'Do' operator
+                        }
+                    }
+                }
+
+                // Invert Colors (Stroking and Non-Stroking for RGB, Gray, CMYK)
+                // Operators: g (Generic Gray), rg (RGB), k (CMYK) - Non-Stroking
+                //            G (Generic Gray), RG (RGB), K (CMYK) - Stroking
+                if ("g".equals(opName) || "G".equals(opName)) {
+                    invertGray(newTokens);
+                } else if ("rg".equals(opName) || "RG".equals(opName)) {
+                    invertRGB(newTokens);
+                } else if ("k".equals(opName) || "K".equals(opName)) {
+                    invertCMYK(newTokens);
+                }
+            }
+            newTokens.add(token);
+        }
+        return newTokens;
+    }
+
+    private void invertGray(List<Object> tokens) {
+        if (tokens.isEmpty()) return;
+        Object top = tokens.get(tokens.size() - 1);
+        if (top instanceof COSNumber) {
+            float val = ((COSNumber) top).floatValue();
+            tokens.set(tokens.size() - 1, new COSFloat(1f - val));
+        }
+    }
+
+    private void invertRGB(List<Object> tokens) {
+        if (tokens.size() < 3) return;
+        for (int i = 1; i <= 3; i++) {
+            Object obj = tokens.get(tokens.size() - i);
+            if (obj instanceof COSNumber) {
+                float val = ((COSNumber) obj).floatValue();
+                tokens.set(tokens.size() - i, new COSFloat(1f - val));
+            }
+        }
+    }
+
+    private void invertCMYK(List<Object> tokens) {
+        if (tokens.size() < 4) return;
+        // In CMYK, 0 is white, 1 is black? No, 0 is zero ink.
+        // If we want to invert visual color:
+        // C' = 1 - C, M' = 1 - M, Y' = 1 - Y, K' = 1 - K?
+        for (int i = 1; i <= 4; i++) {
+            Object obj = tokens.get(tokens.size() - i);
+            if (obj instanceof COSNumber) {
+                float val = ((COSNumber) obj).floatValue();
+                tokens.set(tokens.size() - i, new COSFloat(1f - val));
             }
         }
     }
