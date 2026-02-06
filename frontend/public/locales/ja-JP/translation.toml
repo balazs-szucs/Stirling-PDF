@@ -219,6 +219,8 @@ pagesAndStarting = "ページと開始番号"
 positionAndPages = "位置とページ"
 preview = "位置の選択"
 previewDisclaimer = "プレビューは概算です。最終出力は PDF のフォントメトリクスにより異なる場合があります。"
+zeroPad = "Zero‑pad Width (Bates Stamping)"
+zeroPadTooltip = "Zero‑pad (Bates Stamp) page numbers to this width (e.g., 3 ⇒ 001). Set 0 to disable."
 
 [addPageNumbers.selectText]
 1 = "PDFファイルを選択:"
@@ -1336,6 +1338,8 @@ svgPdfOptions = "SVG to PDF Options"
 combineSvgs = "Combine SVGs into single PDF"
 combineSvgsDescription = "Combine all SVG files into one PDF with multiple pages, or create separate PDFs for each SVG"
 svgVectorNote = "SVG files are rendered as vector graphics for crisp output at any resolution. Dimensions from the SVG determine the PDF page size."
+strictMode = "Strict Mode"
+strictModeDesc = "Error if conversion is not perfect (uses VeraPDF verification)"
 
 [convert.ebookOptions]
 ebookOptions = "eBook から PDF へのオプション"
@@ -2642,6 +2646,7 @@ label = "元の PDF"
 
 [compare.edited]
 label = "編集済み PDF"
+placeholder = "Select the edited PDF"
 
 [compare.swap]
 confirmTitle = "比較を再実行しますか？"
@@ -3601,6 +3606,11 @@ draftWatermark = "Draft Watermark"
 europeanDate = "European Date"
 pageNumberFooter = "Page Number Footer"
 timestamp = "Timestamp"
+doc-info = "Document Info"
+draft = "Draft Watermark"
+european-date = "European Date (DD/MM/YYYY)"
+legal-footer = "Legal Footer"
+page-numbers = "Page Numbers"
 
 [removeImagePdf]
 tags = "画像削除,ページ操作,バックエンド,サーバー側"
@@ -4520,6 +4530,14 @@ description = "パイプラインが受信 PDF を監視するディレクトリ
 [admin.settings.general.customPaths.pipeline.finishedFoldersDir]
 label = "完了フォルダーのディレクトリ"
 description = "処理済み PDF の出力先ディレクトリ（空欄で既定: /pipeline/finishedFolders）"
+
+[admin.settings.general.customPaths.pipeline.pipelineDir]
+description = "Base directory for pipeline resources (leave empty for default: /pipeline)"
+label = "Pipeline Directory"
+
+[admin.settings.general.customPaths.pipeline.watchedFoldersDirs]
+description = "Directories where pipeline monitors for incoming PDFs (one per line or comma-separated; leave empty for default: /pipeline/watchedFolders)"
+label = "Watched Folders Directories"
 
 [admin.settings.general.customPaths.operations]
 label = "外部ツールのパス"

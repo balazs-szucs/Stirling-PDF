@@ -219,6 +219,8 @@ pagesAndStarting = "Pagine e numero iniziale"
 positionAndPages = "Posizione e pagine"
 preview = "Selezione posizione"
 previewDisclaimer = "L'anteprima è approssimativa. Il risultato finale può variare a causa delle metriche dei font PDF."
+zeroPad = "Zero‑pad Width (Bates Stamping)"
+zeroPadTooltip = "Zero‑pad (Bates Stamp) page numbers to this width (e.g., 3 ⇒ 001). Set 0 to disable."
 
 [addPageNumbers.selectText]
 1 = "Seleziona il file PDF:"
@@ -1336,6 +1338,8 @@ svgPdfOptions = "Opzioni da SVG a PDF"
 combineSvgs = "Unisci SVG in un unico PDF"
 combineSvgsDescription = "Unisci tutti i file SVG in un unico PDF con più pagine oppure crea PDF separati per ogni SVG"
 svgVectorNote = "I file SVG vengono renderizzati come grafica vettoriale per un output nitido a qualsiasi risoluzione. Le dimensioni dell'SVG determinano le dimensioni della pagina PDF."
+strictMode = "Strict Mode"
+strictModeDesc = "Error if conversion is not perfect (uses VeraPDF verification)"
 
 [convert.ebookOptions]
 ebookOptions = "Opzioni da eBook a PDF"
@@ -2642,6 +2646,7 @@ label = "PDF originale"
 
 [compare.edited]
 label = "PDF modificato"
+placeholder = "Select the edited PDF"
 
 [compare.swap]
 confirmTitle = "Eseguire di nuovo il confronto?"
@@ -3601,6 +3606,11 @@ draftWatermark = "Bozza Filigrana"
 europeanDate = "Data europea"
 pageNumberFooter = "Piè di pagina con numero di pagina"
 timestamp = "Timestamp"
+doc-info = "Document Info"
+draft = "Draft Watermark"
+european-date = "European Date (DD/MM/YYYY)"
+legal-footer = "Legal Footer"
+page-numbers = "Page Numbers"
 
 [removeImagePdf]
 tags = "Rimuovi immagine,operazioni sulla pagina,back-end,lato server"

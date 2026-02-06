@@ -219,6 +219,8 @@ pagesAndStarting = "Seiten & Startnummer"
 positionAndPages = "Position & Seiten"
 preview = "Positionsauswahl"
 previewDisclaimer = "Vorschau ist ungefähr. Das Endergebnis kann aufgrund der PDF-Schriftmetriken variieren."
+zeroPad = "Zero‑pad Width (Bates Stamping)"
+zeroPadTooltip = "Zero‑pad (Bates Stamp) page numbers to this width (e.g., 3 ⇒ 001). Set 0 to disable."
 
 [addPageNumbers.selectText]
 1 = "PDF-Datei auswählen:"
@@ -1336,6 +1338,8 @@ svgPdfOptions = "SVG to PDF Options"
 combineSvgs = "Combine SVGs into single PDF"
 combineSvgsDescription = "Combine all SVG files into one PDF with multiple pages, or create separate PDFs for each SVG"
 svgVectorNote = "SVG files are rendered as vector graphics for crisp output at any resolution. Dimensions from the SVG determine the PDF page size."
+strictMode = "Strict Mode"
+strictModeDesc = "Error if conversion is not perfect (uses VeraPDF verification)"
 
 [convert.ebookOptions]
 ebookOptions = "Optionen: E-Book zu PDF"
@@ -2642,6 +2646,7 @@ label = "Original-PDF"
 
 [compare.edited]
 label = "Bearbeitetes PDF"
+placeholder = "Select the edited PDF"
 
 [compare.swap]
 confirmTitle = "Vergleich erneut ausführen?"
@@ -3601,6 +3606,11 @@ draftWatermark = "Draft Watermark"
 europeanDate = "European Date"
 pageNumberFooter = "Page Number Footer"
 timestamp = "Timestamp"
+doc-info = "Document Info"
+draft = "Draft Watermark"
+european-date = "European Date (DD/MM/YYYY)"
+legal-footer = "Legal Footer"
+page-numbers = "Page Numbers"
 
 [removeImagePdf]
 tags = "bild entfernen,seitenoperationen,back end,server side"
@@ -4520,6 +4530,14 @@ description = "Verzeichnis, in dem die Pipeline nach eingehenden PDFs überwacht
 [admin.settings.general.customPaths.pipeline.finishedFoldersDir]
 label = "Verzeichnis für fertiggestellte Ordner"
 description = "Verzeichnis, in das verarbeitete PDFs ausgegeben werden (leer lassen für Standard: /pipeline/finishedFolders)"
+
+[admin.settings.general.customPaths.pipeline.pipelineDir]
+description = "Base directory for pipeline resources (leave empty for default: /pipeline)"
+label = "Pipeline Directory"
+
+[admin.settings.general.customPaths.pipeline.watchedFoldersDirs]
+description = "Directories where pipeline monitors for incoming PDFs (one per line or comma-separated; leave empty for default: /pipeline/watchedFolders)"
+label = "Watched Folders Directories"
 
 [admin.settings.general.customPaths.operations]
 label = "Pfade externer Tools"
