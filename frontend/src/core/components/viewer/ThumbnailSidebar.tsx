@@ -40,6 +40,17 @@ export function ThumbnailSidebar({ visible, onToggle: _onToggle, activeFileIndex
     }
   }, [visible]); // Remove thumbnails from dependency to prevent infinite loop
 
+  // Cleanup all blob URLs on unmount to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      Object.values(thumbnails).forEach((thumbUrl) => {
+        if (typeof thumbUrl === 'string' && thumbUrl.startsWith('blob:')) {
+          URL.revokeObjectURL(thumbUrl);
+        }
+      });
+    };
+  }, []);
+
   // Generate thumbnails when sidebar becomes visible
   useEffect(() => {
     if (!visible || scrollState.totalPages === 0) return;
