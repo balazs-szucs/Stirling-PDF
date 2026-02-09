@@ -20,6 +20,7 @@ import {
   TextInput,
   Textarea,
   Checkbox,
+  Radio,
   Select,
   MultiSelect,
   Divider,
@@ -27,14 +28,15 @@ import {
   Paper,
   Progress,
 } from '@mantine/core';
-import { useFormFill } from './FormFillContext';
+import { useFormFill } from '@proprietary/tools/formFill/FormFillContext';
 import { useNavigation } from '@app/contexts/NavigationContext';
 import { useViewer } from '@app/contexts/ViewerContext';
 import { useFileState, useFileActions } from '@app/contexts/FileContext';
+import { Skeleton } from '@mantine/core';
 import { isStirlingFile } from '@app/types/fileContext';
 import { createStirlingFilesAndStubs } from '@app/services/fileStubHelpers';
 import type { BaseToolProps } from '@app/types/tool';
-import type { FormField, FormFieldType } from './types';
+import type { FormField, FormFieldType } from '@proprietary/tools/formFill/types';
 import SaveIcon from '@mui/icons-material/Save';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
@@ -138,6 +140,8 @@ function FieldInputInner({
           clearable
           searchable
           disabled={field.readOnly}
+          aria-label={field.label || field.name}
+          aria-required={field.required}
         />
       );
     }
@@ -158,6 +162,8 @@ function FieldInputInner({
             placeholder={`Select ${field.label}`}
             searchable
             disabled={field.readOnly}
+            aria-label={field.label || field.name}
+            aria-required={field.required}
           />
         );
       }
@@ -171,39 +177,43 @@ function FieldInputInner({
           clearable
           searchable
           disabled={field.readOnly}
+          aria-label={field.label || field.name}
+          aria-required={field.required}
         />
       );
     }
 
     case 'radio': {
-      const radioOptions: string[] = [];
+      const radioOptions: { value: string; label: string }[] = [];
       if (field.widgets && field.widgets.length > 0) {
         for (const w of field.widgets) {
-          if (w.exportValue && !radioOptions.includes(w.exportValue)) {
-            radioOptions.push(w.exportValue);
+          if (w.exportValue && !radioOptions.some(o => o.value === w.exportValue)) {
+            radioOptions.push({ value: w.exportValue, label: w.exportValue });
           }
         }
       }
       if (radioOptions.length === 0 && field.options) {
-        radioOptions.push(...field.options);
+        radioOptions.push(...field.options.map(o => ({ value: o, label: o })));
       }
       return (
-        <Stack gap={4}>
-          {radioOptions.map((opt) => (
-            <Checkbox
-              key={opt}
-              size="xs"
-              label={opt}
-              checked={value === opt}
-              onChange={() => {
-                // Radio buttons should not deselect — only select a different option
-                if (value !== opt) onChange(opt);
-              }}
-              disabled={field.readOnly}
-              styles={{ input: { borderRadius: '50%' } }}
-            />
-          ))}
-        </Stack>
+        <Radio.Group
+          value={value}
+          onChange={onChange}
+          aria-label={field.label || field.name}
+          aria-required={field.required}
+        >
+          <Stack gap={4} mt={4}>
+            {radioOptions.map((opt) => (
+              <Radio
+                key={opt.value}
+                size="xs"
+                value={opt.value}
+                label={opt.label}
+                disabled={field.readOnly}
+              />
+            ))}
+          </Stack>
+        </Radio.Group>
       );
     }
 
@@ -214,6 +224,8 @@ function FieldInputInner({
           value={value}
           onChange={(e) => onChange(e.currentTarget.value)}
           disabled={field.readOnly}
+          aria-label={field.label || field.name}
+          aria-required={field.required}
         />
       );
   }
@@ -245,6 +257,8 @@ const FormFill = (_props: BaseToolProps) => {
   const [saveError, setSaveError] = useState<string | null>(null);
   const hasFetched = useRef(false);
   const activeFieldRef = useRef<HTMLDivElement>(null);
+  const isDirtyRef = useRef(formState.isDirty);
+  isDirtyRef.current = formState.isDirty;
 
   // Get the current file
   const activeFiles = selectors.getFiles();
@@ -290,28 +304,6 @@ const FormFill = (_props: BaseToolProps) => {
     }
   }, [formState.activeFieldName]);
 
-  // Keyboard shortcut: Ctrl+S to save
-  useEffect(() => {
-    if (!isActive) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-        e.preventDefault();
-        if (formState.isDirty) handleSave();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isActive, formState.isDirty]);
-
-  // Handle refresh
-  const handleRefresh = useCallback(() => {
-    if (currentFile) {
-      hasFetched.current = false;
-      fetchFields(currentFile);
-    }
-  }, [currentFile, fetchFields]);
-
-
   // Handle save/apply
   const handleSave = useCallback(async () => {
     if (!currentFile || !isStirlingFile(currentFile)) return;
@@ -343,11 +335,50 @@ const FormFill = (_props: BaseToolProps) => {
 
       hasFetched.current = false;
     } catch (err: any) {
-      setSaveError(err?.message || 'Failed to save filled form');
+      const message = err?.response?.status === 413
+        ? 'File too large. Try reducing the PDF size first.'
+        : err?.response?.status === 400
+        ? 'Invalid form data. Please check all fields.'
+        : err?.message || 'Failed to save filled form';
+      setSaveError(message);
+      console.error('[FormFill] Save failed:', err);
     } finally {
       setSaving(false);
     }
   }, [currentFile, submitForm, flatten, actions, selectors, validateForm]);
+
+  // Keyboard shortcut: Ctrl+S to save
+  useEffect(() => {
+    if (!isActive) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        if (isDirtyRef.current) handleSave();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isActive, handleSave]);
+
+  // Data loss prevention: warn on beforeunload if dirty
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (formState.isDirty) {
+        e.preventDefault();
+        e.returnValue = ''; // Required for some browsers
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [formState.isDirty]);
+
+  // Handle refresh
+  const handleRefresh = useCallback(() => {
+    if (currentFile) {
+      hasFetched.current = false;
+      fetchFields(currentFile);
+    }
+  }, [currentFile, fetchFields]);
 
   const handleValueChange = useCallback(
     (fieldName: string, value: string) => {
@@ -406,12 +437,17 @@ const FormFill = (_props: BaseToolProps) => {
         <Stack gap="sm">
           {/* Status */}
           {formState.loading && (
-            <Group gap="xs">
-              <Loader size="xs" />
-              <Text size="sm" c="dimmed">
-                Analysing form fields…
-              </Text>
-            </Group>
+            <Stack gap="xs">
+              <Group gap="xs">
+                <Loader size="xs" />
+                <Text size="sm" c="dimmed">
+                  Analysing form fields…
+                </Text>
+              </Group>
+              <Skeleton height={60} radius="md" />
+              <Skeleton height={60} radius="md" />
+              <Skeleton height={60} radius="md" />
+            </Stack>
           )}
 
           {formState.error && (

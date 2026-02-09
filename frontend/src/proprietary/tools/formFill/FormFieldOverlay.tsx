@@ -13,8 +13,8 @@
  */
 import React, { useCallback, useMemo, memo } from 'react';
 import { useDocumentState } from '@embedpdf/core/react';
-import { useFormFill } from './FormFillContext';
-import type { FormField, WidgetCoordinates } from './types';
+import { useFormFill } from '@proprietary/tools/formFill/FormFillContext';
+import type { FormField, WidgetCoordinates } from '@proprietary/tools/formFill/types';
 
 // ─── Per-widget input component ─────────────────────────────────────────
 
@@ -70,8 +70,10 @@ function WidgetInputInner({
     pointerEvents: 'auto',
   };
 
-  // Scale font size with the widget height for consistent appearance
-  const fontSize = Math.max(8, Math.min(height * 0.65, 14));
+  // Scale font size with the widget height or use backend-provided size
+  const fontSize = widget.fontSize
+    ? widget.fontSize * scale
+    : Math.max(8, Math.min(height * 0.65, 14));
 
   const inputBaseStyle: React.CSSProperties = {
     width: '100%',
@@ -108,12 +110,17 @@ function WidgetInputInner({
           ) : (
             <input
               type="text"
+              id={`${field.name}_${widget.pageIndex}_${widget.x}_${widget.y}`}
               value={value}
               onChange={(e) => onChange(field.name, e.target.value)}
               onFocus={handleFocus}
               disabled={field.readOnly}
               placeholder={field.label}
               style={inputBaseStyle}
+              aria-label={field.label || field.name}
+              aria-required={field.required}
+              aria-invalid={!!error}
+              aria-describedby={error ? `${field.name}-error` : undefined}
             />
           )}
         </div>
@@ -156,32 +163,63 @@ function WidgetInputInner({
     }
 
     case 'combobox':
-    case 'listbox':
+    case 'listbox': {
+      const isCombobox = field.type === 'combobox';
+      const inputId = `${field.name}_${widget.pageIndex}_${widget.x}_${widget.y}`;
       return (
         <div style={commonStyle} title={error || field.tooltip || field.label}>
-          <select
-            value={value}
-            onChange={(e) => onChange(field.name, e.target.value)}
-            onFocus={handleFocus}
-            disabled={field.readOnly}
-            multiple={field.type === 'listbox' && field.multiSelect}
-            style={{
-              ...inputBaseStyle,
-              padding: 0,
-              paddingLeft: 2,
-              appearance: 'auto',
-              WebkitAppearance: 'auto' as any,
-            }}
-          >
-            <option value="">— select —</option>
-            {(field.options || []).map((opt, idx) => (
-              <option key={opt} value={opt}>
-                {(field.displayOptions && field.displayOptions[idx]) || opt}
-              </option>
-            ))}
-          </select>
+          {isCombobox ? (
+            <>
+              <input
+                list={`list-${field.name}`}
+                id={inputId}
+                value={value}
+                onChange={(e) => onChange(field.name, e.target.value)}
+                onFocus={handleFocus}
+                disabled={field.readOnly}
+                style={inputBaseStyle}
+                aria-label={field.label || field.name}
+                aria-required={field.required}
+                aria-invalid={!!error}
+              />
+              <datalist id={`list-${field.name}`}>
+                {(field.options || []).map((opt, idx) => (
+                  <option key={opt} value={opt}>
+                    {(field.displayOptions && field.displayOptions[idx]) || opt}
+                  </option>
+                ))}
+              </datalist>
+            </>
+          ) : (
+            <select
+              id={inputId}
+              value={value}
+              onChange={(e) => onChange(field.name, e.target.value)}
+              onFocus={handleFocus}
+              disabled={field.readOnly}
+              multiple={field.multiSelect}
+              style={{
+                ...inputBaseStyle,
+                padding: 0,
+                paddingLeft: 2,
+                appearance: 'auto',
+                WebkitAppearance: 'auto' as any,
+              }}
+              aria-label={field.label || field.name}
+              aria-required={field.required}
+              aria-invalid={!!error}
+            >
+              <option value="">— select —</option>
+              {(field.options || []).map((opt, idx) => (
+                <option key={opt} value={opt}>
+                  {(field.displayOptions && field.displayOptions[idx]) || opt}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
       );
+    }
 
     case 'radio': {
       // Each radio widget has an exportValue set by the backend
@@ -265,7 +303,7 @@ export function FormFieldOverlay({
   documentId,
   pageIndex,
 }: FormFieldOverlayProps) {
-  const { state, setValue, setActiveField, getFieldsForPage } = useFormFill();
+  const { state, setValue, setActiveField, fieldsByPage } = useFormFill();
   const { values, activeFieldName, validationErrors } = state;
 
   // Get scale from EmbedPDF document state — same pattern as LinkLayer
@@ -273,9 +311,8 @@ export function FormFieldOverlay({
   const scale = documentState?.scale ?? 1;
 
   const pageFields = useMemo(
-    () => getFieldsForPage(pageIndex),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [getFieldsForPage, pageIndex, state.fields]
+    () => fieldsByPage.get(pageIndex) || [],
+    [fieldsByPage, pageIndex]
   );
 
   const handleFocus = useCallback(
@@ -303,10 +340,10 @@ export function FormFieldOverlay({
       }}
       data-form-overlay-page={pageIndex}
     >
-      {pageFields.map((field) =>
+      {pageFields.map((field: FormField) =>
         (field.widgets || [])
-          .filter((w) => w.pageIndex === pageIndex)
-          .map((widget, widgetIdx) => (
+          .filter((w: WidgetCoordinates) => w.pageIndex === pageIndex)
+          .map((widget: WidgetCoordinates, widgetIdx: number) => (
             <WidgetInput
               key={`${field.name}-${widgetIdx}`}
               field={field}

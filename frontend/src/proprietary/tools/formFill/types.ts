@@ -11,6 +11,8 @@ export interface WidgetCoordinates {
   height: number; // PDF points
   /** Export value for this specific widget (radio/checkbox only) */
   exportValue?: string;
+  /** Font size in PDF points */
+  fontSize?: number;
 }
 
 export interface FormField {

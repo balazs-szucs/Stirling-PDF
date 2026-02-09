@@ -509,6 +509,7 @@ public class FormUtils {
                     finalW,
                     finalH,
                     rotation);
+            return null;
         }
 
         return FormFieldWithCoordinates.WidgetCoordinates.builder()
@@ -518,6 +519,7 @@ public class FormUtils {
                 .width(finalW)
                 .height(finalH)
                 .exportValue(exportValue)
+                .fontSize(extractFontSize(field))
                 .build();
     }
 
@@ -1350,13 +1352,14 @@ public class FormUtils {
             if (field instanceof PDChoice choice) {
                 // Use export values as they match getValueAsString() / setValue()
                 List<String> exportValues = choice.getOptionsExportValues();
+                List<String> displayValues = choice.getOptionsDisplayValues();
+
                 if (exportValues != null && !exportValues.isEmpty()) {
                     return new ArrayList<>(exportValues);
                 }
                 // Fall back to display values if no export values
-                List<String> display = choice.getOptionsDisplayValues();
-                if (display != null && !display.isEmpty()) {
-                    return new ArrayList<>(display);
+                if (displayValues != null && !displayValues.isEmpty()) {
+                    return new ArrayList<>(displayValues);
                 }
             } else if (field instanceof PDRadioButton radio) {
                 List<String> exports = radio.getExportValues();
@@ -1413,6 +1416,44 @@ public class FormUtils {
             }
         }
         return false;
+    }
+
+    private Float extractFontSize(PDTerminalField field) {
+        try {
+            String da = null;
+            if (field instanceof PDVariableText vt) {
+                da = vt.getDefaultAppearance();
+            }
+
+            if (da == null || da.isBlank()) {
+                // Check parent/acroform default appearance if field's is missing
+                PDAcroForm form = field.getAcroForm();
+                if (form != null) {
+                    da = form.getDefaultAppearance();
+                }
+            }
+
+            if (da != null && !da.isBlank()) {
+                // Standard DA looks like: /Helv 12 Tf 0 g
+                // We want the number before 'Tf'
+                String[] tokens = da.split("\\s+");
+                for (int i = 0; i < tokens.length; i++) {
+                    if ("Tf".equals(tokens[i]) && i > 0) {
+                        try {
+                            float size = Float.parseFloat(tokens[i - 1]);
+                            return size > 0 ? size : null;
+                        } catch (NumberFormatException ignored) {
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.trace(
+                    "Could not extract font size for field '{}': {}",
+                    field.getFullyQualifiedName(),
+                    e.getMessage());
+        }
+        return null;
     }
 
     private boolean isSettableCheckBoxState(String state) {

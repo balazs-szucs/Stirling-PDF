@@ -16,11 +16,12 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import type { FormField, FormFillState } from './types';
+import { useDebouncedCallback } from '@mantine/hooks';
+import type { FormField, FormFillState } from '@proprietary/tools/formFill/types';
 import {
   fetchFormFieldsWithCoordinates,
   fillFormFields,
-} from './formApi';
+} from '@proprietary/tools/formFill/formApi';
 
 // ─── Actions ────────────────────────────────────────────────────────────
 type Action =
@@ -120,6 +121,10 @@ export interface FormFillContextValue {
   valuesVersion: number;
   /** Validate the current form state and return true if valid */
   validateForm: () => boolean;
+  /** Clear all form state (fields, values, errors) */
+  reset: () => void;
+  /** Pre-computed map of page index to fields for performance */
+  fieldsByPage: Map<number, FormField[]>;
 }
 
 const FormFillContext = createContext<FormFillContextValue | null>(null);
@@ -162,29 +167,41 @@ export function FormFillProvider({
     }
   }, []);
 
-  const setValue = useCallback(
-    (fieldName: string, value: string) => {
-      dispatch({ type: 'SET_VALUE', fieldName, value });
+  const validateFieldDebounced = useDebouncedCallback((fieldName: string) => {
+    const field = fieldsRef.current.find((f) => f.name === fieldName);
+    if (!field || !field.required) return;
+
+    const val = valuesRef.current[fieldName];
+    if (!val || val.trim() === '' || val === 'Off') {
+      dispatch({
+        type: 'SET_VALIDATION_ERRORS',
+        errors: { ...state.validationErrors, [fieldName]: `${field.label} is required` },
+      });
+    } else {
       dispatch({ type: 'CLEAR_VALIDATION_ERROR', fieldName });
-      setValuesVersion((v) => v + 1);
-    },
-    []
-  );
+    }
+  }, 300);
 
   const validateForm = useCallback((): boolean => {
     const errors: Record<string, string> = {};
     for (const field of fieldsRef.current) {
       const val = valuesRef.current[field.name];
-      if (
-        field.required &&
-        (!val || val.trim() === '' || val === 'Off')
-      ) {
+      if (field.required && (!val || val.trim() === '' || val === 'Off')) {
         errors[field.name] = `${field.label} is required`;
       }
     }
     dispatch({ type: 'SET_VALIDATION_ERRORS', errors });
     return Object.keys(errors).length === 0;
   }, []);
+
+  const setValue = useCallback(
+    (fieldName: string, value: string) => {
+      dispatch({ type: 'SET_VALUE', fieldName, value });
+      validateFieldDebounced(fieldName);
+      setValuesVersion((v) => v + 1);
+    },
+    [validateFieldDebounced, state.validationErrors]
+  );
 
   const setActiveField = useCallback(
     (fieldName: string | null) => {
@@ -221,6 +238,20 @@ export function FormFillProvider({
     []
   );
 
+  const reset = useCallback(() => {
+    dispatch({ type: 'RESET' });
+  }, []);
+
+  const fieldsByPage = useMemo(() => {
+    const map = new Map<number, FormField[]>();
+    for (const field of state.fields) {
+      const pageIdx = field.widgets?.[0]?.pageIndex ?? 0;
+      if (!map.has(pageIdx)) map.set(pageIdx, []);
+      map.get(pageIdx)!.push(field);
+    }
+    return map;
+  }, [state.fields]);
+
   const value = useMemo<FormFillContextValue>(
     () => ({
       state,
@@ -233,6 +264,8 @@ export function FormFillProvider({
       getValue,
       valuesVersion,
       validateForm,
+      reset,
+      fieldsByPage,
     }),
     [
       state,
@@ -245,6 +278,8 @@ export function FormFillProvider({
       getValue,
       valuesVersion,
       validateForm,
+      reset,
+      fieldsByPage,
     ]
   );
 

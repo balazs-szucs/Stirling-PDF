@@ -91,5 +91,8 @@ public class FormFieldWithCoordinates {
 
         @Schema(description = "Export value for this widget (radio/checkbox buttons only)")
         private String exportValue;
+
+        @Schema(description = "Font size in PDF points")
+        private Float fontSize;
     }
 }
