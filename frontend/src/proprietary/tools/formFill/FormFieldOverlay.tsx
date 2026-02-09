@@ -24,12 +24,6 @@ import { useDocumentState } from '@embedpdf/core/react';
 import { useFormFill } from '@proprietary/tools/formFill/FormFillContext';
 import type { FormField, WidgetCoordinates } from '@proprietary/tools/formFill/types';
 
-// ─── Coordinate inverse transformation ──────────────────────────────────
-//
-// The backend outputs widget coordinates in the page-rotation-adjusted space.
-// Since the overlay sits inside EmbedPDF's <Rotate> component (which applies
-// CSS rotation), we must inverse-transform backend coordinates back to the
-// unrotated page space to avoid double-rotation.
 
 function transformToUnrotated(
   bx: number, by: number, bw: number, bh: number,
@@ -63,8 +57,6 @@ function transformToUnrotated(
       return { x: bx, y: by, width: bw, height: bh };
   }
 }
-
-// ─── Per-widget input component ─────────────────────────────────────────
 
 interface WidgetInputProps {
   field: FormField;
@@ -319,8 +311,6 @@ function WidgetInputInner({
   }
 }
 
-// ─── Main overlay component ─────────────────────────────────────────────
-
 const WidgetInput = memo(WidgetInputInner);
 
 interface FormFieldOverlayProps {
@@ -342,12 +332,6 @@ export function FormFieldOverlay({
   // Get scale from EmbedPDF document state — same pattern as LinkLayer
   const documentState = useDocumentState(documentId);
 
-  // Calculate per-page scale and extract page rotation for coordinate inverse-transform.
-  //
-  // The backend outputs widget coordinates in the page-rotation-adjusted space, but the
-  // overlay sits inside EmbedPDF's <Rotate> component which applies CSS rotation. To avoid
-  // double-rotation, we inverse-transform backend coordinates back to the unrotated space
-  // and use simple uniform scaling. The CSS <Rotate> handles all visual rotation.
   const { scaleX, scaleY, pageRotation, pdfWidth, pdfHeight } = useMemo(() => {
     const pdfPage = documentState?.document?.pages?.[pageIndex];
     if (!pdfPage || !pdfPage.size || !pageWidth || !pageHeight) {
@@ -355,9 +339,6 @@ export function FormFieldOverlay({
       return { scaleX: s, scaleY: s, pageRotation: 0, pdfWidth: 0, pdfHeight: 0 };
     }
 
-    // pdfPage.size reports UNROTATED dimensions. The container div also uses unrotated
-    // dimensions (pageWidth × pageHeight). Simple uniform scaling maps unrotated PDF
-    // points to unrotated CSS pixels.
     return {
       scaleX: pageWidth / pdfPage.size.width,
       scaleY: pageHeight / pdfPage.size.height,

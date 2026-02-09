@@ -47,8 +47,6 @@ import RadioButtonCheckedIcon from '@mui/icons-material/RadioButtonChecked';
 import ListIcon from '@mui/icons-material/List';
 import DrawIcon from '@mui/icons-material/Draw';
 
-// ─── Field type visual config ───────────────────────────────────────────
-
 const FIELD_TYPE_ICON: Record<FormFieldType, React.ReactNode> = {
   text: <TextFieldsIcon sx={{ fontSize: 14 }} />,
   checkbox: <CheckBoxIcon sx={{ fontSize: 14 }} />,
@@ -68,8 +66,6 @@ const FIELD_TYPE_COLOR: Record<FormFieldType, string> = {
   button: 'gray',
   signature: 'pink',
 };
-
-// ─── Field input widget ────────────────────────────────────────────────
 
 function FieldInputInner({
   field,
@@ -233,8 +229,6 @@ function FieldInputInner({
 
 const FieldInput = memo(FieldInputInner);
 
-// ─── Main component ─────────────────────────────────────────────────────
-
 const FormFill = (_props: BaseToolProps) => {
   const { selectedTool, workbench } = useNavigation();
   const { selectors, state: fileState } = useFileState();
@@ -260,7 +254,6 @@ const FormFill = (_props: BaseToolProps) => {
   const isDirtyRef = useRef(formState.isDirty);
   isDirtyRef.current = formState.isDirty;
 
-  // Get the current file
   const activeFiles = selectors.getFiles();
   const selectedFileIds = fileState.ui.selectedFileIds;
   const currentFile = React.useMemo(() => {
@@ -276,7 +269,6 @@ const FormFill = (_props: BaseToolProps) => {
 
   const isActive = selectedTool === 'formFill';
 
-  // Fetch form fields when tool activates or file changes
   useEffect(() => {
     if (
       selectedTool === 'formFill' &&
@@ -289,12 +281,9 @@ const FormFill = (_props: BaseToolProps) => {
     }
   }, [selectedTool, workbench, currentFile, fetchFields]);
 
-  // Reset fetch flag when file changes
   useEffect(() => {
     hasFetched.current = false;
   }, [currentFile]);
-
-  // Scroll active field into view in sidebar
   useEffect(() => {
     if (formState.activeFieldName && activeFieldRef.current) {
       activeFieldRef.current.scrollIntoView({
@@ -304,7 +293,6 @@ const FormFill = (_props: BaseToolProps) => {
     }
   }, [formState.activeFieldName]);
 
-  // Handle save/apply
   const handleSave = useCallback(async () => {
     if (!currentFile || !isStirlingFile(currentFile)) return;
 

@@ -23,7 +23,6 @@ import {
   fillFormFields,
 } from '@proprietary/tools/formFill/formApi';
 
-// ─── Actions ────────────────────────────────────────────────────────────
 type Action =
   | { type: 'FETCH_START' }
   | { type: 'FETCH_SUCCESS'; fields: FormField[] }
@@ -97,7 +96,6 @@ function reducer(state: FormFillState, action: Action): FormFillState {
   }
 }
 
-// ─── Context shape ──────────────────────────────────────────────────────
 export interface FormFillContextValue {
   state: FormFillState;
   /** Fetch form fields from backend for the given file */
@@ -137,7 +135,6 @@ export const useFormFill = (): FormFillContextValue => {
   return ctx;
 };
 
-// ─── Provider ───────────────────────────────────────────────────────────
 export function FormFillProvider({
   children,
 }: {
