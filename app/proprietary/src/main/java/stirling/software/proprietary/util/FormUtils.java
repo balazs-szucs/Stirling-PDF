@@ -18,6 +18,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import org.apache.pdfbox.cos.COSArray;
+import org.apache.pdfbox.cos.COSBase;
 import org.apache.pdfbox.cos.COSDictionary;
 import org.apache.pdfbox.cos.COSName;
 import org.apache.pdfbox.pdmodel.PDDocument;
@@ -337,8 +338,7 @@ public class FormUtils {
                     if (pageIndex >= 0) {
                         PDRectangle rectangle =
                                 new PDRectangle(
-                                        fieldDict.getDictionaryObject(
-                                                COSName.RECT, COSArray.class));
+                                        (COSArray) fieldDict.getDictionaryObject(COSName.RECT));
                         result.add(
                                 createWidgetCoordinates(
                                         document, rectangle, pageIndex, null, field));
@@ -432,65 +432,207 @@ public class FormUtils {
             int pageIndex,
             String exportValue,
             PDTerminalField field) {
-        // Get page dimensions for coordinate conversion.
-        // Pdfium (the frontend renderer) reports page size from the
-        // MediaBox, so we must use MediaBox height for the Y-flip.
-        // If a CropBox with a non-zero lower-left origin exists, we
-        // also need to adjust widget coordinates relative to it so
-        // that the overlay aligns with the visible (cropped) area.
-        float pageHeight = 0;
-        float cropOffsetX = 0;
-        float cropOffsetY = 0;
-        if (pageIndex < document.getNumberOfPages()) {
-            PDPage page = document.getPage(pageIndex);
-            PDRectangle mediaBox = page.getMediaBox();
-            pageHeight = mediaBox.getHeight();
+        if (pageIndex < 0 || pageIndex >= document.getNumberOfPages()) {
+            return null;
+        }
 
-            // Account for CropBox offset if it differs from MediaBox
-            PDRectangle cropBox = page.getCropBox();
-            if (cropBox != null) {
-                cropOffsetX = cropBox.getLowerLeftX() - mediaBox.getLowerLeftX();
-                cropOffsetY = cropBox.getLowerLeftY() - mediaBox.getLowerLeftY();
+        PDPage page = document.getPage(pageIndex);
+        PDRectangle cropBox = page.getCropBox();
+        int rotation = page.getRotation();
+
+        // Use CropBox dimensions for the viewport/flip.
+        // Note: getWidth() and getHeight() return dimensions BEFORE rotation.
+        float cropWidth = cropBox.getWidth();
+        float cropHeight = cropBox.getHeight();
+
+        // Get absolute widget coordinates (in MediaBox space)
+        float pdfX = rectangle.getLowerLeftX();
+        float pdfY = rectangle.getLowerLeftY();
+        float width = rectangle.getWidth();
+        float height = rectangle.getHeight();
+
+        // Adjust relative to CropBox origin
+        float relativeX = pdfX - cropBox.getLowerLeftX();
+        float relativeY = pdfY - cropBox.getLowerLeftY();
+
+        float finalX, finalY, finalW, finalH;
+
+        // Handle rotation (standard PDF rotation is clockwise)
+        // The renderer usually swaps dimensions for 90/270
+        switch (rotation) {
+            case 90 -> {
+                // Rotated 90 deg clockwise:
+                // Top-left origin: X comes from relativeY, Y comes from (width - relativeX)
+                finalX = relativeY;
+                finalY = cropWidth - relativeX - width;
+                finalW = height;
+                finalH = width;
+            }
+            case 180 -> {
+                // Rotated upside down:
+                // Top-left origin: X comes from (width - relativeX), Y comes from relativeY
+                finalX = cropWidth - relativeX - width;
+                finalY = relativeY;
+                finalW = width;
+                finalH = height;
+            }
+            case 270 -> {
+                // Rotated 270 deg clockwise (or 90 deg counter-clockwise):
+                // Top-left origin: X comes from (height - relativeY), Y comes from relativeX
+                finalX = cropHeight - relativeY - height;
+                finalY = relativeX;
+                finalW = height;
+                finalH = width;
+            }
+            default -> {
+                // No rotation (or 0):
+                // Standard flip: Y = height - pdfY - widgetHeight
+                finalX = relativeX;
+                finalY = cropHeight - relativeY - height;
+                finalW = width;
+                finalH = height;
             }
         }
 
-        float widgetX = rectangle.getLowerLeftX() - cropOffsetX;
-        float widgetY = rectangle.getLowerLeftY() - cropOffsetY;
-        float widgetWidth = rectangle.getWidth();
-        float widgetHeight = rectangle.getHeight();
-
-        // Convert to top-left origin: y_css = pageHeight - y_pdf - height
-        float topLeftY = pageHeight - widgetY - widgetHeight;
-
         // Validate coordinates are within reasonable bounds
-        if (widgetX < 0
-                || topLeftY < 0
-                || widgetX > pageHeight * 2 // Allow some horizontal overflow
-                || topLeftY > pageHeight) {
+        float checkHeight = (rotation == 90 || rotation == 270) ? cropWidth : cropHeight;
+        if (finalX < -1.0f
+                || finalY < -1.0f
+                || finalX > checkHeight * 2 // Allow some horizontal overflow
+                || finalY > checkHeight + 1.0f) {
             log.warn(
-                    "Widget coordinates out of bounds for field '{}': page={}, x={}, y={}, w={}, h={}",
+                    "Widget coordinates out of bounds for field '{}': page={}, x={}, y={}, w={}, h={}, rotation={}",
                     field.getFullyQualifiedName(),
                     pageIndex,
-                    widgetX,
-                    topLeftY,
-                    widgetWidth,
-                    widgetHeight);
+                    finalX,
+                    finalY,
+                    finalW,
+                    finalH,
+                    rotation);
         }
 
         return FormFieldWithCoordinates.WidgetCoordinates.builder()
                 .pageIndex(pageIndex)
-                .x(widgetX)
-                .y(topLeftY)
-                .width(widgetWidth)
-                .height(widgetHeight)
+                .x(finalX)
+                .y(finalY)
+                .width(finalW)
+                .height(finalH)
                 .exportValue(exportValue)
                 .build();
+    }
+
+    /**
+     * Repairs widgets with missing page references by scanning all pages and setting the /P entry
+     * for orphan widgets.
+     *
+     * <p>This should be called BEFORE extracting form field coordinates.
+     *
+     * @param document PDF document to repair
+     */
+    public void repairMissingWidgetPageReferences(PDDocument document) {
+        try {
+            PDAcroForm acroForm = getAcroFormSafely(document);
+            if (acroForm == null) {
+                return;
+            }
+
+            log.info("Checking for widgets with missing page references...");
+            int repairedCount = 0;
+
+            // First pass: Set page reference for all annotations on pages
+            for (PDPage page : document.getPages()) {
+                try {
+                    for (PDAnnotation annotation : page.getAnnotations()) {
+                        if (annotation.getPage() == null) {
+                            annotation.setPage(page);
+                            log.debug("Set page reference for annotation: {}", annotation.getSubtype());
+                        }
+                    }
+                } catch (Exception e) {
+                    log.warn("Error processing annotations on page: {}", e.getMessage());
+                }
+            }
+
+            // Second pass: Fix field widgets specifically
+            for (PDField field : acroForm.getFieldTree()) {
+                if (!(field instanceof PDTerminalField terminalField)) {
+                    continue;
+                }
+
+                List<PDAnnotationWidget> widgets = terminalField.getWidgets();
+
+                if (widgets == null || widgets.isEmpty()) {
+                    continue;
+                }
+
+                for (PDAnnotationWidget widget : widgets) {
+                    if (widget.getPage() == null) {
+                        // Try to find the page by searching through all pages
+                        PDPage foundPage = findPageForWidget(document, widget);
+                        if (foundPage != null) {
+                            widget.setPage(foundPage);
+                            repairedCount++;
+                            log.info(
+                                    "Repaired widget for field '{}' - set page reference",
+                                    field.getFullyQualifiedName());
+                        } else {
+                            log.warn(
+                                    "Could not find page for widget in field '{}'",
+                                    field.getFullyQualifiedName());
+                        }
+                    }
+                }
+            }
+
+            if (repairedCount > 0) {
+                log.info(
+                        "Successfully repaired {} widgets with missing page references",
+                        repairedCount);
+            } else {
+                log.info("No widgets needed repair");
+            }
+
+        } catch (Exception e) {
+            log.error("Error repairing widget page references: {}", e.getMessage(), e);
+        }
+    }
+
+    /** Finds which page contains a specific widget annotation by scanning all pages. */
+    private PDPage findPageForWidget(PDDocument document, PDAnnotationWidget widget) {
+        COSDictionary widgetDict = widget.getCOSObject();
+
+        try {
+            // Check if widget has a /P entry that PDFBox isn't reading
+            COSDictionary pageDict = widgetDict.getDictionaryObject(COSName.P, COSDictionary.class);
+            if (pageDict != null) {
+                // Find the page by comparing COS objects
+                for (PDPage page : document.getPages()) {
+                    if (page.getCOSObject() == pageDict) {
+                        return page;
+                    }
+                }
+            }
+
+            // Fallback: Search through all page annotations
+            for (PDPage page : document.getPages()) {
+                for (PDAnnotation annotation : page.getAnnotations()) {
+                    if (annotation.getCOSObject() == widgetDict) {
+                        return page;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.trace("Error finding page for widget: {}", e.getMessage());
+        }
+
+        return null;
     }
 
     private int findPageIndexForAnnotation(PDDocument document, COSDictionary annotDict) {
         try {
             // Method 1: Check the /P entry if it points to a page
-            COSDictionary pageDict = annotDict.getDictionaryObject(COSName.P, COSDictionary.class);
+            COSBase base = annotDict.getDictionaryObject(COSName.P);
+            COSDictionary pageDict = (base instanceof COSDictionary c) ? c : null;
             if (pageDict != null) {
                 for (int i = 0; i < document.getNumberOfPages(); i++) {
                     if (document.getPage(i).getCOSObject() == pageDict) {

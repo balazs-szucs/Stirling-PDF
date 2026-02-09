@@ -105,6 +105,7 @@ public class FormFillController {
 
         requirePdf(file);
         try (PDDocument document = pdfDocumentFactory.load(file, true)) {
+            FormUtils.repairMissingWidgetPageReferences(document);
             FormUtils.FormFieldExtraction extraction =
                     FormUtils.extractFieldsWithTemplate(document);
             return ResponseEntity.ok(extraction);
@@ -131,6 +132,7 @@ public class FormFillController {
 
         requirePdf(file);
         try (PDDocument document = pdfDocumentFactory.load(file, true)) {
+            FormUtils.repairMissingWidgetPageReferences(document);
             List<FormFieldWithCoordinates> fields =
                     FormUtils.extractFormFieldsWithCoordinates(document);
             return ResponseEntity.ok(fields);
@@ -242,6 +244,7 @@ public class FormFillController {
 
         String baseName = buildBaseName(file, suffix);
         try (PDDocument document = pdfDocumentFactory.load(file)) {
+            FormUtils.repairMissingWidgetPageReferences(document);
             processor.accept(document);
             return saveDocument(document, baseName);
         }
