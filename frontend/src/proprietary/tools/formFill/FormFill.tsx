@@ -414,19 +414,31 @@ const FormFill = (_props: BaseToolProps) => {
   }, [formState.fields]);
 
   // Progress tracking
-  const filledCount = useMemo(() => {
-    return Object.values(formState.values).filter((v) => v && v !== 'Off' && v.trim() !== '').length;
-  }, [formState.values]);
-
-  const requiredCount = useMemo(() => {
-    return formState.fields.filter((f) => f.required).length;
+  const fillableFields = useMemo(() => {
+    return formState.fields.filter((f) => f.type !== 'button' && f.type !== 'signature');
   }, [formState.fields]);
 
+  const fillableCount = fillableFields.length;
+
+  const filledCount = useMemo(() => {
+    return fillableFields.filter((f) => {
+      const v = formState.values[f.name];
+      return v && v !== 'Off' && v.trim() !== '';
+    }).length;
+  }, [fillableFields, formState.values]);
+
+  const requiredFields = useMemo(() => {
+    return fillableFields.filter((f) => f.required);
+  }, [fillableFields]);
+
+  const requiredCount = requiredFields.length;
+
   const filledRequiredCount = useMemo(() => {
-    return formState.fields.filter(
-      (f) => f.required && formState.values[f.name] && formState.values[f.name] !== 'Off' && formState.values[f.name].trim() !== ''
-    ).length;
-  }, [formState.fields, formState.values]);
+    return requiredFields.filter((f) => {
+      const v = formState.values[f.name];
+      return v && v !== 'Off' && v.trim() !== '';
+    }).length;
+  }, [requiredFields, formState.values]);
 
   if (!isActive) return null;
 
@@ -467,12 +479,12 @@ const FormFill = (_props: BaseToolProps) => {
               <Box>
                 <Group justify="space-between" mb={4}>
                   <Text size="xs" c="dimmed">
-                    {filledCount}/{formState.fields.length} fields filled
+                    {filledCount}/{fillableCount} fields filled
                     {requiredCount > 0 && ` · ${filledRequiredCount}/${requiredCount} required`}
                   </Text>
                 </Group>
                 <Progress
-                  value={formState.fields.length > 0 ? (filledCount / formState.fields.length) * 100 : 0}
+                  value={fillableCount > 0 ? (filledCount / fillableCount) * 100 : 0}
                   size="xs"
                   radius="xl"
                   color={filledRequiredCount === requiredCount ? 'teal' : 'blue'}

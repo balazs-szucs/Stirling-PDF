@@ -22,7 +22,7 @@ export function useViewerRightRailButtons() {
   const [isPanning, setIsPanning] = useState<boolean>(() => viewer.getPanState()?.isPanning ?? false);
   const { sidebarRefs } = useSidebarContext();
   const { position: tooltipPosition } = useRightRailTooltipSide(sidebarRefs, 12);
-  const { handleToolSelect } = useToolWorkflow();
+  const { handleToolSelect, handleBackToTools } = useToolWorkflow();
   const { selectedTool } = useNavigationState();
   const { requestNavigation } = useNavigationGuard();
   const { redactionsApplied, activeType: redactionActiveType } = useRedaction();
@@ -259,8 +259,7 @@ export function useViewerRightRailButtons() {
               onClick={() => {
                 if (disabled) return;
                 if (isFormFillActive) {
-                  // If already in form fill, switch back to no tool
-                  handleToolSelect(null as any);
+                  handleBackToTools();
                 } else {
                   handleToolSelect('formFill' as any);
                 }
