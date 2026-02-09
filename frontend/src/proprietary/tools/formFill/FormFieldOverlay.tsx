@@ -10,11 +10,59 @@
  *
  * Each widget renders an appropriate HTML input (text, checkbox, dropdown, etc.)
  * that synchronises bidirectionally with FormFillContext values.
+ *
+ * Rotation handling:
+ * The backend (FormUtils.java) transforms widget coordinates from the unrotated
+ * MediaBox space into a rotated coordinate space (accounting for /Rotate).
+ * However, the EmbedPDF <Rotate> component applies CSS rotation to the entire
+ * page content (including this overlay). To avoid double-rotation, we inverse-
+ * transform the backend coordinates back to the unrotated space and use uniform
+ * scaling. The CSS <Rotate> transform then handles all visual rotation.
  */
 import React, { useCallback, useMemo, memo } from 'react';
 import { useDocumentState } from '@embedpdf/core/react';
 import { useFormFill } from '@proprietary/tools/formFill/FormFillContext';
 import type { FormField, WidgetCoordinates } from '@proprietary/tools/formFill/types';
+
+// ─── Coordinate inverse transformation ──────────────────────────────────
+//
+// The backend outputs widget coordinates in the page-rotation-adjusted space.
+// Since the overlay sits inside EmbedPDF's <Rotate> component (which applies
+// CSS rotation), we must inverse-transform backend coordinates back to the
+// unrotated page space to avoid double-rotation.
+
+function transformToUnrotated(
+  bx: number, by: number, bw: number, bh: number,
+  pageRotation: number, // 0=0°, 1=90°, 2=180°, 3=270° (quarter turns)
+  pdfWidth: number,     // unrotated page width in PDF points
+  pdfHeight: number,    // unrotated page height in PDF points
+): { x: number; y: number; width: number; height: number } {
+  switch (pageRotation) {
+    case 1: // 90° — backend swapped coords and dimensions
+      return {
+        x: pdfWidth - by - bh,
+        y: pdfHeight - bx - bw,
+        width: bh,
+        height: bw,
+      };
+    case 2: // 180° — backend reflected both axes
+      return {
+        x: pdfWidth - bx - bw,
+        y: pdfHeight - by - bh,
+        width: bw,
+        height: bh,
+      };
+    case 3: // 270° — backend swapped coords and dimensions (opposite direction)
+      return {
+        x: by,
+        y: bx,
+        width: bh,
+        height: bw,
+      };
+    default: // 0° — no transformation needed
+      return { x: bx, y: by, width: bw, height: bh };
+  }
+}
 
 // ─── Per-widget input component ─────────────────────────────────────────
 
@@ -294,17 +342,28 @@ export function FormFieldOverlay({
   // Get scale from EmbedPDF document state — same pattern as LinkLayer
   const documentState = useDocumentState(documentId);
 
-  // Calculate per-page scale for better alignment accuracy across different page sizes.
-  // We compare the rendered page dimensions (from EmbedPDF) against the original PDF page size.
-  const { scaleX, scaleY } = useMemo(() => {
+  // Calculate per-page scale and extract page rotation for coordinate inverse-transform.
+  //
+  // The backend outputs widget coordinates in the page-rotation-adjusted space, but the
+  // overlay sits inside EmbedPDF's <Rotate> component which applies CSS rotation. To avoid
+  // double-rotation, we inverse-transform backend coordinates back to the unrotated space
+  // and use simple uniform scaling. The CSS <Rotate> handles all visual rotation.
+  const { scaleX, scaleY, pageRotation, pdfWidth, pdfHeight } = useMemo(() => {
     const pdfPage = documentState?.document?.pages?.[pageIndex];
     if (!pdfPage || !pdfPage.size || !pageWidth || !pageHeight) {
       const s = documentState?.scale ?? 1;
-      return { scaleX: s, scaleY: s };
+      return { scaleX: s, scaleY: s, pageRotation: 0, pdfWidth: 0, pdfHeight: 0 };
     }
+
+    // pdfPage.size reports UNROTATED dimensions. The container div also uses unrotated
+    // dimensions (pageWidth × pageHeight). Simple uniform scaling maps unrotated PDF
+    // points to unrotated CSS pixels.
     return {
       scaleX: pageWidth / pdfPage.size.width,
       scaleY: pageHeight / pdfPage.size.height,
+      pageRotation: (pdfPage as any).rotation || 0,
+      pdfWidth: pdfPage.size.width,
+      pdfHeight: pdfPage.size.height,
     };
   }, [documentState, pageIndex, pageWidth, pageHeight]);
 
@@ -341,20 +400,35 @@ export function FormFieldOverlay({
       {pageFields.map((field: FormField) =>
         (field.widgets || [])
           .filter((w: WidgetCoordinates) => w.pageIndex === pageIndex)
-          .map((widget: WidgetCoordinates, widgetIdx: number) => (
-            <WidgetInput
-              key={`${field.name}-${widgetIdx}`}
-              field={field}
-              widget={widget}
-              value={values[field.name] ?? ''}
-              isActive={activeFieldName === field.name}
-              error={validationErrors[field.name]}
-              scaleX={scaleX}
-              scaleY={scaleY}
-              onFocus={handleFocus}
-              onChange={handleChange}
-            />
-          ))
+          .map((widget: WidgetCoordinates, widgetIdx: number) => {
+            // Inverse-transform backend rotated coordinates back to unrotated space.
+            // The CSS <Rotate> component handles the visual rotation.
+            const unrotated = transformToUnrotated(
+              widget.x, widget.y, widget.width, widget.height,
+              pageRotation, pdfWidth, pdfHeight,
+            );
+            const adjustedWidget: WidgetCoordinates = {
+              ...widget,
+              x: unrotated.x,
+              y: unrotated.y,
+              width: unrotated.width,
+              height: unrotated.height,
+            };
+            return (
+              <WidgetInput
+                key={`${field.name}-${widgetIdx}`}
+                field={field}
+                widget={adjustedWidget}
+                value={values[field.name] ?? ''}
+                isActive={activeFieldName === field.name}
+                error={validationErrors[field.name]}
+                scaleX={scaleX}
+                scaleY={scaleY}
+                onFocus={handleFocus}
+                onChange={handleChange}
+              />
+            );
+          })
       )}
     </div>
   );
