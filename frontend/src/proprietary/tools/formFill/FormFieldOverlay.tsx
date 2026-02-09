@@ -24,7 +24,8 @@ interface WidgetInputProps {
   value: string;
   isActive: boolean;
   error?: string;
-  scale: number;
+  scaleX: number;
+  scaleY: number;
   onFocus: (fieldName: string) => void;
   onChange: (fieldName: string, value: string) => void;
 }
@@ -35,16 +36,17 @@ function WidgetInputInner({
   value,
   isActive,
   error,
-  scale,
+  scaleX,
+  scaleY,
   onFocus,
   onChange,
 }: WidgetInputProps) {
-  // Coordinates are already in CSS space (top-left origin) from the backend.
-  // Just multiply by scale, same as LinkLayer / RedactionLayer / AnnotationLayer.
-  const left = widget.x * scale;
-  const top = widget.y * scale;
-  const width = widget.width * scale;
-  const height = widget.height * scale;
+  // Coordinates are in PDF space (top-left origin relative to CropBox) from the backend.
+  // Multiply by per-axis scale to get CSS coordinates.
+  const left = widget.x * scaleX;
+  const top = widget.y * scaleY;
+  const width = widget.width * scaleX;
+  const height = widget.height * scaleY;
 
   const borderColor = error ? '#f44336' : (isActive ? '#2196F3' : 'rgba(33, 150, 243, 0.4)');
   const bgColor = error
@@ -68,11 +70,13 @@ function WidgetInputInner({
       : 'none',
     cursor: field.readOnly ? 'default' : 'text',
     pointerEvents: 'auto',
+    display: 'flex',
+    alignItems: field.multiline ? 'stretch' : 'center',
   };
 
-  // Scale font size with the widget height or use backend-provided size
+  // Scale font size with the widget height (using Y scale as a proxy for uniform font scaling)
   const fontSize = widget.fontSize
-    ? widget.fontSize * scale
+    ? widget.fontSize * scaleY
     : Math.max(8, Math.min(height * 0.65, 14));
 
   const inputBaseStyle: React.CSSProperties = {
@@ -81,11 +85,14 @@ function WidgetInputInner({
     border: 'none',
     outline: 'none',
     background: 'transparent',
-    padding: '1px 3px',
+    padding: 0,
+    paddingLeft: `${Math.max(2, 4 * scaleX)}px`,
+    paddingRight: `${Math.max(2, 4 * scaleX)}px`,
     fontSize: `${fontSize}px`,
     fontFamily: 'Helvetica, Arial, sans-serif',
     color: '#000',
     boxSizing: 'border-box',
+    lineHeight: 'normal',
   };
 
   const handleFocus = () => onFocus(field.name);
@@ -105,6 +112,7 @@ function WidgetInputInner({
                 ...inputBaseStyle,
                 resize: 'none',
                 overflow: 'auto',
+                paddingTop: `${Math.max(1, 2 * scaleY)}px`,
               }}
             />
           ) : (
@@ -164,59 +172,34 @@ function WidgetInputInner({
 
     case 'combobox':
     case 'listbox': {
-      const isCombobox = field.type === 'combobox';
       const inputId = `${field.name}_${widget.pageIndex}_${widget.x}_${widget.y}`;
       return (
         <div style={commonStyle} title={error || field.tooltip || field.label}>
-          {isCombobox ? (
-            <>
-              <input
-                list={`list-${field.name}`}
-                id={inputId}
-                value={value}
-                onChange={(e) => onChange(field.name, e.target.value)}
-                onFocus={handleFocus}
-                disabled={field.readOnly}
-                style={inputBaseStyle}
-                aria-label={field.label || field.name}
-                aria-required={field.required}
-                aria-invalid={!!error}
-              />
-              <datalist id={`list-${field.name}`}>
-                {(field.options || []).map((opt, idx) => (
-                  <option key={opt} value={opt}>
-                    {(field.displayOptions && field.displayOptions[idx]) || opt}
-                  </option>
-                ))}
-              </datalist>
-            </>
-          ) : (
-            <select
-              id={inputId}
-              value={value}
-              onChange={(e) => onChange(field.name, e.target.value)}
-              onFocus={handleFocus}
-              disabled={field.readOnly}
-              multiple={field.multiSelect}
-              style={{
-                ...inputBaseStyle,
-                padding: 0,
-                paddingLeft: 2,
-                appearance: 'auto',
-                WebkitAppearance: 'auto' as any,
-              }}
-              aria-label={field.label || field.name}
-              aria-required={field.required}
-              aria-invalid={!!error}
-            >
-              <option value="">— select —</option>
-              {(field.options || []).map((opt, idx) => (
-                <option key={opt} value={opt}>
-                  {(field.displayOptions && field.displayOptions[idx]) || opt}
-                </option>
-              ))}
-            </select>
-          )}
+          <select
+            id={inputId}
+            value={value}
+            onChange={(e) => onChange(field.name, e.target.value)}
+            onFocus={handleFocus}
+            disabled={field.readOnly}
+            multiple={field.multiSelect}
+            style={{
+              ...inputBaseStyle,
+              padding: 0,
+              paddingLeft: 2,
+              appearance: 'auto',
+              WebkitAppearance: 'auto' as any,
+            }}
+            aria-label={field.label || field.name}
+            aria-required={field.required}
+            aria-invalid={!!error}
+          >
+            <option value="">— select —</option>
+            {(field.options || []).map((opt, idx) => (
+              <option key={opt} value={opt}>
+                {(field.displayOptions && field.displayOptions[idx]) || opt}
+              </option>
+            ))}
+          </select>
         </div>
       );
     }
@@ -302,13 +285,28 @@ interface FormFieldOverlayProps {
 export function FormFieldOverlay({
   documentId,
   pageIndex,
+  pageWidth,
+  pageHeight,
 }: FormFieldOverlayProps) {
   const { state, setValue, setActiveField, fieldsByPage } = useFormFill();
   const { values, activeFieldName, validationErrors } = state;
 
   // Get scale from EmbedPDF document state — same pattern as LinkLayer
   const documentState = useDocumentState(documentId);
-  const scale = documentState?.scale ?? 1;
+
+  // Calculate per-page scale for better alignment accuracy across different page sizes.
+  // We compare the rendered page dimensions (from EmbedPDF) against the original PDF page size.
+  const { scaleX, scaleY } = useMemo(() => {
+    const pdfPage = documentState?.document?.pages?.[pageIndex];
+    if (!pdfPage || !pdfPage.size || !pageWidth || !pageHeight) {
+      const s = documentState?.scale ?? 1;
+      return { scaleX: s, scaleY: s };
+    }
+    return {
+      scaleX: pageWidth / pdfPage.size.width,
+      scaleY: pageHeight / pdfPage.size.height,
+    };
+  }, [documentState, pageIndex, pageWidth, pageHeight]);
 
   const pageFields = useMemo(
     () => fieldsByPage.get(pageIndex) || [],
@@ -351,7 +349,8 @@ export function FormFieldOverlay({
               value={values[field.name] ?? ''}
               isActive={activeFieldName === field.name}
               error={validationErrors[field.name]}
-              scale={scale}
+              scaleX={scaleX}
+              scaleY={scaleY}
               onFocus={handleFocus}
               onChange={handleChange}
             />
