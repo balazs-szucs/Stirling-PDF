@@ -30,6 +30,8 @@ type Action =
   | { type: 'SET_VALUE'; fieldName: string; value: string }
   | { type: 'SET_VALUES'; values: Record<string, string> }
   | { type: 'SET_ACTIVE_FIELD'; fieldName: string | null }
+  | { type: 'SET_VALIDATION_ERRORS'; errors: Record<string, string> }
+  | { type: 'CLEAR_VALIDATION_ERROR'; fieldName: string }
   | { type: 'MARK_CLEAN' }
   | { type: 'RESET' };
 
@@ -40,6 +42,7 @@ const initialState: FormFillState = {
   error: null,
   activeFieldName: null,
   isDirty: false,
+  validationErrors: {},
 };
 
 function reducer(state: FormFillState, action: Action): FormFillState {
@@ -77,6 +80,13 @@ function reducer(state: FormFillState, action: Action): FormFillState {
       };
     case 'SET_ACTIVE_FIELD':
       return { ...state, activeFieldName: action.fieldName };
+    case 'SET_VALIDATION_ERRORS':
+      return { ...state, validationErrors: action.errors };
+    case 'CLEAR_VALIDATION_ERROR': {
+      if (!state.validationErrors[action.fieldName]) return state;
+      const { [action.fieldName]: _, ...rest } = state.validationErrors;
+      return { ...state, validationErrors: rest };
+    }
     case 'MARK_CLEAN':
       return { ...state, isDirty: false };
     case 'RESET':
@@ -108,6 +118,8 @@ export interface FormFillContextValue {
   getValue: (fieldName: string) => string;
   /** Version counter that increments on every value change (for targeted re-renders) */
   valuesVersion: number;
+  /** Validate the current form state and return true if valid */
+  validateForm: () => boolean;
 }
 
 const FormFillContext = createContext<FormFillContextValue | null>(null);
@@ -153,10 +165,26 @@ export function FormFillProvider({
   const setValue = useCallback(
     (fieldName: string, value: string) => {
       dispatch({ type: 'SET_VALUE', fieldName, value });
+      dispatch({ type: 'CLEAR_VALIDATION_ERROR', fieldName });
       setValuesVersion((v) => v + 1);
     },
     []
   );
+
+  const validateForm = useCallback((): boolean => {
+    const errors: Record<string, string> = {};
+    for (const field of fieldsRef.current) {
+      const val = valuesRef.current[field.name];
+      if (
+        field.required &&
+        (!val || val.trim() === '' || val === 'Off')
+      ) {
+        errors[field.name] = `${field.label} is required`;
+      }
+    }
+    dispatch({ type: 'SET_VALIDATION_ERRORS', errors });
+    return Object.keys(errors).length === 0;
+  }, []);
 
   const setActiveField = useCallback(
     (fieldName: string | null) => {
@@ -204,6 +232,7 @@ export function FormFillProvider({
       getFieldsForPage,
       getValue,
       valuesVersion,
+      validateForm,
     }),
     [
       state,
@@ -215,6 +244,7 @@ export function FormFillProvider({
       getFieldsForPage,
       getValue,
       valuesVersion,
+      validateForm,
     ]
   );
 

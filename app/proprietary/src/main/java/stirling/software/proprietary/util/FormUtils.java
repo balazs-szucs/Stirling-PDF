@@ -278,14 +278,30 @@ public class FormUtils {
                         return Float.compare(xA, xB);
                     }
 
-                    // In CSS space (top-left origin), smaller Y = higher on page
-                    int yCompare = Float.compare(yA, yB);
-                    if (yCompare != 0) {
-                        return yCompare;
-                    }
-
-                    return a.getName().compareToIgnoreCase(b.getName());
+                    return Float.compare(yA, yB);
                 });
+
+        log.info("=== Form Field Coordination Summary ===");
+        log.info("Total fields processed: {}", fields.size());
+        log.info(
+                "Fields WITH widgets: {}",
+                fields.stream()
+                        .filter(f -> f.getWidgets() != null && !f.getWidgets().isEmpty())
+                        .count());
+        log.info(
+                "Fields WITHOUT widgets: {}",
+                fields.stream()
+                        .filter(f -> f.getWidgets() == null || f.getWidgets().isEmpty())
+                        .count());
+
+        fields.stream()
+                .filter(f -> f.getWidgets() == null || f.getWidgets().isEmpty())
+                .forEach(
+                        f ->
+                                log.warn(
+                                        "Field '{}' type={} has NO widget coordinates",
+                                        f.getName(),
+                                        f.getType()));
 
         return Collections.unmodifiableList(fields);
     }
@@ -302,7 +318,42 @@ public class FormUtils {
         List<FormFieldWithCoordinates.WidgetCoordinates> result = new ArrayList<>();
 
         List<PDAnnotationWidget> widgets = field.getWidgets();
+
+        log.debug(
+                "Field '{}' type={} has {} widgets",
+                field.getFullyQualifiedName(),
+                field.getClass().getSimpleName(),
+                widgets != null ? widgets.size() : 0);
+
         if (widgets == null || widgets.isEmpty()) {
+            // Some fields (especially text fields) might be their own widget annotation
+            log.trace(
+                    "Field '{}' has no widgets, checking if field acts as its own annotation",
+                    field.getFullyQualifiedName());
+            try {
+                COSDictionary fieldDict = field.getCOSObject();
+                if (fieldDict.containsKey(COSName.RECT)) {
+                    int pageIndex = findPageIndexForAnnotation(document, fieldDict);
+                    if (pageIndex >= 0) {
+                        PDRectangle rectangle =
+                                new PDRectangle(
+                                        fieldDict.getDictionaryObject(
+                                                COSName.RECT, COSArray.class));
+                        result.add(
+                                createWidgetCoordinates(
+                                        document, rectangle, pageIndex, null, field));
+                    } else {
+                        log.warn(
+                                "Found rectangle for field '{}' but could not resolve page index",
+                                field.getFullyQualifiedName());
+                    }
+                }
+            } catch (Exception e) {
+                log.debug(
+                        "Could not extract direct rectangle for field '{}': {}",
+                        field.getFullyQualifiedName(),
+                        e.getMessage());
+            }
             return result;
         }
 
@@ -317,55 +368,20 @@ public class FormUtils {
             try {
                 PDRectangle rectangle = widget.getRectangle();
                 if (rectangle == null) {
+                    log.warn(
+                            "Field '{}' widget {} has NULL rectangle",
+                            field.getFullyQualifiedName(),
+                            i);
                     continue;
                 }
 
                 int pageIndex = resolveWidgetPageIndex(document, widget);
                 if (pageIndex < 0) {
-                    continue;
-                }
-
-                // Get page dimensions for coordinate conversion.
-                // Pdfium (the frontend renderer) reports page size from the
-                // MediaBox, so we must use MediaBox height for the Y-flip.
-                // If a CropBox with a non-zero lower-left origin exists, we
-                // also need to adjust widget coordinates relative to it so
-                // that the overlay aligns with the visible (cropped) area.
-                float pageHeight = 0;
-                float cropOffsetX = 0;
-                float cropOffsetY = 0;
-                if (pageIndex < document.getNumberOfPages()) {
-                    PDPage page = document.getPage(pageIndex);
-                    PDRectangle mediaBox = page.getMediaBox();
-                    pageHeight = mediaBox.getHeight();
-
-                    // Account for CropBox offset if it differs from MediaBox
-                    PDRectangle cropBox = page.getCropBox();
-                    if (cropBox != null) {
-                        cropOffsetX = cropBox.getLowerLeftX() - mediaBox.getLowerLeftX();
-                        cropOffsetY = cropBox.getLowerLeftY() - mediaBox.getLowerLeftY();
-                    }
-                }
-
-                float widgetX = rectangle.getLowerLeftX() - cropOffsetX;
-                float widgetY = rectangle.getLowerLeftY() - cropOffsetY;
-                float widgetWidth = rectangle.getWidth();
-                float widgetHeight = rectangle.getHeight();
-
-                // Convert to top-left origin: y_css = pageHeight - y_pdf - height
-                float topLeftY = pageHeight - widgetY - widgetHeight;
-
-                // Validate coordinates are within reasonable bounds
-                if (widgetX < 0
-                        || topLeftY < 0
-                        || widgetX > pageHeight * 2
-                        || topLeftY > pageHeight) {
-                    log.debug(
-                            "Widget coordinates may be out of bounds for field '{}': x={}, y={}, page={}",
+                    log.warn(
+                            "Field '{}' widget {} could not resolve page index",
                             field.getFullyQualifiedName(),
-                            widgetX,
-                            topLeftY,
-                            pageIndex);
+                            i);
+                    continue;
                 }
 
                 // Resolve export value for radio/checkbox widgets
@@ -397,14 +413,8 @@ public class FormUtils {
                 }
 
                 result.add(
-                        FormFieldWithCoordinates.WidgetCoordinates.builder()
-                                .pageIndex(pageIndex)
-                                .x(widgetX)
-                                .y(topLeftY)
-                                .width(widgetWidth)
-                                .height(widgetHeight)
-                                .exportValue(exportValue)
-                                .build());
+                        createWidgetCoordinates(
+                                document, rectangle, pageIndex, exportValue, field));
             } catch (Exception e) {
                 log.debug(
                         "Failed to extract coordinates for widget in field '{}': {}",
@@ -414,6 +424,97 @@ public class FormUtils {
         }
 
         return result;
+    }
+
+    private FormFieldWithCoordinates.WidgetCoordinates createWidgetCoordinates(
+            PDDocument document,
+            PDRectangle rectangle,
+            int pageIndex,
+            String exportValue,
+            PDTerminalField field) {
+        // Get page dimensions for coordinate conversion.
+        // Pdfium (the frontend renderer) reports page size from the
+        // MediaBox, so we must use MediaBox height for the Y-flip.
+        // If a CropBox with a non-zero lower-left origin exists, we
+        // also need to adjust widget coordinates relative to it so
+        // that the overlay aligns with the visible (cropped) area.
+        float pageHeight = 0;
+        float cropOffsetX = 0;
+        float cropOffsetY = 0;
+        if (pageIndex < document.getNumberOfPages()) {
+            PDPage page = document.getPage(pageIndex);
+            PDRectangle mediaBox = page.getMediaBox();
+            pageHeight = mediaBox.getHeight();
+
+            // Account for CropBox offset if it differs from MediaBox
+            PDRectangle cropBox = page.getCropBox();
+            if (cropBox != null) {
+                cropOffsetX = cropBox.getLowerLeftX() - mediaBox.getLowerLeftX();
+                cropOffsetY = cropBox.getLowerLeftY() - mediaBox.getLowerLeftY();
+            }
+        }
+
+        float widgetX = rectangle.getLowerLeftX() - cropOffsetX;
+        float widgetY = rectangle.getLowerLeftY() - cropOffsetY;
+        float widgetWidth = rectangle.getWidth();
+        float widgetHeight = rectangle.getHeight();
+
+        // Convert to top-left origin: y_css = pageHeight - y_pdf - height
+        float topLeftY = pageHeight - widgetY - widgetHeight;
+
+        // Validate coordinates are within reasonable bounds
+        if (widgetX < 0
+                || topLeftY < 0
+                || widgetX > pageHeight * 2 // Allow some horizontal overflow
+                || topLeftY > pageHeight) {
+            log.warn(
+                    "Widget coordinates out of bounds for field '{}': page={}, x={}, y={}, w={}, h={}",
+                    field.getFullyQualifiedName(),
+                    pageIndex,
+                    widgetX,
+                    topLeftY,
+                    widgetWidth,
+                    widgetHeight);
+        }
+
+        return FormFieldWithCoordinates.WidgetCoordinates.builder()
+                .pageIndex(pageIndex)
+                .x(widgetX)
+                .y(topLeftY)
+                .width(widgetWidth)
+                .height(widgetHeight)
+                .exportValue(exportValue)
+                .build();
+    }
+
+    private int findPageIndexForAnnotation(PDDocument document, COSDictionary annotDict) {
+        try {
+            // Method 1: Check the /P entry if it points to a page
+            COSDictionary pageDict = annotDict.getDictionaryObject(COSName.P, COSDictionary.class);
+            if (pageDict != null) {
+                for (int i = 0; i < document.getNumberOfPages(); i++) {
+                    if (document.getPage(i).getCOSObject() == pageDict) {
+                        return i;
+                    }
+                }
+            }
+
+            // Method 2: Fallback search through all pages' annotations
+            for (int i = 0; i < document.getNumberOfPages(); i++) {
+                PDPage page = document.getPage(i);
+                List<PDAnnotation> annotations = page.getAnnotations();
+                if (annotations != null) {
+                    for (PDAnnotation annot : annotations) {
+                        if (annot != null && annot.getCOSObject() == annotDict) {
+                            return i;
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.trace("Error finding page for annotation: {}", e.getMessage());
+        }
+        return -1;
     }
 
     /**
@@ -1250,7 +1351,8 @@ public class FormUtils {
         // Standard UUIDs are 32 hex characters; require at least that to avoid
         // false positives on short hex-like field names.
         String nospaces = simplified.replaceAll("\\s+", "");
-        if (nospaces.length() >= 32 && nospaces.matches("[0-9a-fA-F]+")) return true;
+        if (nospaces.length() >= 32 && nospaces.matches("^[0-9a-fA-F]{8}[0-9a-fA-F]{24,}$"))
+            return true;
 
         return patterns.getGenericFieldNamePattern().matcher(simplified).matches()
                 || patterns.getSimpleFormFieldPattern().matcher(simplified).matches()
@@ -1567,14 +1669,18 @@ public class FormUtils {
             log.debug("Widget page lookup failed: {}", e.getMessage());
         }
 
+        // Try searching all pages by comparing COS objects for robustness
         int pageCount = document.getNumberOfPages();
+        COSDictionary widgetDict = widget.getCOSObject();
         for (int i = 0; i < pageCount; i++) {
             try {
                 PDPage candidate = document.getPage(i);
                 List<PDAnnotation> annotations = candidate.getAnnotations();
-                for (PDAnnotation annotation : annotations) {
-                    if (annotation == widget) {
-                        return i;
+                if (annotations != null) {
+                    for (PDAnnotation annot : annotations) {
+                        if (annot != null && annot.getCOSObject() == widgetDict) {
+                            return i;
+                        }
                     }
                 }
             } catch (IOException e) {

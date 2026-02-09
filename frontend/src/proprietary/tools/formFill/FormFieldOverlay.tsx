@@ -23,6 +23,7 @@ interface WidgetInputProps {
   widget: WidgetCoordinates;
   value: string;
   isActive: boolean;
+  error?: string;
   scale: number;
   onFocus: (fieldName: string) => void;
   onChange: (fieldName: string, value: string) => void;
@@ -33,6 +34,7 @@ function WidgetInputInner({
   widget,
   value,
   isActive,
+  error,
   scale,
   onFocus,
   onChange,
@@ -44,10 +46,10 @@ function WidgetInputInner({
   const width = widget.width * scale;
   const height = widget.height * scale;
 
-  const borderColor = isActive ? '#2196F3' : 'rgba(33, 150, 243, 0.4)';
-  const bgColor = isActive
-    ? 'rgba(33, 150, 243, 0.08)'
-    : 'rgba(255, 255, 255, 0.85)';
+  const borderColor = error ? '#f44336' : (isActive ? '#2196F3' : 'rgba(33, 150, 243, 0.4)');
+  const bgColor = error
+    ? 'rgba(244, 67, 54, 0.08)'
+    : (isActive ? 'rgba(33, 150, 243, 0.08)' : 'rgba(255, 255, 255, 0.85)');
 
   const commonStyle: React.CSSProperties = {
     position: 'absolute',
@@ -62,7 +64,7 @@ function WidgetInputInner({
     background: bgColor,
     transition: 'border-color 0.15s, background 0.15s, box-shadow 0.15s',
     boxShadow: isActive
-      ? '0 0 0 2px rgba(33, 150, 243, 0.25)'
+      ? `0 0 0 2px ${error ? 'rgba(244, 67, 54, 0.25)' : 'rgba(33, 150, 243, 0.25)'}`
       : 'none',
     cursor: field.readOnly ? 'default' : 'text',
     pointerEvents: 'auto',
@@ -89,7 +91,7 @@ function WidgetInputInner({
   switch (field.type) {
     case 'text':
       return (
-        <div style={commonStyle} title={field.tooltip || field.label}>
+        <div style={commonStyle} title={error || field.tooltip || field.label}>
           {field.multiline ? (
             <textarea
               value={value}
@@ -131,7 +133,7 @@ function WidgetInputInner({
             justifyContent: 'center',
             cursor: field.readOnly ? 'default' : 'pointer',
           }}
-          title={field.tooltip || field.label}
+          title={error || field.tooltip || field.label}
           onClick={() => {
             if (field.readOnly) return;
             handleFocus();
@@ -156,7 +158,7 @@ function WidgetInputInner({
     case 'combobox':
     case 'listbox':
       return (
-        <div style={commonStyle} title={field.tooltip || field.label}>
+        <div style={commonStyle} title={error || field.tooltip || field.label}>
           <select
             value={value}
             onChange={(e) => onChange(field.name, e.target.value)}
@@ -195,7 +197,7 @@ function WidgetInputInner({
             justifyContent: 'center',
             cursor: field.readOnly ? 'default' : 'pointer',
           }}
-          title={field.tooltip || `${field.label}: ${optionValue}`}
+          title={error || field.tooltip || `${field.label}: ${optionValue}`}
           onClick={() => {
             if (field.readOnly || value === optionValue) return; // Don't deselect radio buttons
             handleFocus();
@@ -264,7 +266,7 @@ export function FormFieldOverlay({
   pageIndex,
 }: FormFieldOverlayProps) {
   const { state, setValue, setActiveField, getFieldsForPage } = useFormFill();
-  const { values, activeFieldName } = state;
+  const { values, activeFieldName, validationErrors } = state;
 
   // Get scale from EmbedPDF document state — same pattern as LinkLayer
   const documentState = useDocumentState(documentId);
@@ -311,6 +313,7 @@ export function FormFieldOverlay({
               widget={widget}
               value={values[field.name] ?? ''}
               isActive={activeFieldName === field.name}
+              error={validationErrors[field.name]}
               scale={scale}
               onFocus={handleFocus}
               onChange={handleChange}

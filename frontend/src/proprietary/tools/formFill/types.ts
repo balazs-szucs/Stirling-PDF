@@ -52,4 +52,6 @@ export interface FormFillState {
   activeFieldName: string | null;
   /** Whether the form has been modified */
   isDirty: boolean;
+  /** Current validation errors keyed by field name */
+  validationErrors: Record<string, string>;
 }

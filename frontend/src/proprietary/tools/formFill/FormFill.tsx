@@ -234,14 +234,15 @@ const FormFill = (_props: BaseToolProps) => {
     submitForm,
     setValue,
     setActiveField,
+    validateForm,
   } = useFormFill();
+  const { validationErrors } = formState;
 
   const { scrollActions } = useViewer();
 
   const [flatten, setFlatten] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const hasFetched = useRef(false);
   const activeFieldRef = useRef<HTMLDivElement>(null);
 
@@ -310,18 +311,6 @@ const FormFill = (_props: BaseToolProps) => {
     }
   }, [currentFile, fetchFields]);
 
-  // Validate required fields
-  const validateForm = useCallback((): boolean => {
-    const errors: Record<string, string> = {};
-    for (const field of formState.fields) {
-      const value = formState.values[field.name] || '';
-      if (field.required && !value.trim()) {
-        errors[field.name] = `${field.label} is required`;
-      }
-    }
-    setValidationErrors(errors);
-    return Object.keys(errors).length === 0;
-  }, [formState.fields, formState.values]);
 
   // Handle save/apply
   const handleSave = useCallback(async () => {
@@ -353,7 +342,6 @@ const FormFill = (_props: BaseToolProps) => {
       await actions.consumeFiles([currentFileId], stirlingFiles, stubs);
 
       hasFetched.current = false;
-      setValidationErrors({});
     } catch (err: any) {
       setSaveError(err?.message || 'Failed to save filled form');
     } finally {
@@ -364,13 +352,6 @@ const FormFill = (_props: BaseToolProps) => {
   const handleValueChange = useCallback(
     (fieldName: string, value: string) => {
       setValue(fieldName, value);
-      // Clear validation error for this field when user types
-      setValidationErrors((prev) => {
-        if (!prev[fieldName]) return prev;
-        const next = { ...prev };
-        delete next[fieldName];
-        return next;
-      });
     },
     [setValue]
   );
