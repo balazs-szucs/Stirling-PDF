@@ -282,14 +282,13 @@ public class FormUtils {
                     return Float.compare(yA, yB);
                 });
 
-        log.info("=== Form Field Coordination Summary ===");
-        log.info("Total fields processed: {}", fields.size());
-        log.info(
+        log.debug("Total fields processed: {}", fields.size());
+        log.debug(
                 "Fields WITH widgets: {}",
                 fields.stream()
                         .filter(f -> f.getWidgets() != null && !f.getWidgets().isEmpty())
                         .count());
-        log.info(
+        log.debug(
                 "Fields WITHOUT widgets: {}",
                 fields.stream()
                         .filter(f -> f.getWidgets() == null || f.getWidgets().isEmpty())
@@ -299,7 +298,7 @@ public class FormUtils {
                 .filter(f -> f.getWidgets() == null || f.getWidgets().isEmpty())
                 .forEach(
                         f ->
-                                log.warn(
+                                log.debug(
                                         "Field '{}' type={} has NO widget coordinates",
                                         f.getName(),
                                         f.getType()));
@@ -538,7 +537,7 @@ public class FormUtils {
                 return;
             }
 
-            log.info("Checking for widgets with missing page references...");
+            log.debug("Checking for widgets with missing page references...");
             int repairedCount = 0;
 
             // First pass: Set page reference for all annotations on pages
@@ -576,7 +575,7 @@ public class FormUtils {
                         if (foundPage != null) {
                             widget.setPage(foundPage);
                             repairedCount++;
-                            log.info(
+                            log.debug(
                                     "Repaired widget for field '{}' - set page reference",
                                     field.getFullyQualifiedName());
                         } else {
@@ -589,11 +588,11 @@ public class FormUtils {
             }
 
             if (repairedCount > 0) {
-                log.info(
+                log.debug(
                         "Successfully repaired {} widgets with missing page references",
                         repairedCount);
             } else {
-                log.info("No widgets needed repair");
+                log.debug("No widgets needed repair");
             }
 
         } catch (Exception e) {
