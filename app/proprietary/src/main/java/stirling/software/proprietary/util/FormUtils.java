@@ -545,7 +545,9 @@ public class FormUtils {
                     for (PDAnnotation annotation : page.getAnnotations()) {
                         if (annotation.getPage() == null) {
                             annotation.setPage(page);
-                            log.debug("Set page reference for annotation: {}", annotation.getSubtype());
+                            log.debug(
+                                    "Set page reference for annotation: {}",
+                                    annotation.getSubtype());
                         }
                     }
                 } catch (Exception e) {
@@ -603,7 +605,8 @@ public class FormUtils {
 
         try {
             // Check if widget has a /P entry that PDFBox isn't reading
-            COSDictionary pageDict = widgetDict.getDictionaryObject(COSName.P, COSDictionary.class);
+            COSBase base = widgetDict.getDictionaryObject(COSName.P);
+            COSDictionary pageDict = (base instanceof COSDictionary c) ? c : null;
             if (pageDict != null) {
                 // Find the page by comparing COS objects
                 for (PDPage page : document.getPages()) {
