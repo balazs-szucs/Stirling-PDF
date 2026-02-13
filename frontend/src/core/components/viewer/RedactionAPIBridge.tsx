@@ -72,7 +72,7 @@ function RedactionAPIBridgeInner({ documentId }: { documentId: string }) {
   // Expose the EmbedPDF API through our context's ref
   // Uses v2.6.0 unified redaction mode with marquee selection integration
   useImperativeHandle(redactionApiRef, () => ({
-    // Unified redaction methods (v2.5.0)
+    // Unified redaction methods (v2.6.0)
     toggleRedact: () => {
       redactionProvides?.toggleRedact();
     },
