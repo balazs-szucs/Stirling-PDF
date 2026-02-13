@@ -6,9 +6,10 @@ import { useActiveDocumentId } from '@app/components/viewer/useActiveDocumentId'
 import { useAnnotationCapability } from '@embedpdf/plugin-annotation/react';
 
 /**
- * RedactionAPIBridge - Uses embedPDF v2.5.0
+ * RedactionAPIBridge - Updated for embedPDF v2.6.0
  * Bridges between the EmbedPDF redaction plugin and the Stirling-PDF RedactionContext.
  * Uses the unified redaction mode (toggleRedact/enableRedact/endRedact).
+ * v2.6.0: Redaction now uses unified marquee selection with the selection plugin.
  */
 export function RedactionAPIBridge() {
   const activeDocumentId = useActiveDocumentId();
@@ -69,7 +70,7 @@ function RedactionAPIBridgeInner({ documentId }: { documentId: string }) {
   }, [annotationProvides, manualRedactColor]);
 
   // Expose the EmbedPDF API through our context's ref
-  // Uses v2.5.0 unified redaction mode
+  // Uses v2.6.0 unified redaction mode with marquee selection integration
   useImperativeHandle(redactionApiRef, () => ({
     // Unified redaction methods (v2.5.0)
     toggleRedact: () => {
