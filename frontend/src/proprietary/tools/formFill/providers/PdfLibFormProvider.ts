@@ -16,7 +16,7 @@
  */
 import { PDFDocument, PDFForm, PDFField, PDFTextField, PDFCheckBox,
   PDFDropdown, PDFRadioGroup, PDFOptionList, PDFButton, PDFSignature,
-  PDFName, PDFDict, PDFArray, PDFNumber, PDFRef, PDFPage } from 'pdf-lib';
+  PDFName, PDFDict, PDFArray, PDFNumber, PDFRef, PDFPage } from '@cantoo/pdf-lib';
 import type { FormField, FormFieldType, WidgetCoordinates } from '@proprietary/tools/formFill/types';
 import type { IFormDataProvider } from '@proprietary/tools/formFill/providers/types';
 
@@ -143,8 +143,8 @@ function extractWidgets(
       if (normal instanceof PDFDict) {
         // The keys of /N (other than /Off) are the export values
         const keys = normal.entries()
-          .map(([k]) => k.decodeText())
-          .filter(k => k !== 'Off');
+          .map(([k]: [PDFName, any]) => k.decodeText())
+          .filter((k: string) => k !== 'Off');
         if (keys.length > 0) exportValue = keys[0];
       }
     }
@@ -353,7 +353,7 @@ function mapAppearanceStateToOption(
       const normal = ap.lookup(PDFName.of('N'));
       if (!(normal instanceof PDFDict)) continue;
 
-      const keys = normal.entries().map(([k]) => k.decodeText());
+      const keys = normal.entries().map(([k]: [PDFName, any]) => k.decodeText());
       if (keys.includes(stateName) && i < options.length) {
         return options[i];
       }
@@ -381,7 +381,7 @@ function resolveRadioValueForSelect(
   }
 
   const lower = value.toLowerCase();
-  const match = options.find(o => o.toLowerCase() === lower);
+  const match = options.find((o: string) => o.toLowerCase() === lower);
   if (match) return match;
 
   return null;

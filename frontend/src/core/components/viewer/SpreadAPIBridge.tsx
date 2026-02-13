@@ -5,12 +5,12 @@ import { useActiveDocumentId } from '@app/components/viewer/useActiveDocumentId'
 
 export function SpreadAPIBridge() {
   const activeDocumentId = useActiveDocumentId();
-  
+
   // Don't render the inner component until we have a valid document ID
   if (!activeDocumentId) {
     return null;
   }
-  
+
   return <SpreadAPIBridgeInner documentId={activeDocumentId} />;
 }
 
@@ -52,6 +52,10 @@ function SpreadAPIBridgeInner({ documentId }: { documentId: string }) {
     });
 
     triggerImmediateSpreadUpdate(spreadMode);
+
+    return () => {
+      registerBridge('spread', null);
+    };
   }, [spreadMode, registerBridge, triggerImmediateSpreadUpdate]);
 
   return null;

@@ -124,12 +124,20 @@ export function AttachmentAPIBridge() {
   }, [attachmentCapability, documentReady, fetchAttachments]);
 
   useEffect(() => {
-    if (!api) return;
+    if (!api) {
+      // If API becomes null (e.g. document transitions), ensure we unregister stale bridge
+      registerBridge('attachment', null);
+      return;
+    }
 
     registerBridge('attachment', {
       state,
       api,
     });
+
+    return () => {
+      registerBridge('attachment', null);
+    };
   }, [api, state, registerBridge]);
 
   return null;

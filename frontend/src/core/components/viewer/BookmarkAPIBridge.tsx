@@ -99,12 +99,19 @@ export function BookmarkAPIBridge() {
   }, [bookmarkCapability, documentReady, fetchBookmarks]);
 
   useEffect(() => {
-    if (!api) return;
+    if (!api) {
+      registerBridge('bookmark', null);
+      return;
+    }
 
     registerBridge('bookmark', {
       state,
       api,
     });
+
+    return () => {
+      registerBridge('bookmark', null);
+    };
   }, [api, state, registerBridge]);
 
   return null;

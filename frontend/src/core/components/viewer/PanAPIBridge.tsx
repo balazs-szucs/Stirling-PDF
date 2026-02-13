@@ -5,25 +5,25 @@ import { useActiveDocumentId } from '@app/components/viewer/useActiveDocumentId'
 
 export function PanAPIBridge() {
   const activeDocumentId = useActiveDocumentId();
-  
+
   // Don't render the inner component until we have a valid document ID
   if (!activeDocumentId) {
     return null;
   }
-  
+
   return <PanAPIBridgeInner documentId={activeDocumentId} />;
 }
 
 function PanAPIBridgeInner({ documentId }: { documentId: string }) {
   const { provides: pan, isPanning } = usePan(documentId);
   const { registerBridge, triggerImmediatePanUpdate } = useViewer();
-  
+
   // Keep pan ref updated to avoid re-running effect when object reference changes
   const panRef = useRef(pan);
   useEffect(() => {
     panRef.current = pan;
   }, [pan]);
-  
+
   // Track previous isPanning value to detect changes
   const prevIsPanningRef = useRef<boolean>(isPanning);
 
@@ -57,13 +57,16 @@ function PanAPIBridgeInner({ documentId }: { documentId: string }) {
           },
         }
       });
-      
-      // Trigger immediate pan update if the value changed
+
       if (prevIsPanningRef.current !== isPanning) {
         prevIsPanningRef.current = isPanning;
         triggerImmediatePanUpdate(isPanning);
       }
     }
+
+    return () => {
+      registerBridge('pan', null);
+    };
   }, [isPanning, registerBridge, triggerImmediatePanUpdate]);
 
   return null;

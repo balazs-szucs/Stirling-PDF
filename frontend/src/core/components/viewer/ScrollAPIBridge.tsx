@@ -5,12 +5,12 @@ import { useActiveDocumentId } from '@app/components/viewer/useActiveDocumentId'
 
 export function ScrollAPIBridge() {
   const activeDocumentId = useActiveDocumentId();
-  
+
   // Don't render the inner component until we have a valid document ID
   if (!activeDocumentId) {
     return null;
   }
-  
+
   return <ScrollAPIBridgeInner documentId={activeDocumentId} />;
 }
 
@@ -35,7 +35,7 @@ function ScrollAPIBridgeInner({ documentId }: { documentId: string }) {
         currentPage,
         totalPages,
       };
-      
+
       // Trigger immediate update for responsive UI
       triggerImmediateScrollUpdate(newState.currentPage, newState.totalPages);
 
@@ -44,6 +44,10 @@ function ScrollAPIBridgeInner({ documentId }: { documentId: string }) {
         api: currentScroll
       });
     }
+
+    return () => {
+      registerBridge('scroll', null);
+    };
   }, [currentPage, totalPages, registerBridge, triggerImmediateScrollUpdate]);
 
   return null;

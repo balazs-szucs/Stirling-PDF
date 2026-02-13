@@ -68,8 +68,9 @@ export function SelectionAPIBridge() {
       unsubCopy?.();
       document.removeEventListener('copy', handleCopy);
       document.removeEventListener('keydown', handleKeyDown);
+      registerBridge('selection', null);
     };
-  }, [selection]);
+  }, [selection, registerBridge]);
 
   return null;
 }
