@@ -1,19 +1,57 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useBookmarkCapability, BookmarkCapability } from '@embedpdf/plugin-bookmark/react';
+import { useDocumentManagerCapability } from '@embedpdf/plugin-document-manager/react';
 import { useViewer } from '@app/contexts/ViewerContext';
 import { BookmarkState, BookmarkAPIWrapper } from '@app/contexts/viewer/viewerBridges';
 
 export function BookmarkAPIBridge() {
   const { provides: bookmarkCapability } = useBookmarkCapability();
+  const { provides: documentManagerCapability } = useDocumentManagerCapability();
   const { registerBridge } = useViewer();
   const [state, setState] = useState<BookmarkState>({
     bookmarks: null,
     isLoading: false,
     error: null,
   });
+  const [documentReady, setDocumentReady] = useState(false);
+
+  // Wait for document to be ready before making the capability available
+  useEffect(() => {
+    if (!documentManagerCapability) return;
+
+    const checkDocumentReady = async () => {
+      try {
+        const activeDoc = documentManagerCapability.getActiveDocument?.();
+        if (activeDoc?.id) {
+          setDocumentReady(true);
+        }
+      } catch (_e) {
+        // Document not ready yet
+      }
+    };
+
+    checkDocumentReady();
+
+    // Subscribe to document open events
+    const unsubscribe = documentManagerCapability.onDocumentOpened?.((event: any) => {
+      if (event?.documentId || event?.id) {
+        setDocumentReady(true);
+      }
+    });
+
+    return () => {
+      if (typeof unsubscribe === 'function') {
+        unsubscribe();
+      }
+    };
+  }, [documentManagerCapability]);
 
   const fetchBookmarks = useCallback(
     async (capability: BookmarkCapability) => {
+      if (!documentReady) {
+        throw new Error('Document not ready');
+      }
+
       setState(prev => ({ ...prev, isLoading: true, error: null }));
       try {
         const task = capability.getBookmarks();
@@ -34,11 +72,12 @@ export function BookmarkAPIBridge() {
         throw error;
       }
     },
-    []
+    [documentReady]
   );
 
   const api = useMemo<BookmarkAPIWrapper | null>(() => {
-    if (!bookmarkCapability) return null;
+    // Only provide API when both capability AND document are ready
+    if (!bookmarkCapability || !documentReady) return null;
 
     return {
       fetchBookmarks: () => fetchBookmarks(bookmarkCapability),
@@ -57,7 +96,7 @@ export function BookmarkAPIBridge() {
         });
       },
     };
-  }, [bookmarkCapability, fetchBookmarks]);
+  }, [bookmarkCapability, documentReady, fetchBookmarks]);
 
   useEffect(() => {
     if (!api) return;
