@@ -1,4 +1,4 @@
-import { PDFDocument, rgb } from 'pdf-lib';
+import { PDFDocument, rgb } from '@cantoo/pdf-lib';
 import { PdfAnnotationSubtype } from '@embedpdf/models';
 import { generateThumbnailWithMetadata } from '@app/utils/thumbnailUtils';
 import { createProcessedFile, createChildStub } from '@app/contexts/file/fileActions';

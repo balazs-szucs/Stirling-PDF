@@ -10,7 +10,7 @@ import {
   PDFRef,
   PDFPage,
   PDFContext,
-} from 'pdf-lib';
+} from '@cantoo/pdf-lib';
 
 
 export type LinkType = 'internal' | 'external' | 'unknown';

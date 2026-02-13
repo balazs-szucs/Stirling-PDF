@@ -1,21 +1,57 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useAttachmentCapability } from '@embedpdf/plugin-attachment/react';
+import { useDocumentManagerCapability } from '@embedpdf/plugin-document-manager/react';
 import { useViewer } from '@app/contexts/ViewerContext';
 import { AttachmentState, AttachmentAPIWrapper } from '@app/contexts/viewer/viewerBridges';
 import { PdfAttachmentObject } from '@embedpdf/models';
 
 export function AttachmentAPIBridge() {
   const { provides: attachmentCapability } = useAttachmentCapability();
+  const { provides: documentManagerCapability } = useDocumentManagerCapability();
   const { registerBridge } = useViewer();
   const [state, setState] = useState<AttachmentState>({
     attachments: null,
     isLoading: false,
     error: null,
   });
+  const [documentReady, setDocumentReady] = useState(false);
+
+  // Wait for document to be ready before making the capability available
+  useEffect(() => {
+    if (!documentManagerCapability) return;
+
+    const checkDocumentReady = async () => {
+      try {
+        const activeDoc = documentManagerCapability.getActiveDocument?.();
+        if (activeDoc?.id) {
+          setDocumentReady(true);
+        }
+      } catch (_e) {
+        // Document not ready yet
+      }
+    };
+
+    checkDocumentReady();
+
+    // Subscribe to document open events
+    const unsubscribe = documentManagerCapability.onDocumentOpened?.((event: any) => {
+      if (event?.documentId || event?.id) {
+        setDocumentReady(true);
+      }
+    });
+
+    return () => {
+      if (typeof unsubscribe === 'function') {
+        unsubscribe();
+      }
+    };
+  }, [documentManagerCapability]);
 
   const fetchAttachments = useCallback(
     async () => {
-      if (!attachmentCapability) return [];
+      if (!attachmentCapability || !documentReady) {
+        throw new Error('Document not ready or attachment capability not available');
+      }
 
       setState(prev => ({ ...prev, isLoading: true, error: null }));
       try {
@@ -42,11 +78,12 @@ export function AttachmentAPIBridge() {
         throw error;
       }
     },
-    [attachmentCapability]
+    [attachmentCapability, documentReady]
   );
 
   const api = useMemo<AttachmentAPIWrapper | null>(() => {
-    if (!attachmentCapability) return null;
+    // Only provide API when both capability AND document are ready
+    if (!attachmentCapability || !documentReady) return null;
 
     return {
       getAttachments: fetchAttachments,
@@ -84,7 +121,7 @@ export function AttachmentAPIBridge() {
         });
       },
     };
-  }, [attachmentCapability, fetchAttachments]);
+  }, [attachmentCapability, documentReady, fetchAttachments]);
 
   useEffect(() => {
     if (!api) return;

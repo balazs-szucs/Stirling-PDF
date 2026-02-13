@@ -142,6 +142,7 @@ export function LocalEmbedPDF({ file, url, fileName, enableAnnotations = false, 
         autoCommit: true,
         deactivateToolAfterCreate: false,
         selectAfterCreate: true,
+        rotationUI: true, // v2.6.0: Enable rotation UI for annotations
       }),
 
       // Register redaction plugin (depends on InteractionManager, Selection, History)
