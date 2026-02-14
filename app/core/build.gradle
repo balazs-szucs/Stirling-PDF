@@ -150,6 +150,38 @@ springBoot {
     mainClass = 'stirling.software.SPDF.SPDFApplication'
 }
 
+apply plugin: 'org.graalvm.buildtools.native'
+
+graalvmNative {
+    binaries {
+        main {
+            imageName = 'Stirling-PDF'
+            mainClass = 'stirling.software.SPDF.SPDFApplication'
+            buildArgs.addAll(
+                '--verbose',
+                '--no-fallback',
+                '-H:+ReportExceptionStackTraces',
+                '--enable-url-protocols=https,http',
+                '--enable-all-security-services',
+                '-H:+AddAllCharsets',
+                '--initialize-at-build-time=org.apache.pdfbox',
+                '--initialize-at-build-time=org.apache.fontbox',
+                '--initialize-at-build-time=java.awt.Font',
+                '--initialize-at-build-time=sun.java2d',
+                '--initialize-at-run-time=org.apache.fontbox.ttf.BufferedRandomAccessFile'
+            )
+            // Add resource inclusion for fonts if needed, though resource-config.json handles most
+             buildArgs.add('-H:IncludeResources=.*\\.ttf$')
+        }
+        test {
+             buildArgs.addAll(
+                '--verbose',
+                '-H:+ReportExceptionStackTraces'
+            )
+        }
+    }
+}
+
 // Frontend build tasks - only enabled with -PbuildWithFrontend=true
 def buildWithFrontend = project.hasProperty('buildWithFrontend') && project.property('buildWithFrontend') == 'true'
 def frontendDir = file('../../frontend')
@@ -295,3 +327,8 @@ if (buildWithFrontend) {
 
 bootJar.dependsOn ':common:jar'
 bootJar.dependsOn ':proprietary:jar'
+
+tasks.named('test') {
+    useJUnitPlatform()
+    environment.remove('MAIL')
+}

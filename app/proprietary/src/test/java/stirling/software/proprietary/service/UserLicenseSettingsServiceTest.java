@@ -62,7 +62,7 @@ class UserLicenseSettingsServiceTest {
 
         // Create service with overridden validateSettingsIntegrity to bypass signature validation
         service =
-                new UserLicenseSettingsService(
+                new UserLicenseSettingsServiceImpl(
                         settingsRepository,
                         userService,
                         applicationProperties,

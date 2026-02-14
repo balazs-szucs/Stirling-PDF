@@ -1,0 +1,25 @@
+{
+  "resources": {
+    "includes": [
+      {
+        "pattern": "org/apache/pdfbox/resources/.*"
+      },
+      {
+        "pattern": "org/apache/pdfbox/resources/glyphlist/.*\\.txt"
+      },
+      {
+        "pattern": "org/apache/pdfbox/resources/afm/.*\\.afm"
+      },
+      {
+        "pattern": "org/apache/pdfbox/resources/cmap/.*"
+      },
+      {
+        "pattern": "org/apache/pdfbox/resources/icc/.*\\.icc"
+      },
+      {
+        "pattern": "org/apache/fontbox/cmap/.*"
+      }
+    ]
+  },
+  "bundles": []
+}

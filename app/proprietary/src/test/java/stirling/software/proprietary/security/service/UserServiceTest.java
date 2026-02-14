@@ -41,7 +41,7 @@ class UserServiceTest {
     @Mock private DatabaseServiceInterface databaseService;
     @Mock private ApplicationProperties.Security.OAUTH2 oAuth2;
 
-    @Spy @InjectMocks private UserService userService;
+    @Spy @InjectMocks private UserServiceImpl userService;
 
     @Test
     void saveUserCore_populatesFieldsAndPersists()

@@ -17,6 +17,6 @@ public class SessionRegistryConfig {
     @Bean
     public SessionPersistentRegistry sessionPersistentRegistry(
             SessionRepository sessionRepository) {
-        return new SessionPersistentRegistry(sessionRepository);
+        return new SessionPersistentRegistryImpl(sessionRepository);
     }
 }

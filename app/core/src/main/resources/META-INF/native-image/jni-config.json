@@ -1,0 +1,15 @@
+[
+  {
+    "name": "java.io.RandomAccessFile",
+    "methods": [
+      {"name": "open", "parameterTypes": ["java.lang.String", "int"]},
+      {"name": "close"}
+    ]
+  },
+  {
+    "name": "sun.java2d.pipe.ShapeSpanIterator",
+    "methods": [
+      {"name": "initIDs"}
+    ]
+  }
+]
