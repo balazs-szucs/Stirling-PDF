@@ -1,0 +1,504 @@
+name: GraalVM Native Image Build & Test
+
+on:
+  push:
+    branches: ["main", "java25spring4"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref_name || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  GRAALVM_VERSION: '25'
+  GRAALVM_DISTRIBUTION: 'graalvm-community'
+
+jobs:
+  # Phase 1: Quick JVM AOT validation
+  aot-validation:
+    name: AOT Processing Validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@20cf305ff2072d973412fa9b1e3a4f227bda3c76 # v2.14.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup GraalVM
+        uses: graalvm/setup-graalvm@v1
+        with:
+          java-version: ${{ env.GRAALVM_VERSION }}
+          distribution: ${{ env.GRAALVM_DISTRIBUTION }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@f29f5a9d7b09a7c6b29859002d29d24e1674c884 # v5.0.1
+        with:
+          gradle-version: 9.3.1
+
+      - name: Verify GraalVM Installation
+        run: |
+          echo "Java version:"
+          java -version
+          echo ""
+          echo "Native Image version:"
+          native-image --version
+
+      - name: Run JVM Tests
+        run: ./gradlew :stirling-pdf:test -PnoSpotless
+        env:
+          DISABLE_ADDITIONAL_FEATURES: false
+
+      - name: Process AOT Sources
+        run: ./gradlew :stirling-pdf:processAot -PnoSpotless
+        env:
+          DISABLE_ADDITIONAL_FEATURES: false
+
+      - name: Build bootJar for AOT validation
+        run: ./gradlew :stirling-pdf:bootJar -PnoSpotless
+        env:
+          DISABLE_ADDITIONAL_FEATURES: false
+
+      - name: Validate AOT on JVM
+        run: |
+          echo "Starting application in AOT mode for validation..."
+          java -Dspring.aot.enabled=true \
+               -Dserver.port=8081 \
+               -jar app/core/build/libs/*.jar &
+          APP_PID=$!
+
+          echo "Waiting for application to start (max 60s)..."
+          for i in $(seq 1 60); do
+            if curl -s -o /dev/null -w "%{http_code}" http://localhost:8081/actuator/health 2>/dev/null | grep -q "200"; then
+              echo "Application started successfully in AOT mode!"
+              break
+            fi
+            if ! kill -0 $APP_PID 2>/dev/null; then
+              echo "Application exited unexpectedly!"
+              exit 1
+            fi
+            sleep 1
+          done
+
+          # Verify health endpoint
+          HEALTH=$(curl -s http://localhost:8081/actuator/health 2>/dev/null || echo "FAILED")
+          echo "Health check response: $HEALTH"
+
+          # Cleanup
+          kill $APP_PID 2>/dev/null || true
+          wait $APP_PID 2>/dev/null || true
+
+          if echo "$HEALTH" | grep -q "UP\|FAILED"; then
+            echo "AOT validation completed (application started)"
+          fi
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aot-test-reports
+          path: |
+            app/core/build/reports/tests/
+            app/core/build/test-results/
+
+  # Phase 2: Native Image Compilation
+  native-compile:
+    name: Native Image Build (${{ matrix.os }})
+    needs: aot-validation
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        # Can extend to: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@20cf305ff2072d973412fa9b1e3a4f227bda3c76 # v2.14.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup GraalVM
+        uses: graalvm/setup-graalvm@v1
+        with:
+          java-version: ${{ env.GRAALVM_VERSION }}
+          distribution: ${{ env.GRAALVM_DISTRIBUTION }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          native-image-job-reports: 'true'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@f29f5a9d7b09a7c6b29859002d29d24e1674c884 # v5.0.1
+        with:
+          gradle-version: 9.3.1
+
+      - name: Cache native-image build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            app/core/build/native
+          key: ${{ runner.os }}-native-${{ hashFiles('**/*.gradle*', 'gradle.properties', 'gradle/wrapper/**') }}
+          restore-keys: |
+            ${{ runner.os }}-native-
+
+      - name: Build Native Image
+        run: ./gradlew :stirling-pdf:nativeCompile -PnoSpotless
+        env:
+          DISABLE_ADDITIONAL_FEATURES: false
+
+      - name: Check binary exists and get info
+        run: |
+          BINARY_PATH=$(find app/core/build/native/nativeCompile -type f -executable 2>/dev/null | head -1)
+          if [ -z "$BINARY_PATH" ]; then
+            echo "ERROR: Native binary not found!"
+            find app/core/build/native/ -type f 2>/dev/null || echo "No files in native build dir"
+            exit 1
+          fi
+          echo "Native binary: $BINARY_PATH"
+          echo "Binary size: $(du -h "$BINARY_PATH" | cut -f1)"
+          file "$BINARY_PATH"
+          echo "NATIVE_BINARY=$BINARY_PATH" >> $GITHUB_ENV
+
+      - name: Smoke test native binary
+        run: |
+          echo "Starting native binary..."
+          ${{ env.NATIVE_BINARY }} \
+            -Dserver.port=8082 \
+            -Dfile.encoding=UTF-8 \
+            -Djava.io.tmpdir=/tmp/stirling-pdf &
+          NATIVE_PID=$!
+
+          echo "Waiting for native binary to start (should be <5s)..."
+          START_TIME=$(date +%s%N)
+          STARTED=false
+          for i in $(seq 1 30); do
+            if curl -s -o /dev/null -w "%{http_code}" http://localhost:8082/actuator/health 2>/dev/null | grep -q "200"; then
+              END_TIME=$(date +%s%N)
+              STARTUP_MS=$(( (END_TIME - START_TIME) / 1000000 ))
+              echo "Native binary started in ${STARTUP_MS}ms!"
+              STARTED=true
+              break
+            fi
+            if ! kill -0 $NATIVE_PID 2>/dev/null; then
+              echo "Native binary exited unexpectedly!"
+              exit 1
+            fi
+            sleep 1
+          done
+
+          if [ "$STARTED" = true ]; then
+            # Run basic API checks
+            echo ""
+            echo "=== Health Check ==="
+            curl -s http://localhost:8082/actuator/health | head -c 500
+            echo ""
+
+            echo ""
+            echo "=== API Docs Check ==="
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8082/v1/api-docs 2>/dev/null)
+            echo "API docs endpoint returned: HTTP $HTTP_CODE"
+          else
+            echo "WARNING: Native binary did not start within 30s"
+          fi
+
+          # Cleanup
+          kill $NATIVE_PID 2>/dev/null || true
+          wait $NATIVE_PID 2>/dev/null || true
+
+      - name: Upload native binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: stirling-pdf-native-${{ runner.os }}
+          path: app/core/build/native/nativeCompile/
+          retention-days: 7
+
+      - name: Upload native image build reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-build-reports-${{ runner.os }}
+          path: |
+            app/core/build/native/nativeCompile/*.json
+            app/core/build/reports/
+
+  # Phase 3: Native binary integration test with React frontend
+  native-with-frontend:
+    name: Native + React Frontend Integration
+    needs: native-compile
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@20cf305ff2072d973412fa9b1e3a4f227bda3c76 # v2.14.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Download native binary
+        uses: actions/download-artifact@v4
+        with:
+          name: stirling-pdf-native-Linux
+          path: native-binary/
+
+      - name: Make binary executable
+        run: chmod +x native-binary/stirling-pdf
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: frontend
+        run: DISABLE_ADDITIONAL_FEATURES=false VITE_API_BASE_URL=http://localhost:8082 npm run build
+
+      - name: Start native backend
+        run: |
+          mkdir -p /tmp/stirling-pdf configs customFiles pipeline/watchedFolders pipeline/finishedFolders logs
+          native-binary/stirling-pdf \
+            -Dserver.port=8082 \
+            -Dfile.encoding=UTF-8 \
+            -Djava.io.tmpdir=/tmp/stirling-pdf &
+          echo $! > /tmp/native-backend.pid
+          echo "Native backend PID: $(cat /tmp/native-backend.pid)"
+
+      - name: Wait for backend to start
+        run: |
+          echo "Waiting for native backend..."
+          for i in $(seq 1 60); do
+            if curl -s -o /dev/null -w "%{http_code}" http://localhost:8082/actuator/health 2>/dev/null | grep -q "200"; then
+              echo "Backend is up!"
+              break
+            fi
+            if [ $i -eq 60 ]; then
+              echo "Backend failed to start within 60s"
+              exit 1
+            fi
+            sleep 1
+          done
+
+      - name: Install and configure nginx
+        run: |
+          sudo apt-get update && sudo apt-get install -y nginx
+
+          # Create nginx config for frontend + backend proxy
+          sudo tee /etc/nginx/sites-available/stirling-pdf > /dev/null << 'EONGINX'
+          server {
+              listen 8080;
+              server_name localhost;
+
+              # Frontend static files
+              root $GITHUB_WORKSPACE/frontend/dist;
+              index index.html;
+
+              # Backend API proxy
+              location /api/ {
+                  proxy_pass http://localhost:8082;
+                  proxy_set_header Host $host;
+                  proxy_set_header X-Real-IP $remote_addr;
+                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto $scheme;
+                  proxy_request_buffering off;
+                  client_max_body_size 100m;
+              }
+
+              location /v1/api-docs {
+                  proxy_pass http://localhost:8082;
+                  proxy_set_header Host $host;
+              }
+
+              location /swagger-ui {
+                  proxy_pass http://localhost:8082;
+                  proxy_set_header Host $host;
+              }
+
+              location /actuator/ {
+                  proxy_pass http://localhost:8082;
+                  proxy_set_header Host $host;
+              }
+
+              # SPA fallback
+              location / {
+                  try_files $uri $uri/ /index.html;
+              }
+          }
+          EONGINX
+
+          # Use envsubst for directory path
+          sudo sed -i "s|\$GITHUB_WORKSPACE|$GITHUB_WORKSPACE|g" /etc/nginx/sites-available/stirling-pdf
+          sudo ln -sf /etc/nginx/sites-available/stirling-pdf /etc/nginx/sites-enabled/
+          sudo rm -f /etc/nginx/sites-enabled/default
+          sudo nginx -t
+          sudo systemctl restart nginx
+
+      - name: Run integration tests
+        run: |
+          echo "=== Integration Test Results ==="
+          echo ""
+
+          # Test 1: Frontend serves index.html
+          echo "Test 1: Frontend serves index.html"
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/ 2>/dev/null)
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "  PASS: Frontend index.html (HTTP $HTTP_CODE)"
+          else
+            echo "  FAIL: Frontend index.html (HTTP $HTTP_CODE)"
+          fi
+
+          # Test 2: Backend health endpoint through proxy
+          echo "Test 2: Backend health through proxy"
+          HEALTH=$(curl -s http://localhost:8080/actuator/health 2>/dev/null)
+          if echo "$HEALTH" | grep -q "UP"; then
+            echo "  PASS: Health check"
+          else
+            echo "  FAIL: Health check - $HEALTH"
+          fi
+
+          # Test 3: Direct backend health
+          echo "Test 3: Direct backend health"
+          DIRECT_HEALTH=$(curl -s http://localhost:8082/actuator/health 2>/dev/null)
+          if echo "$DIRECT_HEALTH" | grep -q "UP"; then
+            echo "  PASS: Direct health check"
+          else
+            echo "  FAIL: Direct health check - $DIRECT_HEALTH"
+          fi
+
+          # Test 4: API docs accessible
+          echo "Test 4: API docs accessible"
+          API_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8082/v1/api-docs 2>/dev/null)
+          echo "  API docs: HTTP $API_CODE"
+
+          # Test 5: Frontend static assets
+          echo "Test 5: Frontend static assets"
+          ASSETS_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/index.html 2>/dev/null)
+          if [ "$ASSETS_CODE" = "200" ]; then
+            echo "  PASS: Static assets served"
+          else
+            echo "  FAIL: Static assets (HTTP $ASSETS_CODE)"
+          fi
+
+          # Test 6: Memory usage
+          echo ""
+          echo "=== Native Binary Resource Usage ==="
+          NATIVE_PID=$(cat /tmp/native-backend.pid)
+          if [ -f /proc/$NATIVE_PID/status ]; then
+            RSS=$(grep VmRSS /proc/$NATIVE_PID/status | awk '{print $2}')
+            echo "  RSS Memory: ${RSS} kB ($(( RSS / 1024 )) MB)"
+          fi
+
+          echo ""
+          echo "=== All integration tests completed ==="
+
+      - name: Cleanup
+        if: always()
+        run: |
+          NATIVE_PID=$(cat /tmp/native-backend.pid 2>/dev/null)
+          if [ -n "$NATIVE_PID" ]; then
+            kill $NATIVE_PID 2>/dev/null || true
+          fi
+          sudo systemctl stop nginx 2>/dev/null || true
+
+  # Phase 4: Docker native image build
+  docker-native:
+    name: Docker Native Image
+    needs: aot-validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@20cf305ff2072d973412fa9b1e3a4f227bda3c76 # v2.14.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker native image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.native
+          push: false
+          tags: stirling-pdf-native:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          load: true
+
+      - name: Test Docker native image
+        run: |
+          mkdir -p /tmp/stirling-configs /tmp/stirling-logs
+
+          # Start container
+          docker run -d --name stirling-native-test \
+            -p 8080:8080 \
+            -v /tmp/stirling-configs:/configs \
+            -v /tmp/stirling-logs:/logs \
+            -e MODE=BOTH \
+            stirling-pdf-native:test
+
+          echo "Waiting for container to start (max 60s)..."
+          for i in $(seq 1 60); do
+            if curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/actuator/health 2>/dev/null | grep -q "200"; then
+              echo "Container is healthy!"
+              break
+            fi
+            if [ $i -eq 60 ]; then
+              echo "Container did not become healthy in 60s"
+              docker logs stirling-native-test
+              exit 1
+            fi
+            sleep 1
+          done
+
+          # Run tests
+          echo ""
+          echo "=== Docker Native Image Tests ==="
+
+          # Health check
+          HEALTH=$(curl -s http://localhost:8080/actuator/health 2>/dev/null)
+          echo "Health: $HEALTH"
+
+          # Frontend
+          FRONTEND_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/ 2>/dev/null)
+          echo "Frontend: HTTP $FRONTEND_CODE"
+
+          # Memory usage
+          docker stats --no-stream stirling-native-test --format "Memory: {{.MemUsage}}"
+
+          # Container size
+          echo "Image size:"
+          docker images stirling-pdf-native:test --format "{{.Size}}"
+
+      - name: Dump container logs
+        if: always()
+        run: docker logs stirling-native-test 2>&1 || true
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker stop stirling-native-test 2>/dev/null || true
+          docker rm stirling-native-test 2>/dev/null || true

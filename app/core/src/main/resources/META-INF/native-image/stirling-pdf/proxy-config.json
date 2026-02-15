@@ -1,0 +1,17 @@
+[
+  {
+    "interfaces": ["jakarta.servlet.http.HttpServletRequest"]
+  },
+  {
+    "interfaces": ["jakarta.servlet.http.HttpServletResponse"]
+  },
+  {
+    "interfaces": ["jakarta.servlet.http.HttpSession"]
+  },
+  {
+    "interfaces": ["jakarta.servlet.ServletContext"]
+  },
+  {
+    "interfaces": ["org.springframework.web.context.request.NativeWebRequest"]
+  }
+]

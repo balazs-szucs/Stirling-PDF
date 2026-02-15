@@ -1,4 +1,5 @@
 apply plugin: 'org.springframework.boot'
+apply plugin: 'org.graalvm.buildtools.native'
 
 import org.apache.tools.ant.taskdefs.condition.Os
 
@@ -148,6 +149,83 @@ bootJar {
 // Configure main class for Spring Boot
 springBoot {
     mainClass = 'stirling.software.SPDF.SPDFApplication'
+}
+
+// GraalVM Native Image configuration
+graalvmNative {
+    binaries {
+        main {
+            imageName = 'stirling-pdf'
+            mainClass = 'stirling.software.SPDF.SPDFApplication'
+            sharedLibrary = false
+
+            // Fix classpath: include main + AOT compiled classes
+            classpath.from(sourceSets.main.output)
+
+            buildArgs.addAll(
+                // Native Image Configuration Files
+                "-H:ResourceConfigurationFiles=${projectDir}/src/main/resources/META-INF/native-image/stirling-pdf/resource-config.json",
+                "-H:ReflectionConfigurationFiles=${projectDir}/src/main/resources/META-INF/native-image/stirling-pdf/reflect-config.json",
+                "-H:JNIConfigurationFiles=${projectDir}/src/main/resources/META-INF/native-image/stirling-pdf/jni-config.json",
+                "-H:DynamicProxyConfigurationFiles=${projectDir}/src/main/resources/META-INF/native-image/stirling-pdf/proxy-config.json",
+                "-H:SerializationConfigurationFiles=${projectDir}/src/main/resources/META-INF/native-image/stirling-pdf/serialization-config.json",
+
+                // Memory Optimization
+                '-H:+UnlockExperimentalVMOptions',
+                '-H:+UseSerialGC',          // Smaller memory footprint
+                '-march=compatibility',     // Better portability
+                '-R:MaxHeapSize=512m',      // Limit runtime heap
+                '-R:MaxNewSize=256m',       // Limit young gen
+                '-H:MaxRuntimeCompileMethods=8000', // Reduce compilation overhead
+
+                // Diagnostics (removed unsupported options for GraalVM CE 25)
+                // '-H:+BuildReport',
+                // '-H:DashboardAll',
+                // '-H:DashboardDump=build/reports/native-image-dashboard.bgv',
+                // '-H:+PrintImageObjectTree',
+                // '-H:+PrintClassInitialization',
+
+                '--no-fallback',
+                '-H:+ReportExceptionStackTraces',
+                '--enable-url-protocols=https,http',
+                '-H:+AddAllCharsets',
+
+                // AWT headless support for PDF rendering (PDFBox uses java.awt internally)
+                '-Djava.awt.headless=true',
+
+                // Build-time Initialization (only what's strictly required)
+                '--initialize-at-build-time=org.apache.pdfbox.pdmodel.font.Standard14Fonts',
+                '--initialize-at-build-time=org.apache.pdfbox.pdmodel.font.Standard14Fonts$FontName',
+
+                // Runtime Initialization (Stateful or Native dependent classes)
+                '--initialize-at-run-time=sun.awt',
+                '--initialize-at-run-time=sun.java2d',
+                '--initialize-at-run-time=sun.font',
+                '--initialize-at-run-time=java.awt',
+                '--initialize-at-run-time=org.hibernate',
+                '--initialize-at-run-time=javax.persistence',
+                '--initialize-at-run-time=org.h2',
+            )
+        }
+
+        test {
+            buildArgs.addAll(
+                '-H:+ReportExceptionStackTraces'
+            )
+        }
+    }
+
+    agent {
+        defaultMode = "standard"
+        modes {
+            standard {}
+        }
+        metadataCopy {
+            inputTaskNames.add("test")
+            outputDirectories.add("src/main/resources/META-INF/native-image")
+            mergeWithExisting = true
+        }
+    }
 }
 
 // Frontend build tasks - only enabled with -PbuildWithFrontend=true

@@ -5,8 +5,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -30,17 +30,17 @@ public class LicenseKeyChecker {
 
     private final ApplicationProperties applicationProperties;
 
-    private final UserLicenseSettingsService licenseSettingsService;
+    private final ObjectProvider<UserLicenseSettingsService> licenseSettingsProvider;
 
     private License premiumEnabledResult = License.NORMAL;
 
     public LicenseKeyChecker(
             KeygenLicenseVerifier licenseService,
             ApplicationProperties applicationProperties,
-            @Lazy UserLicenseSettingsService licenseSettingsService) {
+            ObjectProvider<UserLicenseSettingsService> licenseSettingsProvider) {
         this.licenseService = licenseService;
         this.applicationProperties = applicationProperties;
-        this.licenseSettingsService = licenseSettingsService;
+        this.licenseSettingsProvider = licenseSettingsProvider;
     }
 
     @PostConstruct
@@ -81,7 +81,10 @@ public class LicenseKeyChecker {
     }
 
     private void synchronizeLicenseSettings() {
-        licenseSettingsService.updateLicenseMaxUsers();
+        UserLicenseSettingsService svc = licenseSettingsProvider.getIfAvailable();
+        if (svc != null) {
+            svc.updateLicenseMaxUsers();
+        }
     }
 
     private String getLicenseKeyContent(String keyOrFilePath) {

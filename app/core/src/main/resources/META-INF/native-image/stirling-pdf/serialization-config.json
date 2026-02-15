@@ -1,0 +1,11 @@
+[
+  {
+    "name": "org.bouncycastle.jce.provider.BouncyCastleProvider"
+  },
+  {
+    "name": "com.sun.org.apache.xerces.internal.jaxp.DocumentBuilderFactoryImpl"
+  },
+  {
+    "name": "com.sun.org.apache.xalan.internal.xsltc.trax.TransformerFactoryImpl"
+  }
+]

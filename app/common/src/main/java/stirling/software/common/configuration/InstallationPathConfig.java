@@ -2,9 +2,6 @@ package stirling.software.common.configuration;
 
 import java.io.File;
 
-import lombok.extern.slf4j.Slf4j;
-
-@Slf4j
 public class InstallationPathConfig {
     private static final String BASE_PATH;
 

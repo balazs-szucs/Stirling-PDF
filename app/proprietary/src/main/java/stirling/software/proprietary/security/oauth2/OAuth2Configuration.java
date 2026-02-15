@@ -11,10 +11,10 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.authority.mapping.GrantedAuthoritiesMapper;
@@ -47,11 +47,11 @@ public class OAuth2Configuration {
     public static final String REDIRECT_URI_PATH = "{baseUrl}/login/oauth2/code/";
 
     private final ApplicationProperties applicationProperties;
-    @Lazy private final UserService userService;
+    private final ObjectProvider<UserService> userServiceProvider;
 
     public OAuth2Configuration(
-            ApplicationProperties applicationProperties, @Lazy UserService userService) {
-        this.userService = userService;
+            ApplicationProperties applicationProperties, ObjectProvider<UserService> userServiceProvider) {
+        this.userServiceProvider = userServiceProvider;
         this.applicationProperties = applicationProperties;
         log.info(
                 "OAuth2Configuration initialized - OAuth2 enabled: {}",
@@ -272,13 +272,13 @@ public class OAuth2Configuration {
                                             .getOauth2()
                                             .getUseAsUsername();
                             Optional<User> userOpt =
-                                    userService.findByUsernameIgnoreCase(
+                                    userServiceProvider.getObject().findByUsernameIgnoreCase(
                                             (String) oAuth2Auth.getAttributes().get(useAsUsername));
                             userOpt.ifPresent(
                                     user ->
                                             mappedAuthorities.add(
                                                     new Authority(
-                                                            userService
+                                                            userServiceProvider.getObject()
                                                                     .findRole(user)
                                                                     .getAuthority(),
                                                             user)));

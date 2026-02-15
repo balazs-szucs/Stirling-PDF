@@ -13,6 +13,7 @@ import java.util.Properties;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.annotation.ImportRuntimeHints;
 import org.springframework.context.event.EventListener;
 import org.springframework.core.env.Environment;
 import org.springframework.scheduling.annotation.EnableScheduling;
@@ -23,6 +24,7 @@ import jakarta.annotation.PostConstruct;
 
 import lombok.extern.slf4j.Slf4j;
 
+import stirling.software.SPDF.config.NativeImageRuntimeHints;
 import stirling.software.common.configuration.AppConfig;
 import stirling.software.common.configuration.ConfigInitializer;
 import stirling.software.common.configuration.InstallationPathConfig;
@@ -30,6 +32,7 @@ import stirling.software.common.model.ApplicationProperties;
 
 @Slf4j
 @EnableScheduling
+@ImportRuntimeHints(NativeImageRuntimeHints.class)
 @SpringBootApplication(
         scanBasePackages = {
             "stirling.software.SPDF",

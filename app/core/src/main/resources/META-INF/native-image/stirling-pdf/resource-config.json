@@ -1,0 +1,133 @@
+{
+  "resources": {
+    "includes": [
+      {
+        "pattern": "org/apache/pdfbox/resources/.*"
+      },
+      {
+        "pattern": "org/apache/pdfbox/resources/glyphlist/.*\\.txt"
+      },
+      {
+        "pattern": "org/apache/pdfbox/resources/afm/.*\\.afm"
+      },
+      {
+        "pattern": "org/apache/pdfbox/resources/cmap/.*"
+      },
+      {
+        "pattern": "org/apache/pdfbox/resources/icc/.*\\.icc"
+      },
+      {
+        "pattern": "org/apache/fontbox/cmap/.*"
+      },
+      {
+        "pattern": "org/apache/fontbox/.*"
+      },
+      {
+        "pattern": "fonts/.*\\.ttf$"
+      },
+      {
+        "pattern": "org/apache/pdfbox/resources/ttf/.*\\.ttf$"
+      },
+      {
+        "pattern": ".*\\.otf$"
+      },
+      {
+        "pattern": ".*\\.properties$"
+      },
+      {
+        "pattern": ".*\\.yml$"
+      },
+      {
+        "pattern": ".*\\.template$"
+      },
+      {
+        "pattern": ".*\\.yaml$"
+      },
+      {
+        "pattern": ".*\\.html$"
+      },
+      {
+        "pattern": ".*\\.json$"
+      },
+      {
+        "pattern": ".*\\.xml$"
+      },
+      {
+        "pattern": ".*\\.css$"
+      },
+      {
+        "pattern": ".*\\.js$"
+      },
+      {
+        "pattern": ".*\\.mjs$"
+      },
+      {
+        "pattern": ".*\\.svg$"
+      },
+      {
+        "pattern": ".*\\.png$"
+      },
+      {
+        "pattern": ".*\\.ico$"
+      },
+      {
+        "pattern": ".*\\.toml$"
+      },
+      {
+        "pattern": "version\\.properties"
+      },
+      {
+        "pattern": "application.*\\.yml"
+      },
+      {
+        "pattern": "application.*\\.yaml"
+      },
+      {
+        "pattern": "application.*\\.properties"
+      },
+      {
+        "pattern": "META-INF/.*"
+      },
+      {
+        "pattern": "static/.*"
+      },
+      {
+        "pattern": "templates/.*"
+      },
+      {
+        "pattern": "messages.*\\.properties"
+      }
+    ],
+    "excludes": [
+      {
+        "pattern": "META-INF/services/org\\.hibernate\\.bytecode\\.spi\\.BytecodeProvider"
+      }
+    ]
+  },
+  "bundles": [
+    {
+      "name": "messages",
+      "locales": ["", "en"]
+    },
+    {
+      "name": "com.sun.imageio.plugins.jpeg.JPEGImageWriterResources",
+      "locales": ["", "en", "en_GB", "en_US"]
+    },
+    {
+      "name": "com.sun.imageio.plugins.jpeg.JPEGImageReaderResources",
+      "locales": ["", "en", "en_GB", "en_US"]
+    },
+    {
+      "name": "com.sun.imageio.plugins.common.I18N",
+      "locales": ["", "en", "en_GB", "en_US"]
+    },
+    {
+      "name": "sun.awt.resources.awt",
+      "locales": ["", "en", "en_GB", "en_US"]
+    },
+    {
+      "name": "sun.font.FontManagerResources",
+      "locales": ["", "en", "en_GB", "en_US"]
+    }
+  ]
+}

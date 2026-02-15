@@ -6,8 +6,8 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
@@ -39,18 +39,18 @@ import stirling.software.proprietary.security.session.SessionPersistentRegistry;
 @Component
 public class UserAuthenticationFilter extends OncePerRequestFilter {
 
-    private final ApplicationProperties.Security securityProp;
-    private final UserService userService;
+    private final ObjectProvider<ApplicationProperties.Security> securityPropProvider;
+    private final ObjectProvider<UserService> userServiceProvider;
     private final SessionPersistentRegistry sessionPersistentRegistry;
     private final boolean loginEnabledValue;
 
     public UserAuthenticationFilter(
-            @Lazy ApplicationProperties.Security securityProp,
-            @Lazy UserService userService,
+            ObjectProvider<ApplicationProperties.Security> securityPropProvider,
+            ObjectProvider<UserService> userServiceProvider,
             SessionPersistentRegistry sessionPersistentRegistry,
             @Qualifier("loginEnabled") boolean loginEnabledValue) {
-        this.securityProp = securityProp;
-        this.userService = userService;
+        this.securityPropProvider = securityPropProvider;
+        this.userServiceProvider = userServiceProvider;
         this.sessionPersistentRegistry = sessionPersistentRegistry;
         this.loginEnabledValue = loginEnabledValue;
     }
@@ -65,6 +65,8 @@ public class UserAuthenticationFilter extends OncePerRequestFilter {
             filterChain.doFilter(request, response);
             return;
         }
+        UserService userService = userServiceProvider.getObject();
+        ApplicationProperties.Security securityProp = securityPropProvider.getObject();
         String requestURI = request.getRequestURI();
 
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();

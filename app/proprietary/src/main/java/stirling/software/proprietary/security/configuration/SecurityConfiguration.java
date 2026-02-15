@@ -2,12 +2,12 @@ package stirling.software.proprietary.security.configuration;
 
 import java.util.List;
 
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.DependsOn;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.core.annotation.Order;
 import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
@@ -69,7 +69,7 @@ import stirling.software.proprietary.security.session.SessionPersistentRegistry;
 public class SecurityConfiguration {
 
     private final CustomUserDetailsService userDetailsService;
-    private final UserService userService;
+    private final ObjectProvider<UserService> userServiceProvider;
     private final boolean loginEnabledValue;
     private final boolean runningProOrHigher;
 
@@ -92,7 +92,7 @@ public class SecurityConfiguration {
     public SecurityConfiguration(
             PersistentLoginRepository persistentLoginRepository,
             CustomUserDetailsService userDetailsService,
-            @Lazy UserService userService,
+            ObjectProvider<UserService> userServiceProvider,
             @Qualifier("loginEnabled") boolean loginEnabledValue,
             @Qualifier("runningProOrHigher") boolean runningProOrHigher,
             AppConfig appConfig,
@@ -112,7 +112,7 @@ public class SecurityConfiguration {
             stirling.software.proprietary.service.UserLicenseSettingsService
                     licenseSettingsService) {
         this.userDetailsService = userDetailsService;
-        this.userService = userService;
+        this.userServiceProvider = userServiceProvider;
         this.loginEnabledValue = loginEnabledValue;
         this.runningProOrHigher = runningProOrHigher;
         this.appConfig = appConfig;
@@ -192,8 +192,8 @@ public class SecurityConfiguration {
     @Order(1)
     public SecurityFilterChain samlFilterChain(
             HttpSecurity http,
-            @Lazy IPRateLimitingFilter rateLimitingFilter,
-            @Lazy JwtAuthenticationFilter jwtAuthenticationFilter)
+            ObjectProvider<IPRateLimitingFilter> rateLimitingFilterProvider,
+            ObjectProvider<JwtAuthenticationFilter> jwtAuthenticationFilterProvider)
             throws Exception {
         http.securityMatcher("/saml2/**", "/login/saml2/**");
 
@@ -202,26 +202,30 @@ public class SecurityConfiguration {
                         ? SessionCreationPolicy.IF_REQUIRED
                         : SessionCreationPolicy.STATELESS;
 
-        return configureSecurity(http, rateLimitingFilter, jwtAuthenticationFilter, sessionPolicy);
+        return configureSecurity(http, rateLimitingFilterProvider.getObject(), jwtAuthenticationFilterProvider.getObject(), sessionPolicy);
     }
 
     @Bean
     @Order(2)
     public SecurityFilterChain filterChain(
             HttpSecurity http,
-            @Lazy IPRateLimitingFilter rateLimitingFilter,
-            @Lazy JwtAuthenticationFilter jwtAuthenticationFilter)
+            ObjectProvider<IPRateLimitingFilter> rateLimitingFilterProvider,
+            ObjectProvider<JwtAuthenticationFilter> jwtAuthenticationFilterProvider)
             throws Exception {
         SessionCreationPolicy sessionPolicy = SessionCreationPolicy.STATELESS;
-        return configureSecurity(http, rateLimitingFilter, jwtAuthenticationFilter, sessionPolicy);
+        return configureSecurity(http, rateLimitingFilterProvider.getObject(), jwtAuthenticationFilterProvider.getObject(), sessionPolicy);
     }
 
     private SecurityFilterChain configureSecurity(
             HttpSecurity http,
-            @Lazy IPRateLimitingFilter rateLimitingFilter,
-            @Lazy JwtAuthenticationFilter jwtAuthenticationFilter,
+            IPRateLimitingFilter rateLimitingFilter,
+            JwtAuthenticationFilter jwtAuthenticationFilter,
             SessionCreationPolicy sessionPolicy)
             throws Exception {
+        UserService userService = userServiceProvider.getObject();
+        if (userService == null) {
+            throw new IllegalStateException("UserService not available");
+        }
         // Enable CORS only if we have configured origins
         CorsConfigurationSource corsSource = corsConfigurationSource();
         if (corsSource != null) {
@@ -444,7 +448,7 @@ public class SecurityConfiguration {
     public JwtAuthenticationFilter jwtAuthenticationFilter() {
         return new JwtAuthenticationFilter(
                 jwtService,
-                userService,
+                userServiceProvider.getObject(),
                 userDetailsService,
                 jwtAuthenticationEntryPoint,
                 securityProperties);

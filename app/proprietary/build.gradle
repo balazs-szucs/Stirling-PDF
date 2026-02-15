@@ -68,7 +68,11 @@ dependencies {
         implementation "org.opensaml:opensaml-saml-api:$openSamlVersion"
         implementation "org.opensaml:opensaml-saml-impl:$openSamlVersion"
     }
-    implementation 'com.coveo:saml-client:5.0.0'
+    implementation ('com.coveo:saml-client:5.0.0') {
+        // Exclude old opensaml-core v4 to avoid sealed package conflict with
+        // opensaml-core-api v5 from spring-security-saml2-service-provider
+        exclude group: 'org.opensaml', module: 'opensaml-core'
+    }
 }
 
 tasks.register('prepareKotlinBuildScriptModel') {}
