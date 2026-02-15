@@ -142,5 +142,12 @@
   ],
   "[typescript]": {
     "editor.defaultFormatter": "vscode.typescript-language-features"
+  },
+  "chat.tools.terminal.autoApprove": {
+    "jar": true,
+    "unzip": true,
+    "awk": true,
+    "read": true,
+    "java": true
   }
 }

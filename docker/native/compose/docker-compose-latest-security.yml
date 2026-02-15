@@ -32,4 +32,7 @@ services:
       METRICS_ENABLED: "true"
       SYSTEM_GOOGLEVISIBILITY: "true"
       SHOW_SURVEY: "true"
+      # Native image heap configuration (set at runtime, not baked into binary)
+      NATIVE_HEAP_MIN: "128m"
+      NATIVE_HEAP_MAX: "512m"
     restart: on-failure:5

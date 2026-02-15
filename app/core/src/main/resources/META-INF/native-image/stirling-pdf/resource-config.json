@@ -17,6 +17,30 @@
         "pattern": "org/apache/pdfbox/resources/icc/.*\\.icc"
       },
       {
+        "pattern": "sun/java2d/cmm/profiles/.*\\.pf"
+      },
+      {
+        "pattern": "icc/.*\\.icc"
+      },
+      {
+        "pattern": "type3/.*"
+      },
+      {
+        "pattern": "org/verapdf/pdfa/validation/.*"
+      },
+      {
+        "pattern": "org/verapdf/metadata/fixer/.*"
+      },
+      {
+        "pattern": "org/verapdf/release/.*"
+      },
+      {
+        "pattern": "org/verapdf/.*\\.xml"
+      },
+      {
+        "pattern": "org/verapdf/.*\\.xsd"
+      },
+      {
         "pattern": "org/apache/fontbox/cmap/.*"
       },
       {
@@ -68,7 +92,34 @@
         "pattern": ".*\\.png$"
       },
       {
+        "pattern": ".*\\.jpg$"
+      },
+      {
+        "pattern": ".*\\.jpeg$"
+      },
+      {
+        "pattern": ".*\\.gif$"
+      },
+      {
+        "pattern": ".*\\.webp$"
+      },
+      {
         "pattern": ".*\\.ico$"
+      },
+      {
+        "pattern": ".*\\.woff$"
+      },
+      {
+        "pattern": ".*\\.woff2$"
+      },
+      {
+        "pattern": ".*\\.eot$"
+      },
+      {
+        "pattern": ".*\\.wasm$"
+      },
+      {
+        "pattern": ".*\\.map$"
       },
       {
         "pattern": ".*\\.toml$"
@@ -107,27 +158,55 @@
   "bundles": [
     {
       "name": "messages",
-      "locales": ["", "en"]
+      "locales": [
+        "",
+        "en"
+      ]
     },
     {
       "name": "com.sun.imageio.plugins.jpeg.JPEGImageWriterResources",
-      "locales": ["", "en", "en_GB", "en_US"]
+      "locales": [
+        "",
+        "en",
+        "en_GB",
+        "en_US"
+      ]
     },
     {
       "name": "com.sun.imageio.plugins.jpeg.JPEGImageReaderResources",
-      "locales": ["", "en", "en_GB", "en_US"]
+      "locales": [
+        "",
+        "en",
+        "en_GB",
+        "en_US"
+      ]
     },
     {
       "name": "com.sun.imageio.plugins.common.I18N",
-      "locales": ["", "en", "en_GB", "en_US"]
+      "locales": [
+        "",
+        "en",
+        "en_GB",
+        "en_US"
+      ]
     },
     {
       "name": "sun.awt.resources.awt",
-      "locales": ["", "en", "en_GB", "en_US"]
+      "locales": [
+        "",
+        "en",
+        "en_GB",
+        "en_US"
+      ]
     },
     {
       "name": "sun.font.FontManagerResources",
-      "locales": ["", "en", "en_GB", "en_US"]
+      "locales": [
+        "",
+        "en",
+        "en_GB",
+        "en_US"
+      ]
     }
   ]
 }

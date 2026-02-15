@@ -155,7 +155,7 @@ jobs:
             ${{ runner.os }}-native-
 
       - name: Build Native Image
-        run: ./gradlew :stirling-pdf:nativeCompile -PnoSpotless
+        run: ./gradlew :stirling-pdf:nativeCompile -Pnative.profile=production -PnoSpotless
         env:
           DISABLE_ADDITIONAL_FEATURES: false
 

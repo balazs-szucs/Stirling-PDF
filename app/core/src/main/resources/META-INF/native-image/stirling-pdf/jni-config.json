@@ -1013,5 +1013,19 @@
   {
     "name": "java.awt.event.KeyEvent",
     "allDeclaredFields": true
+  },
+  {
+    "name": "sun.java2d.cmm.lcms.LCMS",
+    "methods": [
+      {"name": "loadProfileNative", "parameterTypes": ["byte[]", "java.lang.Object[]"]},
+      {"name": "freeProfileNative", "parameterTypes": ["long"]},
+      {"name": "getProfileSizeNative", "parameterTypes": ["long"]},
+      {"name": "getProfileDataNative", "parameterTypes": ["long", "byte[]"]},
+      {"name": "getTagSizeNative", "parameterTypes": ["long", "int"]},
+      {"name": "getTagDataNative", "parameterTypes": ["long", "int", "byte[]"]},
+      {"name": "createTransform", "parameterTypes": ["long[]", "int", "int", "boolean", "int", "boolean", "java.lang.Object"]},
+      {"name": "colorConvert", "parameterTypes": ["sun.java2d.cmm.lcms.LCMSTransform", "sun.java2d.cmm.lcms.LCMSImageLayout", "sun.java2d.cmm.lcms.LCMSImageLayout"]},
+      {"name": "initLCMS", "parameterTypes": ["java.lang.Class", "java.lang.Class", "java.lang.Class"]}
+    ]
   }
 ]

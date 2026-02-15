@@ -4,7 +4,7 @@
 # Multi-stage build:
 #   Stage 1: Build React frontend
 #   Stage 2: Build native binary with GraalVM
-#   Stage 3: Runtime image with native binary + system deps (mirrors embedded)
+#   Stage 3: Runtime image with native binary + system deps
 #
 # Usage:
 #   docker build -f docker/Dockerfile.native -t stirling-pdf-native .
@@ -20,14 +20,15 @@ COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 
 COPY frontend .
-# Override VITE_API_BASE_URL to use relative paths for production
 RUN DISABLE_ADDITIONAL_FEATURES=false VITE_API_BASE_URL=/ npm run build
 
 # Stage 2: Build Native Image with GraalVM
 FROM ghcr.io/graalvm/graalvm-community:25 AS native-build
 
-# Install native-image component (included in GraalVM 25+)
 RUN native-image --version
+
+# Install strip (binutils) for post-build binary stripping
+RUN microdnf install -y binutils && microdnf clean all
 
 WORKDIR /app
 
@@ -41,7 +42,6 @@ COPY app/core/build.gradle app/core/build.gradle
 COPY app/common/build.gradle app/common/build.gradle
 COPY app/proprietary/build.gradle app/proprietary/build.gradle
 
-# Create directories expected by Gradle
 RUN mkdir -p app/core/src app/common/src app/proprietary/src
 
 # Download dependencies (separate layer for caching)
@@ -50,40 +50,46 @@ RUN ./gradlew dependencies --no-daemon -PnoSpotless || true
 # Copy full source code
 COPY . .
 
+# Copy pre-built frontend
+COPY --from=frontend-build /app/dist/. frontend/dist/
+
+# Verify frontend files are present
+RUN echo "=== Verifying frontend files ===" && \
+    test -f "frontend/dist/index.html" || { echo "ERROR: index.html missing!" && exit 1; } && \
+    echo "✓ Frontend verified ($(find frontend/dist -type f | wc -l) files)"
+
 # Build the native image
-# -PnoSpotless skips code formatting
-# Use -x test to skip tests in the build (tests run separately in CI)
 RUN DISABLE_ADDITIONAL_FEATURES=false \
     ./gradlew :stirling-pdf:nativeCompile \
+    -PbuildWithFrontend=true \
+    -Pnative.profile=production \
     -PnoSpotless \
     -x test \
+    -x npmInstall \
+    -x npmBuild \
     -x spotlessCheck \
     -x sonarqube \
-    --no-daemon \
-    && strip app/core/build/native/nativeCompile/stirling-pdf
+    --no-daemon
 
-# Verify the binary was created
+# Verify the binary
 RUN ls -la app/core/build/native/nativeCompile/ && \
     file app/core/build/native/nativeCompile/stirling-pdf
 
-# Collect JDK native libraries needed at runtime (AWT, font, JPEG, color mgmt)
-# These are dynamically loaded via System.loadLibrary at runtime
-RUN mkdir -p /jdk-native-libs && \
-    JAVA_LIB_DIR="$(dirname $(find $JAVA_HOME -name 'libawt.so' -type f 2>/dev/null | head -1))" && \
-    echo "Found JDK native libs in: $JAVA_LIB_DIR" && \
-    for lib in libawt.so libawt_headless.so libfontmanager.so libjavajpeg.so \
-               liblcms.so libharfbuzz.so libjava.so libjimage.so libnet.so \
-               libnio.so libzip.so libverify.so libjsig.so libsyslookup.so; do \
-        if [ -f "$JAVA_LIB_DIR/$lib" ]; then \
-            cp "$JAVA_LIB_DIR/$lib" /jdk-native-libs/; \
-            echo "  Copied: $lib"; \
-        fi; \
-    done && \
-    ls -la /jdk-native-libs/
+# Collect ONLY the companion .so files produced by native-image.
+# GraalVM resolves these relative to the binary they MUST live alongside it.
+# Also strip the binary and libs to save space.
+RUN strip --strip-unneeded app/core/build/native/nativeCompile/stirling-pdf && \
+    mkdir -p /native-libs && \
+    cp app/core/build/native/nativeCompile/*.so /native-libs/ && \
+    strip --strip-unneeded /native-libs/*.so 2>/dev/null || true && \
+    echo "Collected $(ls /native-libs/*.so | wc -l) companion libraries" && \
+    ls -la /native-libs/
 
-# Stage 3: Runtime image - Debian-based (mirrors docker/embedded/Dockerfile)
-# Uses the same base as the embedded JVM image for maximum compatibility
-FROM eclipse-temurin:25-jre
+
+# ==========================================================================
+# Stage 3: Runtime image
+# ==========================================================================
+FROM debian:bookworm-slim
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 ENV DEBIAN_FRONTEND=noninteractive
@@ -93,70 +99,134 @@ ENV LANG=C.UTF-8 \
 
 ARG VERSION_TAG
 
-# Labels
-LABEL org.opencontainers.image.title="Stirling-PDF Native"
-LABEL org.opencontainers.image.description="GraalVM Native Image build of Stirling-PDF - Ultra-fast startup, minimal memory"
-LABEL org.opencontainers.image.source="https://github.com/Stirling-Tools/Stirling-PDF"
-LABEL org.opencontainers.image.licenses="MIT"
-LABEL org.opencontainers.image.vendor="Stirling-Tools"
-LABEL org.opencontainers.image.url="https://www.stirlingpdf.com"
-LABEL org.opencontainers.image.documentation="https://docs.stirlingpdf.com"
-LABEL maintainer="Stirling-Tools"
-LABEL org.opencontainers.image.authors="Stirling-Tools"
-LABEL org.opencontainers.image.version="${VERSION_TAG}"
-LABEL org.opencontainers.image.keywords="PDF, manipulation, native, GraalVM, API, Spring Boot, React"
+LABEL org.opencontainers.image.title="Stirling-PDF Native" \
+      org.opencontainers.image.description="GraalVM Native Image build of Stirling-PDF" \
+      org.opencontainers.image.source="https://github.com/Stirling-Tools/Stirling-PDF" \
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.vendor="Stirling-Tools" \
+      org.opencontainers.image.url="https://www.stirlingpdf.com" \
+      org.opencontainers.image.documentation="https://docs.stirlingpdf.com" \
+      maintainer="Stirling-Tools" \
+      org.opencontainers.image.authors="Stirling-Tools" \
+      org.opencontainers.image.version="${VERSION_TAG}" \
+      org.opencontainers.image.keywords="PDF, native, GraalVM, Spring Boot, React"
 
-# Install core runtime dependencies - mirrors embedded Dockerfile
+# ---------------------------------------------------------------------------
+# Install ALL runtime deps, Calibre, LibreOffice in ONE layer.
+# Strip bloat and clean up in the SAME layer so deleted bytes never persist.
+# ---------------------------------------------------------------------------
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates tzdata tini bash fontconfig curl \
-    ffmpeg poppler-utils ocrmypdf imagemagick fontforge ghostscript \
-    fonts-dejavu \
-    fonts-liberation fonts-liberation2 \
+    # Core
+    ca-certificates tzdata tini bash fontconfig curl gosu coreutils \
+    # PDF tools
+    ffmpeg poppler-utils ocrmypdf imagemagick fontforge ghostscript unpaper qpdf \
+    # Python + UNO bridge
+    python3 python3-venv python3-uno \
+    # OCR
+    tesseract-ocr tesseract-ocr-eng tesseract-ocr-deu tesseract-ocr-fra \
+    tesseract-ocr-por tesseract-ocr-chi-sim tesseract-ocr-spa \
+    # Fonts (same set as embedded Dockerfile)
+    fonts-dejavu fonts-liberation2 \
     fonts-crosextra-caladea fonts-crosextra-carlito \
     fonts-linuxlibertine \
-    fonts-noto-core fonts-noto-cjk fonts-noto-mono fonts-noto-ui-core \
-    fonts-noto-color-emoji \
-    ttf-wqy-zenhei \
-    fonts-arphic-ukai fonts-arphic-uming \
-    python3 python3-venv python3-uno \
-    tesseract-ocr tesseract-ocr-eng tesseract-ocr-deu tesseract-ocr-fra \
-    tesseract-ocr-por tesseract-ocr-chi-sim \
+    fonts-noto-core fonts-noto-cjk fonts-noto-mono \
+    # Graphics / AWT headless (native binary needs these for PDF rendering)
     libcairo2 libpango-1.0-0 libpangoft2-1.0-0 libgdk-pixbuf-2.0-0 \
-    gosu unpaper qpdf \
-    # AWT headless support (required for PDF rendering via PDFBox)
     libfreetype6 libfontconfig1 libx11-6 libxt6 libxext6 libxrender1 libxtst6 libxi6 \
     libxinerama1 libxkbcommon0 libxkbfile1 libsm6 libice6 \
-    # Qt WebEngine dependencies for Calibre
+    # Qt WebEngine deps (Calibre ebook-convert EPUB→PDF)
     libegl1 libopengl0 libgl1 libxdamage1 libxfixes3 libxshmfence1 libdrm2 libgbm1 \
     libxkbcommon-x11-0 libxrandr2 libxcomposite1 libnss3 libx11-xcb1 \
     libxcb-cursor0 libdbus-1-3 libglib2.0-0 \
-    # Virtual framebuffer (required for headless LibreOffice)
-    xvfb x11-utils coreutils \
-    # Temporary packages only needed for Calibre installer
+    # Headless display (required by Calibre Qt WebEngine)
+    xvfb \
+    # LibreOffice headless (-nogui uses svp VCL plugin, no X11/display needed)
+    libreoffice-writer-nogui libreoffice-calc-nogui \
+    libreoffice-impress-nogui libreoffice-draw-nogui \
+    # Temp: only for Calibre installer
     xz-utils gpgv xdg-utils \
+    # Health check utility for unoserver watchdog
+    netcat-openbsd \
     \
-    # Install Calibre from official installer script
-    && curl -fsSL https://download.calibre-ebook.com/linux-installer.sh | sh /dev/stdin \
+    # ---- Calibre ----
+    # ---- Calibre (Manual Install) ----
+    && curl -fsSL -o /tmp/calibre.txz https://download.calibre-ebook.com/9.2.1/calibre-9.2.1-x86_64.txz \
+    && mkdir -p /opt/calibre \
+    && tar -xJC /opt/calibre -f /tmp/calibre.txz \
+    && rm /tmp/calibre.txz \
+    && ln -sf /opt/calibre/ebook-convert /usr/bin/ebook-convert \
     \
-    # Clean up installer-only packages
-    && apt-get purge -y xz-utils xdg-utils \
-    && apt-get autoremove -y \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install LibreOffice
-RUN set -eux; \
-    apt-get update; \
-    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-        libreoffice libreoffice-java-common; \
-    rm -rf /var/lib/apt/lists/*; \
-    libreoffice --version
-
-# Make ebook-convert available in PATH
-RUN ln -sf /opt/calibre/ebook-convert /usr/bin/ebook-convert \
-    && /opt/calibre/ebook-convert --version
+    # ---- Calibre Stripping ----
+    # Keep: ebook-convert, calibre-parallel, calibre-debug, Qt WebEngine (EPUB→PDF)
+    # Removed aggressive stripping of root files to fix "missing modules" errors
+    # (Original find command removed here)
+    && rm -rf /opt/calibre/calibre-server \
+              /opt/calibre/calibre-smtp \
+              /opt/calibre/calibredb \
+              /opt/calibre/calibre \
+              /opt/calibre/lrf* \
+              /opt/calibre/markdown-calibre \
+              /opt/calibre/web2disk \
+              /opt/calibre/fetch-ebook-metadata \
+              /opt/calibre/ebook-edit \
+              /opt/calibre/ebook-viewer \
+              /opt/calibre/ebook-polish \
+              /opt/calibre/ebook-meta \
+              /opt/calibre/ebook-device \
+              /opt/calibre/lib/calibre/gui2 \
+              /opt/calibre/lib/calibre/devices \
+              /opt/calibre/lib/calibre/library \
+              /opt/calibre/lib/calibre/db \
+              /opt/calibre/lib/calibre/srv \
+              /opt/calibre/lib/libQt5Multimedia* \
+              /opt/calibre/lib/libQt53D* \
+              /opt/calibre/translations \
+              /opt/calibre/plugins/Viewer \
+              /opt/calibre/history.plist \
+              /opt/calibre/app_icon.png \
+    && find /opt/calibre -type f -name '*.py[co]' -delete \
+    && find /opt/calibre -name '__pycache__' -type d -exec rm -rf {} + 2>/dev/null || true \
+    \
+    # ---- Strip LibreOffice ----
+    && rm -rf /usr/share/libreoffice/help \
+              /usr/share/libreoffice/share/gallery \
+              /usr/share/libreoffice/share/config/soffice.cfg/simpress \
+              /usr/share/libreoffice/share/config/soffice.cfg/modules/simpress \
+              /usr/lib/libreoffice/share/gallery \
+              /usr/lib/libreoffice/readmes \
+              /usr/lib/libreoffice/share/autotext \
+              /usr/lib/libreoffice/share/extensions/wiki-publisher \
+              /usr/lib/libreoffice/share/extensions/nlpsolver \
+    \
+    # ---- Global Cleanup (Docs, Man, Locales) ----
+    && rm -rf /usr/share/doc \
+              /usr/share/man \
+              /usr/share/info \
+              /usr/share/lintian \
+              /usr/share/linda \
+              /usr/share/bug \
+              /usr/share/pixmaps \
+              /usr/share/applications \
+    # Remove all locales except English (libc)
+    && find /usr/share/locale -mindepth 1 -maxdepth 1 \
+         ! -name 'en' ! -name 'en_US' ! -name 'locale.alias' \
+         -exec rm -rf {} + 2>/dev/null || true \
+    && find /usr/share/i18n/locales -mindepth 1 \
+         ! -name 'en_US' ! -name 'en_GB' ! -name 'POSIX' ! -name 'i18n*' ! -name 'iso*' ! -name 'translit*' \
+         -exec rm -f {} + 2>/dev/null || true \
+    \
+    # ---- Clean up ----
+    && apt-get purge -y xz-utils xdg-utils gpgv \
+    && apt-get autoremove -y --purge \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /var/log/*.log /var/log/apt \
+    \
+    # Backup tessdata for entrypoint
+    && mkdir -p /usr/share/tessdata-original \
+    && cp -r /usr/share/tesseract-ocr/5/tessdata/* /usr/share/tessdata-original/ 2>/dev/null || true
 
 # ==============================================================================
-# Create non-root user (stirlingpdfuser) with configurable UID/GID
+# Create non-root user
 # ==============================================================================
 ARG PUID=1000
 ARG PGID=1000
@@ -178,29 +248,25 @@ RUN set -eux; \
     fi; \
     fi
 
-# Compatibility alias for older entrypoint scripts expecting su-exec
 RUN ln -sf /usr/sbin/gosu /usr/local/bin/su-exec
 
-# Copy native binary (not a JAR!)
+# ==============================================================================
+# Copy native binary + companion .so files
+# --chown on COPY sets ownership WITHOUT creating a duplicate layer.
+# NEVER chown -R /app later — that would duplicate the entire 480 MB binary.
+# ==============================================================================
 COPY --from=native-build --chown=stirlingpdfuser:stirlingpdfgroup \
     /app/app/core/build/native/nativeCompile/stirling-pdf /app/stirling-pdf
+COPY --from=native-build --chown=stirlingpdfuser:stirlingpdfgroup \
+    /native-libs/*.so /app/
 
-# Copy JDK native libraries needed by the native binary (AWT, fonts, JPEG, etc.)
-COPY --from=native-build /jdk-native-libs/ /app/jdk-libs/
-
-# Copy scripts and static resources
-COPY scripts /scripts
-COPY app/core/src/main/resources/static/fonts/*.ttf /usr/share/fonts/truetype/
-
-# Copy frontend files
-COPY --from=frontend-build /app/dist /usr/share/nginx/html
-
-# Copy nginx configuration and entrypoint
-COPY docker/unified/nginx.conf /etc/nginx/nginx.conf
-COPY docker/native/entrypoint.sh /entrypoint.sh
+# Copy scripts, fonts, entrypoint — set ownership via --chown to avoid later chown
+COPY --chown=stirlingpdfuser:stirlingpdfgroup scripts /scripts
+COPY app/core/src/main/resources/static/fonts/*.ttf /usr/share/fonts/opentype/noto/
+COPY --chmod=755 docker/native/entrypoint.sh /entrypoint.sh
 
 # ==============================================================================
-# Runtime environment variables
+# Runtime environment
 # ==============================================================================
 ENV VERSION_TAG=$VERSION_TAG \
     HOME=/home/stirlingpdfuser \
@@ -211,67 +277,51 @@ ENV VERSION_TAG=$VERSION_TAG \
     UNO_PATH=/usr/lib/libreoffice/program \
     LIBREOFFICE_BIN_PATH=/usr/lib/libreoffice/program/soffice.bin \
     URE_BOOTSTRAP=file:///usr/lib/libreoffice/program/fundamentalrc \
+    SAL_USE_VCLPLUGIN=svp \
     STIRLING_TEMPFILES_DIRECTORY=/tmp/stirling-pdf \
     TMPDIR=/tmp/stirling-pdf \
     TEMP=/tmp/stirling-pdf \
-    TMP=/tmp/stirling-pdf \
-    MODE=BOTH \
-    BACKEND_INTERNAL_PORT=8081 \
-    VITE_API_BASE_URL=http://localhost:8080 \
-    # AWT native library path for the native binary
-    JDK_NATIVE_LIB_PATH=/app/jdk-libs
+    TMP=/tmp/stirling-pdf
 
 # ==============================================================================
-# Python virtual environment (mirrors embedded Dockerfile)
+# Python venvs + unoserver — single layer
 # ==============================================================================
-RUN python3 -m venv /opt/venv --system-site-packages \
-    && /opt/venv/bin/pip install --no-cache-dir weasyprint pdf2image opencv-python-headless \
-    && /opt/venv/bin/python -c "import cv2; print('OpenCV version:', cv2.__version__)"
-
-# Separate venv for unoserver
 ARG UNOSERVER_VERSION=3.6
-RUN python3 -m venv /opt/unoserver-venv --system-site-packages \
-    && /opt/unoserver-venv/bin/pip install --no-cache-dir "unoserver==${UNOSERVER_VERSION}"
+RUN python3 -m venv /opt/venv --system-site-packages \
+    && /opt/venv/bin/pip install --no-cache-dir \
+        weasyprint pdf2image opencv-python-headless \
+    && python3 -m venv /opt/unoserver-venv --system-site-packages \
+    && /opt/unoserver-venv/bin/pip install --no-cache-dir "unoserver==${UNOSERVER_VERSION}" \
+    && ln -sf /opt/unoserver-venv/bin/unoconvert /opt/venv/bin/unoconvert \
+    && ln -sf /opt/unoserver-venv/bin/unoserver  /opt/venv/bin/unoserver \
+    # ---- Clean up Python venvs ----
+    && find /opt/venv /opt/unoserver-venv -type f -name '*.so' \
+         -exec strip --strip-unneeded {} + 2>/dev/null || true \
+    && find /opt/venv -type f -name '*.pyc' -delete \
+    && find /opt/venv -type d -name '__pycache__' -exec rm -rf {} + \
+    && find /opt/unoserver-venv -type f -name '*.pyc' -delete \
+    && find /opt/unoserver-venv -type d -name '__pycache__' -exec rm -rf {} +
 
-# Make unoserver tools available in main venv PATH
-RUN ln -sf /opt/unoserver-venv/bin/unoconvert /opt/venv/bin/unoconvert \
-    && ln -sf /opt/unoserver-venv/bin/unoserver /opt/venv/bin/unoserver
-
-# Extend PATH to include virtual environments
 ENV PATH="/opt/venv/bin:/opt/unoserver-venv/bin:${PATH}"
 
-# ==============================================================================
-# Final permissions, directories and font cache
-# ==============================================================================
 RUN set -eux; \
     chmod +x /scripts/* 2>/dev/null || true; \
-    chmod +x /entrypoint.sh; \
     chmod +x /app/stirling-pdf; \
     mkdir -p /configs /configs/heap_dumps /logs /customFiles \
-             /pipeline/watchedFolders /pipeline/finishedFolders /tmp/stirling-pdf; \
+             /pipeline/watchedFolders /pipeline/finishedFolders /tmp/stirling-pdf \
+             /home/stirlingpdfuser/.config/libreoffice/4/user; \
     chown -R stirlingpdfuser:stirlingpdfgroup \
         /home/stirlingpdfuser /configs /logs /customFiles /pipeline /tmp/stirling-pdf \
-        /app/stirling-pdf /app/jdk-libs /usr/share/fonts/truetype /scripts; \
-    chmod -R 755 /tmp/stirling-pdf
+        /usr/share/fonts/opentype/noto; \
+    chmod -R 755 /tmp/stirling-pdf; \
+    fc-cache -f
 
-# Rebuild font cache
-RUN fc-cache -f -v
-
-# Force Qt/WebEngine to run headlessly (required for Calibre in Docker)
 ENV QT_QPA_PLATFORM=offscreen \
-    QTWEBENGINE_CHROMIUM_FLAGS="--disable-gpu --disable-dev-shm-usage"
-
-# Install nginx for BOTH mode
-RUN apt-get update && apt-get install -y --no-install-recommends nginx \
-    && mkdir -p /var/lib/nginx/tmp /var/log/nginx \
-    && chown -R stirlingpdfuser:stirlingpdfgroup /var/lib/nginx /var/log/nginx /usr/share/nginx \
-    && rm -rf /var/lib/apt/lists/*
+    QTWEBENGINE_CHROMIUM_FLAGS="--no-sandbox --disable-gpu --disable-dev-shm-usage --disable-software-rasterizer" \
+    QTWEBENGINE_DISABLE_SANDBOX=1 \
+    DISPLAY=:99
 
 EXPOSE 8080/tcp
-
 STOPSIGNAL SIGTERM
-
-# Use tini as init (handles signals and zombies correctly)
 ENTRYPOINT ["tini", "--", "/entrypoint.sh"]
-
 CMD []

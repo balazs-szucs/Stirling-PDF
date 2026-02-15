@@ -2,15 +2,24 @@
 # =============================================================================
 # Stirling-PDF GraalVM Native Image - Full Build & Test Pipeline
 # =============================================================================
-# Usage: ./scripts/test-native.sh [--skip-jvm-tests] [--skip-frontend] [--quick]
+# Usage: ./scripts/test-native.sh [OPTIONS]
+#
+# Options:
+#   --skip-jvm-tests  Skip Phase 1 (JVM tests)
+#   --skip-frontend   Skip Phase 6 (Frontend integration)
+#   --quick           Use quick build profile (fastest build, less optimized)
+#   --production      Use production build profile (full optimization)
+#   --pgo             Run full PGO workflow (instrument → train → rebuild)
+#   --arch=ARCH       CPU architecture (compatibility|x86-64-v3|native)
+#   --help            Show this help
 #
 # This script runs the complete native image pipeline:
 #   Phase 1: JVM Tests
 #   Phase 2: AOT Processing & Validation
-#   Phase 3: Generate tracing agent config (optional)
-#   Phase 4: Native Image Build
-#   Phase 5: Smoke Test Native Binary
-#   Phase 6: Native + React Frontend Integration Test
+#   Phase 3: Native Image Build
+#   Phase 4: Smoke Test Native Binary
+#   Phase 5: Native + React Frontend Integration Test
+#   Phase 6: Benchmark (when --pgo or explicitly requested)
 # =============================================================================
 
 set -e
@@ -26,18 +35,27 @@ NC='\033[0m' # No Color
 SKIP_JVM_TESTS=false
 SKIP_FRONTEND=false
 QUICK=false
+BUILD_PROFILE="standard"
+RUN_PGO=false
+ARCH_OVERRIDE=""
 for arg in "$@"; do
     case $arg in
         --skip-jvm-tests) SKIP_JVM_TESTS=true ;;
         --skip-frontend)  SKIP_FRONTEND=true ;;
-        --quick)          QUICK=true; SKIP_JVM_TESTS=true ;;
+        --quick)          QUICK=true; SKIP_JVM_TESTS=true; BUILD_PROFILE="quick" ;;
+        --production)     BUILD_PROFILE="production" ;;
+        --pgo)            RUN_PGO=true; BUILD_PROFILE="production" ;;
+        --arch=*)         ARCH_OVERRIDE="${arg#*=}" ;;
         --help|-h)
-            echo "Usage: $0 [--skip-jvm-tests] [--skip-frontend] [--quick]"
+            echo "Usage: $0 [OPTIONS]"
             echo ""
             echo "Options:"
             echo "  --skip-jvm-tests  Skip Phase 1 (JVM tests)"
             echo "  --skip-frontend   Skip Phase 6 (Frontend integration)"
-            echo "  --quick           Skip JVM tests, run minimal pipeline"
+            echo "  --quick           Quick build profile (fast builds, less optimized)"
+            echo "  --production      Production build profile (full optimization)"
+            echo "  --pgo             Full PGO workflow (instrument -> train -> rebuild)"
+            echo "  --arch=ARCH       CPU arch: compatibility (default), x86-64-v3, native"
             echo "  --help            Show this help"
             exit 0
             ;;
@@ -156,20 +174,100 @@ phase_end
 # ============================================
 # Phase 3: Native Image Build
 # ============================================
-# ============================================
-# Phase 3: Native Image Build
-# ============================================
 echo -e "${BLUE}=== Phase 3: Native Image Build ===${NC}"
-echo -e "  ${YELLOW}This may take 5-15 minutes depending on your machine...${NC}"
+echo -e "  Profile: ${BUILD_PROFILE}"
+echo -e "  ${YELLOW}This may take 5-15 minutes depending on your machine and profile...${NC}"
 
-# Optional PGO instructions (uncomment to use)
-# ./gradlew :stirling-pdf:nativeCompile -Pnative.pgo-instrument -PnoSpotless
-# <Run workload to generate default.iprof>
-# ./gradlew :stirling-pdf:nativeCompile -Pnative.pgo-profile=default.iprof -PnoSpotless
+# Build Gradle args
+GRADLE_ARGS="-Pnative.profile=${BUILD_PROFILE} -PnoSpotless"
+if [ -n "$ARCH_OVERRIDE" ]; then
+    GRADLE_ARGS="$GRADLE_ARGS -Pnative.arch=${ARCH_OVERRIDE}"
+    echo -e "  Architecture: ${ARCH_OVERRIDE}"
+fi
 
-phase_start
-./gradlew :stirling-pdf:nativeCompile -PnoSpotless
-phase_end
+if [ "$RUN_PGO" = true ]; then
+    # --- PGO Workflow ---
+    echo -e "  ${YELLOW}PGO Mode: Building instrumented binary first...${NC}"
+    echo ""
+
+    # Step 1: Build instrumented binary
+    echo -e "  ${BLUE}PGO Step 1/3: Building instrumented binary...${NC}"
+    phase_start
+    ./gradlew :stirling-pdf:nativeCompile $GRADLE_ARGS -Pnative.pgo.instrument
+    phase_end
+
+    NATIVE_BINARY=$(find app/core/build/native/nativeCompile -type f -executable 2>/dev/null | head -1)
+    if [ -z "$NATIVE_BINARY" ]; then
+        echo -e "${RED}ERROR: Instrumented native binary not found!${NC}"
+        exit 1
+    fi
+
+    # Step 2: Run instrumented binary with training workload
+    echo -e "  ${BLUE}PGO Step 2/3: Running training workload...${NC}"
+    phase_start
+    mkdir -p /tmp/stirling-pdf-test
+
+    "$NATIVE_BINARY" \
+        -Dserver.port=8094 \
+        -Dfile.encoding=UTF-8 \
+        -Djava.io.tmpdir=/tmp/stirling-pdf-test &
+    PGO_PID=$!
+
+    # Wait for startup
+    PGO_STARTED=false
+    for i in $(seq 1 60); do
+        if curl -s -o /dev/null -w "%{http_code}" http://localhost:8094/actuator/health 2>/dev/null | grep -q "200"; then
+            echo -e "  ${GREEN}Instrumented binary started${NC}"
+            PGO_STARTED=true
+            break
+        fi
+        if ! kill -0 $PGO_PID 2>/dev/null; then
+            echo -e "  ${RED}Instrumented binary exited unexpectedly!${NC}"
+            exit 1
+        fi
+        sleep 1
+    done
+
+    if [ "$PGO_STARTED" = true ]; then
+        echo -e "  Exercising API endpoints for profiling..."
+        # Hit key API endpoints to generate profile data
+        curl -s http://localhost:8094/actuator/health > /dev/null 2>&1 || true
+        curl -s http://localhost:8094/v1/api-docs > /dev/null 2>&1 || true
+        curl -s http://localhost:8094/ > /dev/null 2>&1 || true
+        # Add more representative API calls here as available
+        sleep 2
+        echo -e "  ${GREEN}Training workload complete${NC}"
+    else
+        echo -e "  ${YELLOW}WARNING: Could not start instrumented binary for PGO training${NC}"
+    fi
+
+    # Graceful shutdown to flush profile data
+    kill $PGO_PID 2>/dev/null || true
+    wait $PGO_PID 2>/dev/null || true
+    sleep 1
+    phase_end
+
+    # Step 3: Find profile and rebuild
+    PROFILE_FILE=$(find . -name "default.iprof" -type f 2>/dev/null | head -1)
+    if [ -z "$PROFILE_FILE" ]; then
+        echo -e "  ${YELLOW}WARNING: No PGO profile generated. Building without PGO.${NC}"
+        echo -e "  ${BLUE}PGO Step 3/3: Building standard binary (no profile found)...${NC}"
+        phase_start
+        ./gradlew :stirling-pdf:nativeCompile $GRADLE_ARGS
+        phase_end
+    else
+        echo -e "  ${GREEN}PGO profile found: $PROFILE_FILE${NC}"
+        echo -e "  ${BLUE}PGO Step 3/3: Rebuilding with PGO profile...${NC}"
+        phase_start
+        ./gradlew :stirling-pdf:nativeCompile $GRADLE_ARGS -Pnative.pgo.profile="$PROFILE_FILE"
+        phase_end
+    fi
+else
+    # --- Standard Build ---
+    phase_start
+    ./gradlew :stirling-pdf:nativeCompile $GRADLE_ARGS
+    phase_end
+fi
 
 # Find the native binary
 NATIVE_BINARY=$(find app/core/build/native/nativeCompile -type f -executable 2>/dev/null | head -1)
@@ -312,12 +410,22 @@ echo -e "${GREEN}============================================${NC}"
 echo ""
 echo -e "  Native Binary: $NATIVE_BINARY"
 echo -e "  Binary Size:   $BINARY_SIZE"
+echo -e "  Build Profile: $BUILD_PROFILE"
+if [ "$RUN_PGO" = true ]; then
+echo -e "  PGO:           Enabled"
+fi
 echo -e "  Total Time:    ${TOTAL_MINUTES}m ${TOTAL_SECONDS}s"
 echo ""
 echo -e "  ${BLUE}To run the native binary:${NC}"
 echo -e "    $NATIVE_BINARY -Dserver.port=8080"
 echo ""
+echo -e "  ${BLUE}To run with custom heap (recommended for production):${NC}"
+echo -e "    $NATIVE_BINARY -Xms128m -Xmx512m -Dserver.port=8080"
+echo ""
 echo -e "  ${BLUE}To run with frontend:${NC}"
 echo -e "    $NATIVE_BINARY -Dserver.port=8081 &"
 echo -e "    cd frontend && VITE_API_BASE_URL=http://localhost:8081 npm run dev"
+echo ""
+echo -e "  ${BLUE}To benchmark:${NC}"
+echo -e "    ./scripts/benchmark-native.sh $NATIVE_BINARY"
 echo ""

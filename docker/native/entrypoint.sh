@@ -6,9 +6,9 @@
 # Key difference: runs /app/stirling-pdf (native binary) instead of java -jar
 # No JVM options needed - the binary runs without a JVM!
 #
-# IMPORTANT: The native binary still needs JDK native libraries (libawt.so etc.)
-# for AWT/Java2D support. These are copied from the GraalVM build stage to
-# /app/jdk-libs/ and made available via LD_LIBRARY_PATH.
+# IMPORTANT: The native binary ships with companion .so files (libawt.so, etc.)
+# produced by GraalVM native-image. They live in /app/ alongside the binary and
+# are resolved automatically via loadLibraryRelative().
 # =============================================================================
 
 set -e
@@ -16,15 +16,22 @@ set -e
 # Default MODE to BOTH if not set
 MODE=${MODE:-BOTH}
 
-# Setup JDK native library path for AWT support
-# The native binary uses System.loadLibrary("awt") which needs libawt.so etc.
-JDK_NATIVE_LIB_PATH=${JDK_NATIVE_LIB_PATH:-/app/jdk-libs}
-export LD_LIBRARY_PATH="${JDK_NATIVE_LIB_PATH}:${LD_LIBRARY_PATH:-}"
+# Setup native library path for AWT support.
+# GraalVM native images resolve companion .so files (libawt.so, liblcms.so, etc.)
+# relative to the binary's own directory.  We also add /app to LD_LIBRARY_PATH
+# so the dynamic linker can satisfy any transitive shared-lib dependencies.
+export LD_LIBRARY_PATH="/app:${LD_LIBRARY_PATH:-}"
+
+# Runtime heap configuration (set via environment variables)
+# Heap limits are NOT baked into the binary — this allows tuning per deployment.
+# Defaults: -Xms128m -Xmx512m (suitable for most workloads)
+NATIVE_HEAP_MIN=${NATIVE_HEAP_MIN:-128m}
+NATIVE_HEAP_MAX=${NATIVE_HEAP_MAX:-512m}
 
 echo "==================================="
 echo "Stirling-PDF Native Image Container"
 echo "MODE: $MODE"
-echo "LD_LIBRARY_PATH: $LD_LIBRARY_PATH"
+echo "Heap: -Xms${NATIVE_HEAP_MIN} -Xmx${NATIVE_HEAP_MAX}"
 echo "==================================="
 
 # Function to setup OCR (from init.sh)
@@ -44,7 +51,7 @@ setup_ocr() {
         for LANG in $SPACE_SEPARATED_LANGS; do
             case "$LANG" in
                 [a-zA-Z][a-zA-Z]|[a-zA-Z][a-zA-Z][a-zA-Z]|[a-zA-Z][a-zA-Z][a-zA-Z][a-zA-Z]|[a-zA-Z][a-zA-Z]_[a-zA-Z][a-zA-Z]|[a-zA-Z][a-zA-Z][a-zA-Z]_[a-zA-Z][a-zA-Z][a-zA-Z]|[a-zA-Z][a-zA-Z][a-zA-Z][a-zA-Z]_[a-zA-Z][a-zA-Z][a-zA-Z][a-zA-Z])
-                    apk add --no-cache "tesseract-ocr-data-$LANG" 2>/dev/null || true
+                    apt-get update -qq && apt-get install -y --no-install-recommends "tesseract-ocr-$LANG" 2>/dev/null || true
                     ;;
             esac
         done
@@ -77,21 +84,57 @@ setup_permissions() {
 
     mkdir -p /tmp/stirling-pdf || true
 
+    # NOTE: Do NOT chown -R /app here — the 480 MB binary already has correct
+    # ownership from COPY --chown in the Dockerfile. Re-chowning would be very
+    # slow and wasteful on overlay filesystems.
     chown -R stirlingpdfuser:stirlingpdfgroup \
         $HOME /logs /scripts /usr/share/fonts/opentype/noto \
         /configs /customFiles /pipeline /tmp/stirling-pdf \
-        /var/lib/nginx /var/log/nginx /usr/share/nginx \
-        /app/stirling-pdf 2>/dev/null || echo "[WARN] Some chown operations failed, may run as host user"
+        2>/dev/null || echo "[WARN] Some chown operations failed, may run as host user"
 
     chmod -R 755 /logs /scripts /usr/share/fonts/opentype/noto \
         /configs /customFiles /pipeline /tmp/stirling-pdf 2>/dev/null || true
 }
 
-# Function to configure nginx
-configure_nginx() {
-    local backend_url=$1
-    echo "Configuring nginx with backend URL: $backend_url"
-    sed -i "s|\${BACKEND_URL}|${backend_url}|g" /etc/nginx/nginx.conf
+# ---------- XDG_RUNTIME_DIR ----------
+# Required by LibreOffice for IPC sockets and by dbus.
+setup_xdg_runtime() {
+    local ruid
+    if id -u stirlingpdfuser >/dev/null 2>&1; then
+        ruid="$(id -u stirlingpdfuser)"
+    else
+        ruid="$(id -u)"
+    fi
+    export XDG_RUNTIME_DIR="/tmp/xdg-${ruid}"
+    mkdir -p "${XDG_RUNTIME_DIR}" || true
+    if [ "$(id -u)" -eq 0 ]; then
+        chown stirlingpdfuser:stirlingpdfgroup "${XDG_RUNTIME_DIR}" 2>/dev/null || true
+    fi
+    chmod 700 "${XDG_RUNTIME_DIR}" 2>/dev/null || true
+    echo "XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR}"
+}
+
+# ---------- Xvfb ----------
+# Virtual framebuffer required by LibreOffice and Calibre's Qt WebEngine.
+start_xvfb() {
+    if command -v Xvfb >/dev/null 2>&1; then
+        echo "Starting Xvfb on :99"
+        Xvfb :99 -screen 0 1024x768x24 -ac +extension GLX +render -noreset > /dev/null 2>&1 &
+        export DISPLAY=:99
+        sleep 1
+    else
+        echo "[WARN] Xvfb not installed; LibreOffice/Calibre may fail"
+    fi
+}
+
+# ---------- LibreOffice profile ----------
+# Pre-create user profile dir so LibreOffice doesn't crash on first launch.
+setup_libreoffice_profile() {
+    local profile_dir="${HOME}/.config/libreoffice/4/user"
+    mkdir -p "${profile_dir}" 2>/dev/null || true
+    if [ "$(id -u)" -eq 0 ]; then
+        chown -R stirlingpdfuser:stirlingpdfgroup "${HOME}/.config" 2>/dev/null || true
+    fi
 }
 
 # Function to run as user or root
@@ -273,97 +316,49 @@ start_unoserver_pool() {
     start_unoserver_watchdog
 }
 
-# Setup OCR and permissions
+# Setup OCR, permissions, runtime dirs, and virtual display
 setup_ocr
 setup_permissions
+setup_xdg_runtime
+setup_libreoffice_profile
+start_xvfb
 
-# Handle different modes
-case "$MODE" in
-    BOTH)
-        echo "Starting in BOTH mode: Frontend + Native Backend on port 8080"
+# Frontend is EMBEDDED in the native binary - no MODE needed!
+echo "Starting Stirling-PDF Native Binary..."
 
-        configure_nginx "http://localhost:${BACKEND_INTERNAL_PORT:-8081}"
+if [ ! -f "/app/stirling-pdf" ]; then
+    echo "ERROR: Native binary not found at /app/stirling-pdf"
+    exit 1
+fi
 
-        # Start native backend (no java -jar, direct binary execution!)
-        echo "Starting native backend on port ${BACKEND_INTERNAL_PORT:-8081}..."
+if [ ! -x "/app/stirling-pdf" ]; then
+    chmod +x /app/stirling-pdf
+fi
 
-        if [ ! -f "/app/stirling-pdf" ]; then
-            echo "ERROR: Native binary not found at /app/stirling-pdf"
-            exit 1
-        fi
+# Start UnoServer pool FIRST so it's ready when the app needs it.
+start_unoserver_pool
 
-        if [ ! -x "/app/stirling-pdf" ]; then
-            chmod +x /app/stirling-pdf
-        fi
+# Give unoserver a moment to initialise before starting the app.
+# The watchdog will auto-restart it if it still isn't healthy.
+sleep 2
 
-        run_as_user sh -c "/app/stirling-pdf \
-            -Djava.awt.headless=true \
-            -Djava.library.path=${JDK_NATIVE_LIB_PATH} \
-            -Dfile.encoding=UTF-8 \
-            -Djava.io.tmpdir=/tmp/stirling-pdf \
-            -Dserver.port=${BACKEND_INTERNAL_PORT:-8081}" &
-        BACKEND_PID=$!
+# Start the native binary directly on port 8080
+# Companion .so files are in /app/ alongside the binary — GraalVM finds them automatically.
+run_as_user sh -c "/app/stirling-pdf \
+    -Xms${NATIVE_HEAP_MIN} -Xmx${NATIVE_HEAP_MAX} \
+    -Djava.awt.headless=true \
+    -Dfile.encoding=UTF-8 \
+    -Djava.io.tmpdir=/tmp/stirling-pdf \
+    -Dserver.port=8080" &
+BACKEND_PID=$!
 
-        start_unoserver_pool
-
-        sleep 2
-
-        echo "Starting nginx on port 8080..."
-        run_as_user nginx -g "daemon off;" &
-        NGINX_PID=$!
-
-        echo "==================================="
-        echo "✓ NATIVE IMAGE - Ultra-fast startup!"
-        echo "✓ Frontend available at: http://localhost:8080"
-        echo "✓ Backend API at: http://localhost:8080/api"
-        echo "✓ Backend running internally on port ${BACKEND_INTERNAL_PORT:-8081}"
-        echo "✓ No JVM overhead - minimal memory footprint"
-        echo "==================================="
-        ;;
-
-    FRONTEND)
-        echo "Starting in FRONTEND mode: Frontend only on port 8080"
-
-        BACKEND_URL=${VITE_API_BASE_URL:-http://backend:8080}
-        configure_nginx "$BACKEND_URL"
-
-        echo "Starting nginx on port 8080..."
-        run_as_user nginx -g "daemon off;" &
-        NGINX_PID=$!
-
-        echo "==================================="
-        echo "✓ Frontend available at: http://localhost:8080"
-        echo "✓ Proxying API calls to: $BACKEND_URL"
-        echo "==================================="
-        ;;
-
-    BACKEND)
-        echo "Starting in BACKEND mode: Native Backend only on port 8080"
-
-        # Start native backend directly on port 8080
-        echo "Starting native backend on port 8080..."
-        run_as_user sh -c "/app/stirling-pdf \
-            -Djava.awt.headless=true \
-            -Djava.library.path=${JDK_NATIVE_LIB_PATH} \
-            -Dfile.encoding=UTF-8 \
-            -Djava.io.tmpdir=/tmp/stirling-pdf \
-            -Dserver.port=8080" &
-        BACKEND_PID=$!
-        start_unoserver_pool
-
-        echo "==================================="
-        echo "✓ NATIVE IMAGE - Ultra-fast startup!"
-        echo "✓ Backend API available at: http://localhost:8080/api"
-        echo "✓ Swagger UI at: http://localhost:8080/swagger-ui/index.html"
-        echo "✓ No JVM overhead - minimal memory footprint"
-        echo "==================================="
-        ;;
-
-    *)
-        echo "ERROR: Invalid MODE '$MODE'. Must be BOTH, FRONTEND, or BACKEND"
-        exit 1
-        ;;
-esac
+echo "==================================="
+echo "✓ NATIVE IMAGE - Ultra-fast startup!"
+echo "✓ Frontend & Backend at: http://localhost:8080"
+echo "✓ Backend API at: http://localhost:8080/api"
+echo "✓ Swagger UI at: http://localhost:8080/swagger-ui/index.html"
+echo "✓ No JVM overhead - minimal memory footprint"
+echo "==================================="
 
 # Wait for all background processes
 wait

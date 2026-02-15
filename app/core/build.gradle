@@ -151,7 +151,24 @@ springBoot {
     mainClass = 'stirling.software.SPDF.SPDFApplication'
 }
 
-// GraalVM Native Image configuration
+// =============================================================================
+// GraalVM Native Image Configuration
+// =============================================================================
+// Build profiles (pass via -P flag):
+//   -Pnative.profile=quick       Fast dev builds (~2-3 min), minimal optimization
+//   -Pnative.profile=standard    Default balanced build (default if omitted)
+//   -Pnative.profile=production  Full optimization for release builds
+//
+// PGO (Profile-Guided Optimization):
+//   Step 1: ./gradlew :stirling-pdf:nativeCompile -Pnative.pgo.instrument -PnoSpotless
+//   Step 2: Run the instrumented binary with realistic workloads
+//   Step 3: ./gradlew :stirling-pdf:nativeCompile -Pnative.pgo.profile=default.iprof -PnoSpotless
+//
+// Architecture override:
+//   -Pnative.arch=x86-64-v3      For modern servers (AVX2, BMI2 — post-2013 Intel/AMD)
+//   -Pnative.arch=native          Build for the current machine's CPU (not portable)
+//   -Pnative.arch=compatibility   Maximum portability (default)
+// =============================================================================
 graalvmNative {
     binaries {
         main {
@@ -162,50 +179,104 @@ graalvmNative {
             // Fix classpath: include main + AOT compiled classes
             classpath.from(sourceSets.main.output)
 
-            buildArgs.addAll(
-                // Native Image Configuration Files
-                "-H:ResourceConfigurationFiles=${projectDir}/src/main/resources/META-INF/native-image/stirling-pdf/resource-config.json",
-                "-H:ReflectionConfigurationFiles=${projectDir}/src/main/resources/META-INF/native-image/stirling-pdf/reflect-config.json",
-                "-H:JNIConfigurationFiles=${projectDir}/src/main/resources/META-INF/native-image/stirling-pdf/jni-config.json",
-                "-H:DynamicProxyConfigurationFiles=${projectDir}/src/main/resources/META-INF/native-image/stirling-pdf/proxy-config.json",
-                "-H:SerializationConfigurationFiles=${projectDir}/src/main/resources/META-INF/native-image/stirling-pdf/serialization-config.json",
+            // --- Build profile selection ---
+            def nativeProfile = project.findProperty('native.profile') ?: 'standard'
+            def pgoInstrument = project.hasProperty('native.pgo.instrument')
+            def pgoProfile = project.findProperty('native.pgo.profile')
+            def archOverride = project.findProperty('native.arch')
 
-                // Memory Optimization
-                '-H:+UnlockExperimentalVMOptions',
-                '-H:+UseSerialGC',          // Smaller memory footprint
-                '-march=compatibility',     // Better portability
-                '-R:MaxHeapSize=512m',      // Limit runtime heap
-                '-R:MaxNewSize=256m',       // Limit young gen
-                '-H:MaxRuntimeCompileMethods=8000', // Reduce compilation overhead
+            // --- Optimization level based on profile ---
+            def optimizationLevel
+            def sizeOptimizations = []
+            switch (nativeProfile) {
+                case 'quick':
+                    optimizationLevel = '-Ob'      // Quick build — minimal optimization
+                    break
+                case 'production':
+                    optimizationLevel = '-Os'      // Production — optimize for SIZE (instead of -O2)
+                    // Additional size optimizations for production builds
+                    sizeOptimizations.add('-H:+RemoveUnusedSymbols')     // Strip unused symbols
+                    sizeOptimizations.add('-H:+StripDebugInfo')          // Remove debug info
+                    break
+                default:
+                    optimizationLevel = '-O2'      // Standard — balanced performance
+                    break
+            }
 
-                // Diagnostics (removed unsupported options for GraalVM CE 25)
-                // '-H:+BuildReport',
-                // '-H:DashboardAll',
-                // '-H:DashboardDump=build/reports/native-image-dashboard.bgv',
-                // '-H:+PrintImageObjectTree',
-                // '-H:+PrintClassInitialization',
+            // --- Architecture selection ---
+            // Default: compatibility (portable across all x86_64 CPUs).
+            // Override with -Pnative.arch=x86-64-v3 for modern servers,
+            // or -Pnative.arch=native for current machine's CPU.
+            def marchArg = "-march=${archOverride ?: 'compatibility'}"
 
-                '--no-fallback',
-                '-H:+ReportExceptionStackTraces',
-                '--enable-url-protocols=https,http',
-                '-H:+AddAllCharsets',
+            // --- Assemble build args ---
+            def args = []
 
-                // AWT headless support for PDF rendering (PDFBox uses java.awt internally)
-                '-Djava.awt.headless=true',
+            // Optimization & architecture
+            args.add(optimizationLevel)
+            args.add(marchArg)
+            
+            // Size optimizations (production profile only)
+            if (!sizeOptimizations.isEmpty()) {
+                args.addAll(sizeOptimizations)
+            }
 
-                // Build-time Initialization (only what's strictly required)
-                '--initialize-at-build-time=org.apache.pdfbox.pdmodel.font.Standard14Fonts',
-                '--initialize-at-build-time=org.apache.pdfbox.pdmodel.font.Standard14Fonts$FontName',
+            // GC: Serial GC — best for GraalVM Community Edition, lowest memory footprint.
+            // G1 GC is only available in Oracle GraalVM Enterprise (not CE).
+            args.add('--gc=serial')
 
-                // Runtime Initialization (Stateful or Native dependent classes)
-                '--initialize-at-run-time=sun.awt',
-                '--initialize-at-run-time=sun.java2d',
-                '--initialize-at-run-time=sun.font',
-                '--initialize-at-run-time=java.awt',
-                '--initialize-at-run-time=org.hibernate',
-                '--initialize-at-run-time=javax.persistence',
-                '--initialize-at-run-time=org.h2',
-            )
+
+
+            // Strict mode — no JVM fallback, catches missing configs at build time
+            args.add('--no-fallback')
+            args.add('-H:+ReportExceptionStackTraces')
+
+            // Network & charset support
+            args.add('--enable-url-protocols=https,http')
+            args.add('-H:+AddAllCharsets')
+
+            // AWT headless support for PDF rendering (PDFBox uses java.awt internally)
+            args.add('-Djava.awt.headless=true')
+
+            // Hibernate 7 uses ServiceLoader to find BytecodeProvider.
+            // hibernate-core ships a service entry for the ByteBuddy provider,
+            // which cannot work in native images. The service file is excluded
+            // from native image resources via resource-config.json "excludes".
+            // Without the service file, ServiceLoader finds zero providers and
+            // Hibernate falls back to the no-op "none" BytecodeProviderImpl.
+
+            // Build-time Initialization
+            // Only pure static data (lookup tables, constants) is safe here.
+            // PDFBox Standard14Fonts is a static enum — safe and speeds up startup.
+            args.add('--initialize-at-build-time=org.apache.pdfbox.pdmodel.font.Standard14Fonts')
+            args.add('--initialize-at-build-time=org.apache.pdfbox.pdmodel.font.Standard14Fonts$FontName')
+
+            // Required because LocatorImpl objects are reachable in the image heap (via JAXB context)
+            args.add('--initialize-at-build-time=org.xml.sax.helpers.LocatorImpl')
+            // Required because DefaultHandler objects are reachable in the image heap (via JAXB context)
+            args.add('--initialize-at-build-time=org.xml.sax.helpers.DefaultHandler')
+
+            // Runtime Initialization
+            args.add('--initialize-at-run-time=sun.awt')
+            args.add('--initialize-at-run-time=sun.java2d')
+            args.add('--initialize-at-run-time=sun.font')
+            args.add('--initialize-at-run-time=java.awt')
+            args.add('--initialize-at-run-time=org.hibernate')
+            args.add('--initialize-at-run-time=javax.persistence')
+            args.add('--initialize-at-run-time=org.h2')
+
+            // PGO (Profile-Guided Optimization)
+            if (pgoInstrument) {
+                args.add('--pgo-instrument')
+            } else if (pgoProfile) {
+                def profileFile = file(pgoProfile)
+                if (!profileFile.exists()) {
+                    throw new GradleException("PGO profile not found: ${profileFile.absolutePath}")
+                }
+                args.add("--pgo=${profileFile.absolutePath}")
+            }
+
+            buildArgs.addAll(args)
         }
 
         test {
