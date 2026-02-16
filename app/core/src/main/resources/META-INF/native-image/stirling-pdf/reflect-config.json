@@ -1296,8 +1296,21 @@
     "allDeclaredMethods": true,
     "allPublicMethods": true,
     "methods": [
-      {"name": "createContext", "parameterTypes": ["java.lang.Class[]", "java.util.Map"]},
-      {"name": "createContext", "parameterTypes": ["java.lang.String", "java.lang.ClassLoader", "java.util.Map"]}
+      {
+        "name": "createContext",
+        "parameterTypes": [
+          "java.lang.Class[]",
+          "java.util.Map"
+        ]
+      },
+      {
+        "name": "createContext",
+        "parameterTypes": [
+          "java.lang.String",
+          "java.lang.ClassLoader",
+          "java.util.Map"
+        ]
+      }
     ]
   },
   {

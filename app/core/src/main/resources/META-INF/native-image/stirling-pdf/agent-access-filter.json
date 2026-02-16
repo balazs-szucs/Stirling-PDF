@@ -1,0 +1,19 @@
+{
+  "rules": [
+    {
+      "excludeClasses": "jdk.internal.**"
+    },
+    {
+      "excludeClasses": "jdk.jfr.**"
+    },
+    {
+      "excludeClasses": "sun.misc.**"
+    },
+    {
+      "excludeClasses": "sun.reflect.**"
+    },
+    {
+      "excludeClasses": "com.sun.proxy.**"
+    }
+  ]
+}

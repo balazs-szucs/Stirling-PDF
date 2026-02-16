@@ -37,6 +37,7 @@ SKIP_FRONTEND=false
 QUICK=false
 BUILD_PROFILE="standard"
 RUN_PGO=false
+RUN_AGENT=false
 ARCH_OVERRIDE=""
 for arg in "$@"; do
     case $arg in
@@ -45,6 +46,7 @@ for arg in "$@"; do
         --quick)          QUICK=true; SKIP_JVM_TESTS=true; BUILD_PROFILE="quick" ;;
         --production)     BUILD_PROFILE="production" ;;
         --pgo)            RUN_PGO=true; BUILD_PROFILE="production" ;;
+        --agent)          RUN_AGENT=true ;;
         --arch=*)         ARCH_OVERRIDE="${arg#*=}" ;;
         --help|-h)
             echo "Usage: $0 [OPTIONS]"
@@ -55,6 +57,7 @@ for arg in "$@"; do
             echo "  --quick           Quick build profile (fast builds, less optimized)"
             echo "  --production      Production build profile (full optimization)"
             echo "  --pgo             Full PGO workflow (instrument -> train -> rebuild)"
+            echo "  --agent           Run tracing agent to regenerate native-image config"
             echo "  --arch=ARCH       CPU arch: compatibility (default), x86-64-v3, native"
             echo "  --help            Show this help"
             exit 0
@@ -116,6 +119,20 @@ if [ "$SKIP_JVM_TESTS" = false ]; then
     phase_end
 else
     echo -e "${YELLOW}=== Phase 1: JVM Tests (SKIPPED) ===${NC}"
+    echo ""
+fi
+
+# ============================================
+# Phase 1b: Agent Config Generation (optional)
+# ============================================
+if [ "$RUN_AGENT" = true ]; then
+    echo -e "${BLUE}=== Phase 1b: Tracing Agent Config Generation ===${NC}"
+    phase_start
+    echo -e "  Running generate-native-config.sh --merge..."
+    ./scripts/generate-native-config.sh --merge --skip-build
+    phase_end
+else
+    echo -e "${YELLOW}=== Phase 1b: Agent Config (SKIPPED — use --agent to enable) ===${NC}"
     echo ""
 fi
 

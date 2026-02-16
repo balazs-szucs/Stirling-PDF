@@ -1,75 +1,24 @@
-# Node modules and build artifacts
-node_modules
-frontend/node_modules
-frontend/dist
-frontend/build
-frontend/.vite
-frontend/.tauri
-frontend/src-tauri/target
-
-# Gradle build artifacts
-.gradle
-build
-bin
-target
-out
-
-# Git
+# .dockerignore
 .git
-.gitignore
-
-# IDE
-.vscode
+.github
+.gradle
 .idea
 *.iml
-*.iws
-*.ipr
 
-# Logs
-*.log
-logs
+# Build outputs — MUST exclude or COPY . . brings stale binaries
+**/build/
+!gradle/wrapper/
 
-# Environment files
-.env
-.env.*
-!.env.example
+# Frontend build output (built in Docker)
+frontend/node_modules/
+frontend/dist/
 
-# OS files
-.DS_Store
-Thumbs.db
-
-# Java compiled files
-*.class
-*.jar
-*.war
-*.ear
-
-# Test reports
-test-results
-coverage
-
-# Docker
-docker-compose.override.yml
-.dockerignore
-
-# Temporary files
-tmp
-temp
-*.tmp
-*.swp
-*~
-
-# Runtime database and config files (locked by running app)
-app/core/configs/**
-stirling/**
-stirling-pdf-DB*.mv.db
-stirling-pdf-DB*.trace.db
-
-# Documentation
+# Dev files
 *.md
-!README.md
-docs
-
-# CI/CD
-.github
-.gitlab-ci.yml
+!docs/
+LICENSE
+docker-compose*.yml
+.env*
+.vscode/
+.editorconfig
+.gitattributes

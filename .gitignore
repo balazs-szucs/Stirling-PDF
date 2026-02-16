@@ -47,6 +47,10 @@ app/core/src/main/resources/static/pdfium/
 app/core/src/main/resources/static/vendor/
 # Note: Keep backend-managed files like fonts/, css/, js/, pdfjs/, etc.
 
+# Native image agent output (generated, not committed)
+**/build/native/agent-output/
+**/build/native/agent-merged/
+
 # Gradle
 .gradle
 .gradle-home

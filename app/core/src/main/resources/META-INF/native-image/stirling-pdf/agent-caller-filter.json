@@ -1,0 +1,22 @@
+{
+  "rules": [
+    {
+      "includeClasses": "stirling.**"
+    },
+    {
+      "includeClasses": "org.apache.pdfbox.**"
+    },
+    {
+      "includeClasses": "org.bouncycastle.**"
+    },
+    {
+      "includeClasses": "org.verapdf.**"
+    },
+    {
+      "includeClasses": "org.mozilla.**"
+    },
+    {
+      "excludeClasses": "**"
+    }
+  ]
+}

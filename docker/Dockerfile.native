@@ -27,8 +27,8 @@ FROM ghcr.io/graalvm/graalvm-community:25 AS native-build
 
 RUN native-image --version
 
-# Install strip (binutils) for post-build binary stripping
-RUN microdnf install -y binutils && microdnf clean all
+# Install strip (binutils) and python3 (for agent script)
+RUN microdnf install -y binutils python3 && microdnf clean all
 
 WORKDIR /app
 
@@ -50,18 +50,26 @@ RUN ./gradlew dependencies --no-daemon -PnoSpotless || true
 # Copy full source code
 COPY . .
 
-# Copy pre-built frontend
-COPY --from=frontend-build /app/dist/. frontend/dist/
-
-# Verify frontend files are present
-RUN echo "=== Verifying frontend files ===" && \
-    test -f "frontend/dist/index.html" || { echo "ERROR: index.html missing!" && exit 1; } && \
-    echo "✓ Frontend verified ($(find frontend/dist -type f | wc -l) files)"
+# (Frontend is NOT copied here — it is served from filesystem in runtime stage)
 
 # Build the native image
+# Optionally run the tracing agent first to auto-generate native-image config.
+# Set --build-arg RUN_AGENT=true to enable.
+ARG CACHE_BUST=1
+ARG RUN_AGENT=false
+RUN if [ "$RUN_AGENT" = "true" ]; then \
+      echo "=== Running tracing agent to generate native-image config ===" && \
+      echo "Cache Bust: $CACHE_BUST" && \
+      chmod +x scripts/generate-native-config.sh && \
+      ./scripts/generate-native-config.sh --merge && \
+      echo "✓ Agent config generated and merged"; \
+    else \
+      echo "=== Skipping tracing agent (RUN_AGENT=false) ==="; \
+    fi
+
 RUN DISABLE_ADDITIONAL_FEATURES=false \
     ./gradlew :stirling-pdf:nativeCompile \
-    -PbuildWithFrontend=true \
+    -PbuildWithFrontend=false \
     -Pnative.profile=production \
     -PnoSpotless \
     -x test \
@@ -119,7 +127,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # Core
     ca-certificates tzdata tini bash fontconfig curl gosu coreutils \
     # PDF tools
-    ffmpeg poppler-utils ocrmypdf imagemagick fontforge ghostscript unpaper qpdf \
+    ffmpeg poppler-utils imagemagick fontforge ghostscript unpaper qpdf pngquant \
     # Python + UNO bridge
     python3 python3-venv python3-uno \
     # OCR
@@ -265,10 +273,18 @@ COPY --chown=stirlingpdfuser:stirlingpdfgroup scripts /scripts
 COPY app/core/src/main/resources/static/fonts/*.ttf /usr/share/fonts/opentype/noto/
 COPY --chmod=755 docker/native/entrypoint.sh /entrypoint.sh
 
+# ┌─────────────────────────────────────────────────────────────────┐
+# │ Frontend served from FILESYSTEM, not embedded in binary        │
+# │ This saves ~50-100 MB in the native image                      │
+# └─────────────────────────────────────────────────────────────────┘
+COPY --from=frontend-build --chown=stirlingpdfuser:stirlingpdfgroup \
+    /app/dist /app/static/
+
 # ==============================================================================
 # Runtime environment
 # ==============================================================================
-ENV VERSION_TAG=$VERSION_TAG \
+ENV SPRING_WEB_RESOURCES_STATIC_LOCATIONS=file:/app/static/,classpath:/static/ \
+    VERSION_TAG=$VERSION_TAG \
     HOME=/home/stirlingpdfuser \
     PUID=${PUID} \
     PGID=${PGID} \
@@ -289,7 +305,7 @@ ENV VERSION_TAG=$VERSION_TAG \
 ARG UNOSERVER_VERSION=3.6
 RUN python3 -m venv /opt/venv --system-site-packages \
     && /opt/venv/bin/pip install --no-cache-dir \
-        weasyprint pdf2image opencv-python-headless \
+        weasyprint pdf2image opencv-python-headless ocrmypdf \
     && python3 -m venv /opt/unoserver-venv --system-site-packages \
     && /opt/unoserver-venv/bin/pip install --no-cache-dir "unoserver==${UNOSERVER_VERSION}" \
     && ln -sf /opt/unoserver-venv/bin/unoconvert /opt/venv/bin/unoconvert \

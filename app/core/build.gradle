@@ -215,7 +215,7 @@ graalvmNative {
             // Optimization & architecture
             args.add(optimizationLevel)
             args.add(marchArg)
-            
+
             // Size optimizations (production profile only)
             if (!sizeOptimizations.isEmpty()) {
                 args.addAll(sizeOptimizations)
@@ -234,6 +234,16 @@ graalvmNative {
             // Network & charset support
             args.add('--enable-url-protocols=https,http')
             args.add('-H:+AddAllCharsets')
+
+            // Exclude static resources from binary — served from filesystem
+            args.add('-H:ExcludeResources=static/pdfjs/.*')
+            args.add('-H:ExcludeResources=static/vendor/.*')
+            args.add('-H:ExcludeResources=static/fonts/.*')
+            args.add('-H:ExcludeResources=static/assets/.*')
+            args.add('-H:ExcludeResources=static/.*\\.map')
+            args.add('-H:ExcludeResources=static/.*\\.woff2?')
+            args.add('-H:ExcludeResources=static/.*\\.png')
+            args.add('-H:ExcludeResources=static/.*\\.svg')
 
             // AWT headless support for PDF rendering (PDFBox uses java.awt internally)
             args.add('-Djava.awt.headless=true')
@@ -297,6 +307,220 @@ graalvmNative {
             mergeWithExisting = true
         }
     }
+}
+
+// =============================================================================
+// Native Image Config Generation via Tracing Agent
+// =============================================================================
+// Automated workflow to generate reflection/resource/JNI/proxy/serialization
+// configs by running the app under GraalVM's native-image-agent.
+//
+// Usage:
+//   ./gradlew :stirling-pdf:nativeAgentGenerate -PnoSpotless
+//     → Runs the app with tracing agent, exercises endpoints, copies config
+//
+//   ./gradlew :stirling-pdf:nativeAgentMerge -PnoSpotless
+//     → Merge agent output into existing META-INF/native-image configs
+//
+//   ./scripts/generate-native-config.sh
+//     → Full automated workflow (build → agent run → smoke tests → merge)
+// =============================================================================
+def agentOutputDir = file("build/native/agent-output")
+def agentMergedDir = file("build/native/agent-merged")
+def nativeImageConfigDir = file("src/main/resources/META-INF/native-image/stirling-pdf")
+
+// Task: Run the app under the native-image-agent to generate config
+tasks.register('nativeAgentRun', JavaExec) {
+    group = 'native'
+    description = 'Run the app with GraalVM native-image-agent to generate native-image config'
+
+    dependsOn ':stirling-pdf:bootJar'
+
+    def bootJarTask = tasks.named('bootJar')
+    def mergeMode = project.hasProperty('native.agent.merge')
+
+    // Use merge mode if previous output exists, or if explicitly requested
+    def outputDirToUse = mergeMode ? agentMergedDir : agentOutputDir
+
+    doFirst {
+        outputDirToUse.mkdirs()
+    }
+
+    mainClass = '-jar'
+    args = [bootJarTask.get().archiveFile.get().asFile.absolutePath]
+
+    def agentOption = mergeMode
+        ? "config-merge-dir=${outputDirToUse.absolutePath}"
+        : "config-output-dir=${outputDirToUse.absolutePath}"
+
+    jvmArgs = [
+        "-agentlib:native-image-agent=${agentOption}",
+        '-Dserver.port=8099',
+        '-Dfile.encoding=UTF-8',
+        '-Djava.io.tmpdir=/tmp/stirling-pdf-agent',
+        '-Djava.awt.headless=true',
+    ]
+
+    // Don't fail on System.exit() — the agent run is stopped externally
+    ignoreExitValue = true
+}
+
+// Task: Copy agent output into META-INF/native-image (merge with existing)
+tasks.register('nativeAgentCopyConfig') {
+    group = 'native'
+    description = 'Copy agent-generated native-image config to META-INF/native-image/stirling-pdf'
+
+    def sourceDir = agentOutputDir.exists() ? agentOutputDir : agentMergedDir
+
+    doFirst {
+        if (!sourceDir.exists() || sourceDir.listFiles()?.length == 0) {
+            throw new GradleException(
+                "No agent output found in ${sourceDir}. Run nativeAgentRun first.\n" +
+                "  ./gradlew :stirling-pdf:nativeAgentRun -PnoSpotless"
+            )
+        }
+    }
+
+    doLast {
+        nativeImageConfigDir.mkdirs()
+
+        // DELETE the agent's resource-config.json — it causes massive bloat
+        // We do NOT want to embed all static resources into the native image.
+        def agentResourceConfig = new File(sourceDir, 'resource-config.json')
+        if (agentResourceConfig.exists()) {
+            logger.lifecycle("  ⚠ SKIPPING resource-config.json (causes binary bloat)")
+            logger.lifecycle("    Agent recorded ${agentResourceConfig.length()} bytes of resource patterns")
+            agentResourceConfig.delete()
+        }
+
+        def configFiles = [
+            'reflect-config.json',
+            'jni-config.json',
+            // 'resource-config.json', // Skip this explicitly
+            'proxy-config.json',
+            'serialization-config.json',
+            'predefined-classes-config.json'
+        ]
+
+        configFiles.each { fileName ->
+            def srcFile = new File(sourceDir, fileName)
+            if (srcFile.exists()) {
+                def destFile = new File(nativeImageConfigDir, fileName)
+                // Merge: parse both JSONs and combine entries
+                if (destFile.exists()) {
+                    logger.lifecycle("  Merging ${fileName} (agent → existing)")
+                    def slurper = new groovy.json.JsonSlurper()
+                    def existingEntries = slurper.parse(destFile)
+                    def newEntries = slurper.parse(srcFile)
+
+                    // Both are JSON arrays — merge and deduplicate by "type"/"name" key
+                    if (existingEntries instanceof List && newEntries instanceof List) {
+                        def merged = new LinkedHashSet()
+                        def existingKeys = new HashSet()
+
+                        // Index existing entries
+                        existingEntries.each { entry ->
+                            def key = entry.type ?: entry.name ?: entry.toString()
+                            existingKeys.add(key)
+                            merged.add(groovy.json.JsonOutput.toJson(entry))
+                        }
+
+                        // Add new entries not already present
+                        int addedCount = 0
+                        newEntries.each { entry ->
+                            def key = entry.type ?: entry.name ?: entry.toString()
+                            def json = groovy.json.JsonOutput.toJson(entry)
+                            if (!existingKeys.contains(key) && merged.add(json)) {
+                                addedCount++
+                            }
+                        }
+                        logger.lifecycle("    Added ${addedCount} new entries (${merged.size()} total)")
+
+                        // Re-parse and pretty-print
+                        def mergedParsed = merged.collect { new groovy.json.JsonSlurper().parseText(it) }
+                        destFile.text = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(mergedParsed))
+                    } else {
+                        // Non-array JSON — just overwrite
+                        destFile.text = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(newEntries))
+                    }
+                } else {
+                    logger.lifecycle("  Copying ${fileName} (new file)")
+                    destFile.text = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(new groovy.json.JsonSlurper().parse(srcFile)))
+                }
+            }
+        }
+
+        logger.lifecycle("Native image config updated in ${nativeImageConfigDir}")
+    }
+}
+
+// Task: Clean agent output
+tasks.register('nativeAgentClean', Delete) {
+    group = 'native'
+    description = 'Clean agent-generated native-image config output'
+    delete agentOutputDir, agentMergedDir
+}
+
+// Task: Validate that native-image config exists and is well-formed
+tasks.register('nativeConfigValidate') {
+    group = 'native'
+    description = 'Validate native-image JSON config files are well-formed'
+
+    doLast {
+        def slurper = new groovy.json.JsonSlurper()
+        def configFiles = [
+            'reflect-config.json',
+            'jni-config.json',
+            'resource-config.json',
+            'proxy-config.json',
+            'serialization-config.json'
+        ]
+
+        def errors = []
+        configFiles.each { fileName ->
+            def f = new File(nativeImageConfigDir, fileName)
+            if (f.exists()) {
+                try {
+                    def parsed = slurper.parse(f)
+                    def count = (parsed instanceof List) ? parsed.size() : 'N/A'
+                    logger.lifecycle("  ✓ ${fileName} — ${count} entries")
+                } catch (Exception e) {
+                    errors.add("  ✗ ${fileName} — ${e.message}")
+                }
+            } else {
+                logger.lifecycle("  - ${fileName} — not found (optional)")
+            }
+        }
+
+        if (!errors.isEmpty()) {
+            throw new GradleException("Invalid native-image config files:\n${errors.join('\n')}")
+        }
+        logger.lifecycle("All native-image config files are valid.")
+    }
+}
+
+// Task: Run app under agent with MissingRegistrationReportingMode=Exit to find missing configs
+tasks.register('nativeAgentValidateRegistrations', JavaExec) {
+    group = 'native'
+    description = 'Run with MissingRegistrationReportingMode=Exit to detect missing native-image registrations'
+
+    dependsOn ':stirling-pdf:bootJar'
+
+    def bootJarTask = tasks.named('bootJar')
+
+    mainClass = '-jar'
+    args = [bootJarTask.get().archiveFile.get().asFile.absolutePath]
+
+    jvmArgs = [
+        "-agentlib:native-image-agent=config-merge-dir=${agentMergedDir.absolutePath}",
+        '-XX:MissingRegistrationReportingMode=Exit',
+        '-Dserver.port=8098',
+        '-Dfile.encoding=UTF-8',
+        '-Djava.io.tmpdir=/tmp/stirling-pdf-agent',
+        '-Djava.awt.headless=true',
+    ]
+
+    ignoreExitValue = true
 }
 
 // Frontend build tasks - only enabled with -PbuildWithFrontend=true
