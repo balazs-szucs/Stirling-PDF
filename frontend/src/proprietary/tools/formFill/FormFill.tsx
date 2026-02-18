@@ -40,6 +40,8 @@ import FileCopyIcon from '@mui/icons-material/FileCopy';
 import BuildCircleIcon from '@mui/icons-material/BuildCircle';
 import DescriptionIcon from '@mui/icons-material/Description';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
+import { SegmentedControl } from '@mantine/core';
+import { FormMakerPanel } from '@proprietary/tools/formFill/FormMakerPanel';
 import styles from '@proprietary/tools/formFill/FormFill.module.css';
 
 // ---------------------------------------------------------------------------
@@ -55,9 +57,9 @@ interface ModeTabDef {
   ready: boolean;
 }
 
-const _MODE_TABS: ModeTabDef[] = [
+const MODE_TABS: ModeTabDef[] = [
   { id: 'fill', label: 'Fill', icon: <EditNoteIcon className={styles.modeTabIcon} />, ready: true },
-  { id: 'make', label: 'Create', icon: <PostAddIcon className={styles.modeTabIcon} />, ready: false },
+  { id: 'make', label: 'Create', icon: <PostAddIcon className={styles.modeTabIcon} />, ready: true },
   { id: 'batch', label: 'Batch', icon: <FileCopyIcon className={styles.modeTabIcon} />, ready: false },
   { id: 'modify', label: 'Modify', icon: <BuildCircleIcon className={styles.modeTabIcon} />, ready: false },
 ];
@@ -66,18 +68,17 @@ const _MODE_TABS: ModeTabDef[] = [
 // Coming-soon placeholder for unimplemented tabs
 // ---------------------------------------------------------------------------
 
-// ComingSoonPlaceholder — re-enable when mode tabs are exposed
-// function ComingSoonPlaceholder({ mode }: { mode: ModeTabDef }) {
-//   return (
-//     <div className={styles.comingSoon}>
-//       <DescriptionIcon className={styles.comingSoonIcon} />
-//       <div className={styles.comingSoonTitle}>{mode.label} Forms</div>
-//       <div className={styles.comingSoonDesc}>
-//         This feature is coming soon. Stay tuned!
-//       </div>
-//     </div>
-//   );
-// }
+function ComingSoonPlaceholder({ mode }: { mode: ModeTabDef }) {
+  return (
+    <div className={styles.comingSoon}>
+      <DescriptionIcon className={styles.comingSoonIcon} />
+      <div className={styles.comingSoonTitle}>{mode.label} Forms</div>
+      <div className={styles.comingSoonDesc}>
+        This feature is coming soon. Stay tuned!
+      </div>
+    </div>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Main FormFill component
@@ -101,11 +102,7 @@ const FormFill = (_props: BaseToolProps) => {
 
   const { scrollActions } = useViewer();
 
-  // Mode system is temporarily restricted to 'fill' only.
-  // Other modes (make, batch, modify) are defined above but not yet exposed in the UI.
-  // When ready, uncomment the SegmentedControl and mode state below.
-  // const [mode, setMode] = useState<FormMode>('fill');
-  const mode: FormMode = 'fill';
+  const [mode, setMode] = useState<FormMode>('fill');
   const [flatten, setFlatten] = useState(false);
   const [saving, setSaving] = useState(false);
   const [extracting, setExtracting] = useState(false);
@@ -297,11 +294,11 @@ const FormFill = (_props: BaseToolProps) => {
 
   if (!isActive) return null;
 
-  // const currentModeDef = MODE_TABS.find((t) => t.id === mode)!;
+  const currentModeDef = MODE_TABS.find((t) => t.id === mode)!;
 
   return (
     <div className={styles.root}>
-      {/* ---- Mode selection (commented out until additional modes are implemented) ----
+      {/* ---- Mode selection ---- */}
       <div className={styles.modeTabs}>
         <SegmentedControl
           value={mode}
@@ -326,10 +323,12 @@ const FormFill = (_props: BaseToolProps) => {
           }}
         />
       </div>
-      ---- */}
 
-      {/* ---- Coming-soon for non-ready tabs (hidden while mode tabs are disabled) ---- */}
-      {/* !currentModeDef.ready && <ComingSoonPlaceholder mode={currentModeDef} /> */}
+      {/* ---- Coming-soon for non-ready tabs ---- */}
+      {!currentModeDef.ready && <ComingSoonPlaceholder mode={currentModeDef} />}
+
+      {/* ---- Create Form content ---- */}
+      {mode === 'make' && currentModeDef.ready && <FormMakerPanel />}
 
       {/* ---- Fill Form content ---- */}
       {mode === 'fill' && (

@@ -17,10 +17,247 @@
  * handles visual rotation via CSS transforms — same as TilingLayer,
  * AnnotationLayer, and LinkLayer.
  */
-import React, { useCallback, useMemo, memo } from 'react';
+import React, { useCallback, useMemo, memo, useRef, useState } from 'react';
 import { useDocumentState } from '@embedpdf/core/react';
 import { useFormFill, useFieldValue } from '@proprietary/tools/formFill/FormFillContext';
-import type { FormField, WidgetCoordinates } from '@proprietary/tools/formFill/types';
+import { useFormMaker } from '@proprietary/tools/formFill/FormMakerContext';
+import type { FormField, FormMakerField, WidgetCoordinates } from '@proprietary/tools/formFill/types';
+
+// ---------------------------------------------------------------------------
+// Field-type colour mapping for the form maker overlay
+// ---------------------------------------------------------------------------
+
+const MAKER_FIELD_COLORS: Record<string, string> = {
+  text: '#2196F3',
+  checkbox: '#4CAF50',
+  radio: '#FF9800',
+  combobox: '#9C27B0',
+  listbox: '#00BCD4',
+  signature: '#F44336',
+  button: '#607D8B',
+};
+
+function makerFieldColor(type: string): string {
+  return MAKER_FIELD_COLORS[type] ?? '#2196F3';
+}
+
+// ---------------------------------------------------------------------------
+// FormMakerDrawLayer — renders per-page draw canvas + placed maker fields
+// ---------------------------------------------------------------------------
+
+interface FormMakerDrawLayerProps {
+  pageIndex: number;
+  scaleX: number;
+  scaleY: number;
+}
+
+interface DragState {
+  fieldId: string;
+  startMouseX: number;
+  startMouseY: number;
+  origX: number;
+  origY: number;
+  scaleX: number;
+  scaleY: number;
+}
+
+function FormMakerDrawLayer({ pageIndex, scaleX, scaleY }: FormMakerDrawLayerProps) {
+  const formMaker = useFormMaker();
+  const isDrawingRef = useRef(false);
+  const dragRef = useRef<DragState | null>(null);
+  const [draggingFieldId, setDraggingFieldId] = useState<string | null>(null);
+
+  if (!formMaker) return null;
+
+  const { state, startDrawing, updateDrawing, finishDrawing, cancelDrawing, selectField, updateField } = formMaker;
+  const { isDrawingMode, activeDrawing, fields, selectedFieldId } = state;
+
+  const makerFieldsOnPage: FormMakerField[] = fields.filter((f) => f.pageIndex === pageIndex);
+
+  // ---- Draw mode: blank-area mouse handlers ----
+
+  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isDrawingMode) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / scaleX;
+    const y = (e.clientY - rect.top) / scaleY;
+    isDrawingRef.current = true;
+    startDrawing(pageIndex, x, y);
+  };
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isDrawingMode || !isDrawingRef.current) return;
+    e.preventDefault();
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / scaleX;
+    const y = (e.clientY - rect.top) / scaleY;
+    updateDrawing(x, y);
+  };
+
+  const handleMouseUp = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isDrawingMode || !isDrawingRef.current) return;
+    e.preventDefault();
+    e.stopPropagation();
+    isDrawingRef.current = false;
+    finishDrawing();
+  };
+
+  const handleMouseLeave = () => {
+    if (isDrawingRef.current) {
+      isDrawingRef.current = false;
+      cancelDrawing();
+    }
+  };
+
+  // ---- Drag-to-move: field box mouse handlers ----
+
+  const handleFieldMouseDown = (e: React.MouseEvent, field: FormMakerField) => {
+    e.stopPropagation();
+    selectField(field.id);
+
+    // In draw mode clicks just select; dragging is disabled
+    if (isDrawingMode) return;
+
+    e.preventDefault();
+    const drag: DragState = {
+      fieldId: field.id,
+      startMouseX: e.clientX,
+      startMouseY: e.clientY,
+      origX: field.x,
+      origY: field.y,
+      scaleX,
+      scaleY,
+    };
+    dragRef.current = drag;
+    setDraggingFieldId(field.id);
+
+    const onMouseMove = (mv: MouseEvent) => {
+      const d = dragRef.current;
+      if (!d) return;
+      const dx = (mv.clientX - d.startMouseX) / d.scaleX;
+      const dy = (mv.clientY - d.startMouseY) / d.scaleY;
+      updateField(d.fieldId, {
+        x: Math.max(0, d.origX + dx),
+        y: Math.max(0, d.origY + dy),
+      });
+    };
+
+    const onMouseUp = () => {
+      dragRef.current = null;
+      setDraggingFieldId(null);
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  };
+
+  // Draw-mode ghost rectangle
+  const ghostRect =
+    activeDrawing && activeDrawing.pageIndex === pageIndex
+      ? {
+          left: Math.min(activeDrawing.startX, activeDrawing.currentX) * scaleX,
+          top: Math.min(activeDrawing.startY, activeDrawing.currentY) * scaleY,
+          width: Math.abs(activeDrawing.currentX - activeDrawing.startX) * scaleX,
+          height: Math.abs(activeDrawing.currentY - activeDrawing.startY) * scaleY,
+        }
+      : null;
+
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        inset: 0,
+        cursor: isDrawingMode ? 'crosshair' : 'default',
+        // Capture events only when drawing; field boxes handle their own events otherwise
+        pointerEvents: isDrawingMode ? 'all' : 'none',
+        zIndex: 15,
+      }}
+      onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+      onMouseLeave={handleMouseLeave}
+    >
+      {/* In-progress drawing rectangle */}
+      {ghostRect && (
+        <div
+          style={{
+            position: 'absolute',
+            left: ghostRect.left,
+            top: ghostRect.top,
+            width: ghostRect.width,
+            height: ghostRect.height,
+            border: '2px dashed #2196F3',
+            background: 'rgba(33, 150, 243, 0.08)',
+            pointerEvents: 'none',
+            boxSizing: 'border-box',
+          }}
+        />
+      )}
+
+      {/* Already-placed maker fields on this page */}
+      {makerFieldsOnPage.map((field) => {
+        const isSelected = field.id === selectedFieldId;
+        const isBeingDragged = field.id === draggingFieldId;
+        const color = makerFieldColor(field.type);
+        return (
+          <div
+            key={field.id}
+            style={{
+              position: 'absolute',
+              left: field.x * scaleX,
+              top: field.y * scaleY,
+              width: field.width * scaleX,
+              height: field.height * scaleY,
+              border: `2px solid ${color}`,
+              background: isSelected ? `${color}22` : `${color}0F`,
+              boxSizing: 'border-box',
+              cursor: isDrawingMode ? 'pointer' : (isBeingDragged ? 'grabbing' : 'grab'),
+              pointerEvents: 'all',
+              zIndex: 16,
+              display: 'flex',
+              alignItems: 'flex-start',
+              justifyContent: 'flex-start',
+              overflow: 'hidden',
+              boxShadow: isSelected
+                ? `0 0 0 2px ${color}66`
+                : isBeingDragged
+                ? `0 4px 12px rgba(0,0,0,0.2)`
+                : 'none',
+              userSelect: 'none',
+              opacity: isBeingDragged ? 0.85 : 1,
+            }}
+            onMouseDown={(e) => handleFieldMouseDown(e, field)}
+            title={`${field.type}: ${field.name}${isDrawingMode ? '' : ' — drag to move'}`}
+          >
+            <span
+              style={{
+                fontSize: Math.max(8, Math.min(field.height * scaleY * 0.45, 11)),
+                fontWeight: 700,
+                color,
+                background: `${color}33`,
+                padding: '0 2px',
+                lineHeight: 1.2,
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                maxWidth: '100%',
+                textTransform: 'uppercase',
+                letterSpacing: '0.02em',
+                pointerEvents: 'none',
+              }}
+            >
+              {field.name}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 interface WidgetInputProps {
   field: FormField;
@@ -384,6 +621,7 @@ export function FormFieldOverlay({
 }: FormFieldOverlayProps) {
   const { setValue, setActiveField, fieldsByPage, state, forFileId } = useFormFill();
   const { activeFieldName, validationErrors } = state;
+  const formMaker = useFormMaker();
 
   // Get scale from EmbedPDF document state — same pattern as LinkLayer
   // NOTE: All hooks must be called unconditionally (before any early returns)
@@ -419,17 +657,40 @@ export function FormFieldOverlay({
     [setValue]
   );
 
+  // Whether the form maker has any content to show for this page
+  const hasMakerContent = formMaker != null && (
+    formMaker.state.isDrawingMode ||
+    formMaker.state.fields.some((f) => f.pageIndex === pageIndex)
+  );
+
   // Guard: don't render fields from a previous document.
   // If fileId is provided and doesn't match what the context fetched for, render nothing.
   if (fileId != null && forFileId != null && fileId !== forFileId) {
-    return null;
+    // Still show maker layer even if fill fields are stale
+    if (!hasMakerContent) return null;
+    return (
+      <div
+        style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 5 }}
+        data-form-overlay-page={pageIndex}
+      >
+        <FormMakerDrawLayer pageIndex={pageIndex} scaleX={scaleX} scaleY={scaleY} />
+      </div>
+    );
   }
   // Also guard: if fields exist but no forFileId is set (reset happened), don't render stale fields
   if (fileId != null && forFileId == null && state.fields.length > 0) {
-    return null;
+    if (!hasMakerContent) return null;
+    return (
+      <div
+        style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 5 }}
+        data-form-overlay-page={pageIndex}
+      >
+        <FormMakerDrawLayer pageIndex={pageIndex} scaleX={scaleX} scaleY={scaleY} />
+      </div>
+    );
   }
 
-  if (pageFields.length === 0) return null;
+  if (pageFields.length === 0 && !hasMakerContent) return null;
 
   return (
     <div
@@ -465,6 +726,11 @@ export function FormFieldOverlay({
               />
             );
           })
+      )}
+
+      {/* Form maker draw layer — only renders when form maker is active */}
+      {hasMakerContent && (
+        <FormMakerDrawLayer pageIndex={pageIndex} scaleX={scaleX} scaleY={scaleY} />
       )}
     </div>
   );

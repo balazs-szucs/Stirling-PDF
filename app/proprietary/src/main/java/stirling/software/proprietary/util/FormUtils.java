@@ -1824,6 +1824,115 @@ public class FormUtils {
         ensureAppearances(acroForm);
     }
 
+    /**
+     * Creates new interactive form fields in the PDF from a list of definitions.
+     *
+     * <p>Coordinates in each definition are expected in CSS upper-left origin — the same system
+     * returned by {@link #extractFormFieldsWithCoordinates(PDDocument)}:
+     *
+     * <ul>
+     *   <li>x, y: distance from the top-left corner of the page's CropBox, in PDF points
+     *   <li>width, height: field dimensions in PDF points
+     * </ul>
+     *
+     * <p>If the document has no AcroForm, one is created automatically.
+     *
+     * @param document PDF document to add fields to
+     * @param definitions list of field definitions (coordinates in CSS upper-left origin)
+     * @throws IOException if field creation fails
+     */
+    public static void createFormFields(
+            PDDocument document, List<NewFormFieldDefinition> definitions) throws IOException {
+        if (document == null || definitions == null || definitions.isEmpty()) return;
+
+        PDAcroForm acroForm = getAcroFormSafely(document);
+        if (acroForm == null) {
+            acroForm = new PDAcroForm(document);
+            document.getDocumentCatalog().setAcroForm(acroForm);
+            PDResources dr = new PDResources();
+            try {
+                PDFont helvetica = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
+                dr.put(COSName.getPDFName("Helv"), helvetica);
+            } catch (Exception e) {
+                log.debug(
+                        "Could not pre-register Helvetica in new AcroForm DR: {}", e.getMessage());
+            }
+            acroForm.setDefaultResources(dr);
+            acroForm.setNeedAppearances(true);
+        }
+
+        Set<String> existingNames = collectExistingFieldNames(acroForm);
+
+        for (NewFormFieldDefinition definition : definitions) {
+            if (definition == null) continue;
+
+            String name =
+                    Optional.ofNullable(definition.name())
+                            .map(String::trim)
+                            .filter(s -> !s.isEmpty())
+                            .orElse("field");
+
+            Integer pageIndex = definition.pageIndex();
+            if (pageIndex == null || pageIndex < 0 || pageIndex >= document.getNumberOfPages()) {
+                log.warn("Skipping field '{}': invalid pageIndex {}", name, pageIndex);
+                continue;
+            }
+
+            PDPage page = document.getPage(pageIndex);
+            PDRectangle cropBox = page.getCropBox();
+            float cropHeight = cropBox.getHeight();
+
+            float cssX = definition.x() != null ? definition.x() : 100f;
+            float cssY = definition.y() != null ? definition.y() : 100f;
+            float w = definition.width() != null ? Math.max(definition.width(), 1f) : 150f;
+            float h = definition.height() != null ? Math.max(definition.height(), 1f) : 20f;
+
+            // Convert CSS upper-left origin to PDF lower-left origin
+            float pdfX = cssX + cropBox.getLowerLeftX();
+            float pdfY = (cropHeight - cssY - h) + cropBox.getLowerLeftY();
+            PDRectangle rectangle = new PDRectangle(pdfX, pdfY, w, h);
+
+            String resolvedType =
+                    Optional.ofNullable(definition.type())
+                            .map(FormUtils::normalizeFieldType)
+                            .orElse(FIELD_TYPE_TEXT);
+
+            FormFieldTypeSupport handler = FormFieldTypeSupport.forTypeName(resolvedType);
+            if (handler == null || handler.doesNotsupportsDefinitionCreation()) {
+                handler = FormFieldTypeSupport.TEXT;
+            }
+
+            String uniqueName = generateUniqueFieldName(name, existingNames);
+            existingNames.add(uniqueName);
+
+            List<String> sanitizedOptions = sanitizeOptions(definition.options());
+            try {
+                createNewField(
+                        handler,
+                        acroForm,
+                        page,
+                        rectangle,
+                        uniqueName,
+                        definition,
+                        sanitizedOptions);
+                log.debug(
+                        "Created field '{}' (type={}) on page {}",
+                        uniqueName,
+                        resolvedType,
+                        pageIndex);
+            } catch (Exception e) {
+                log.warn(
+                        "Failed to create field '{}' on page {}: {}",
+                        uniqueName,
+                        pageIndex,
+                        e.getMessage(),
+                        e);
+            }
+        }
+
+        ensureAppearances(acroForm);
+    }
+
     private void removeFieldFromDocument(PDDocument document, PDAcroForm acroForm, PDField field) {
         if (field == null) return;
 

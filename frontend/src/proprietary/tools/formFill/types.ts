@@ -41,6 +41,53 @@ export type FormFieldType =
   | 'button'
   | 'signature';
 
+// ---------------------------------------------------------------------------
+// Form Maker types — for creating new fields from scratch
+// ---------------------------------------------------------------------------
+
+/**
+ * Definition for a new form field to be created via POST /api/v1/form/create-fields.
+ * Coordinates (x, y, width, height) are in PDF points, CSS upper-left origin
+ * (same system as WidgetCoordinates returned by /fields-with-coordinates).
+ */
+export interface NewFormFieldDefinition {
+  /** Internal field name (unique in AcroForm) */
+  name: string;
+  /** Displayed label / alternate field name */
+  label?: string;
+  /** Field type */
+  type: FormFieldType;
+  /** 0-based page index */
+  pageIndex: number;
+  /** Distance from left edge of CropBox, in PDF points */
+  x: number;
+  /** Distance from top edge of CropBox, in PDF points */
+  y: number;
+  /** Width in PDF points */
+  width: number;
+  /** Height in PDF points */
+  height: number;
+  /** Whether the field is required */
+  required?: boolean;
+  /** Whether a listbox allows multi-selection */
+  multiSelect?: boolean;
+  /** Options for combobox, listbox, radio fields */
+  options?: string[];
+  /** Default / pre-filled value */
+  defaultValue?: string;
+  /** Tooltip / user description */
+  tooltip?: string;
+}
+
+/**
+ * A field being designed in the form maker UI.
+ * Extends NewFormFieldDefinition with a client-side id for React keys / selection.
+ */
+export interface FormMakerField extends NewFormFieldDefinition {
+  /** Client-side unique id (not sent to backend) */
+  id: string;
+}
+
 export interface FormFillState {
   /** Fields fetched from backend with coordinates */
   fields: FormField[];

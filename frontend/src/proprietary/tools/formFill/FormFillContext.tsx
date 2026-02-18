@@ -34,6 +34,7 @@ import type { FormField, FormFillState, WidgetCoordinates } from '@proprietary/t
 import type { IFormDataProvider } from '@proprietary/tools/formFill/providers/types';
 import { PdfLibFormProvider } from '@proprietary/tools/formFill/providers/PdfLibFormProvider';
 import { PdfBoxFormProvider } from '@proprietary/tools/formFill/providers/PdfBoxFormProvider';
+import { FormMakerProvider } from '@proprietary/tools/formFill/FormMakerContext';
 
 // ---------------------------------------------------------------------------
 // FormValuesStore — external store for field values (outside React state)
@@ -498,7 +499,9 @@ export function FormFillProvider({
   return (
     <FormValuesStoreContext.Provider value={valuesStore}>
       <FormFillContext.Provider value={value}>
-        {children}
+        <FormMakerProvider>
+          {children}
+        </FormMakerProvider>
       </FormFillContext.Provider>
     </FormValuesStoreContext.Provider>
   );

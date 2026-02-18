@@ -28,6 +28,8 @@ final class FormPayloadParser {
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
     private static final TypeReference<List<FormUtils.ModifyFormFieldDefinition>>
             MODIFY_FIELD_LIST_TYPE = new TypeReference<>() {};
+    private static final TypeReference<List<FormUtils.NewFormFieldDefinition>> NEW_FIELD_LIST_TYPE =
+            new TypeReference<>() {};
     private static final TypeReference<List<String>> STRING_LIST_TYPE = new TypeReference<>() {};
 
     private FormPayloadParser() {}
@@ -93,6 +95,39 @@ final class FormPayloadParser {
             return List.of();
         }
         return objectMapper.readValue(json, MODIFY_FIELD_LIST_TYPE);
+    }
+
+    /**
+     * Parses a JSON payload into a list of {@link FormUtils.NewFormFieldDefinition}.
+     *
+     * <p>Accepts either a bare JSON array of definitions, or a wrapper object with a {@code
+     * "fields"} array property.
+     */
+    static List<FormUtils.NewFormFieldDefinition> parseNewFieldDefinitions(
+            ObjectMapper objectMapper, String json) throws IOException {
+        if (json == null || json.isBlank()) {
+            return List.of();
+        }
+
+        JsonNode root = objectMapper.readTree(json);
+        if (root == null || root.isNull()) {
+            return List.of();
+        }
+
+        JsonNode fieldsNode;
+        if (root.isObject() && root.has(KEY_FIELDS)) {
+            fieldsNode = root.get(KEY_FIELDS);
+        } else if (root.isArray()) {
+            fieldsNode = root;
+        } else {
+            return List.of();
+        }
+
+        if (!fieldsNode.isArray() || fieldsNode.isEmpty()) {
+            return List.of();
+        }
+
+        return objectMapper.convertValue(fieldsNode, NEW_FIELD_LIST_TYPE);
     }
 
     static List<String> parseNameList(ObjectMapper objectMapper, String json) throws IOException {

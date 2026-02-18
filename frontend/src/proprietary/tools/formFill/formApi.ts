@@ -2,7 +2,7 @@
  * API service for form-related backend calls.
  */
 import apiClient from '@app/services/apiClient';
-import type { FormField } from '@proprietary/tools/formFill/types';
+import type { FormField, NewFormFieldDefinition } from '@proprietary/tools/formFill/types';
 
 /**
  * Fetch form fields with coordinates from the backend.
@@ -18,6 +18,30 @@ export async function fetchFormFieldsWithCoordinates(
     '/api/v1/form/fields-with-coordinates',
     formData
   );
+  return response.data;
+}
+
+/**
+ * Create new form fields in a PDF and return the updated PDF blob.
+ * Calls POST /api/v1/form/create-fields
+ *
+ * Coordinates in each field definition must be in CSS upper-left origin (same system
+ * as returned by fetchFormFieldsWithCoordinates).
+ */
+export async function createFormFields(
+  file: File | Blob,
+  fields: NewFormFieldDefinition[]
+): Promise<Blob> {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append(
+    'fields',
+    new Blob([JSON.stringify(fields)], { type: 'application/json' })
+  );
+
+  const response = await apiClient.post('/api/v1/form/create-fields', formData, {
+    responseType: 'blob',
+  });
   return response.data;
 }
 

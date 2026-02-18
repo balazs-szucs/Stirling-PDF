@@ -205,6 +205,61 @@ public class FormFillController {
                 file, "updated", document -> FormUtils.deleteFormFields(document, names));
     }
 
+    @PostMapping(value = "/create-fields", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(
+            summary = "Create new form fields",
+            description =
+                    """
+                    Adds new interactive form fields to the PDF at the specified positions and
+                    returns the updated PDF.
+
+                    Coordinates are in CSS upper-left origin (same system returned by
+                    /fields-with-coordinates):
+                    • x, y — distance from the top-left of the page CropBox, in PDF points
+                    • width, height — field dimensions in PDF points
+
+                    Supported types: text, checkbox, combobox, listbox (button and signature are
+                    accepted but produce non-interactive placeholders).
+
+                    If the PDF has no AcroForm, one is created automatically.
+                    """)
+    public ResponseEntity<byte[]> createFields(
+            @Parameter(
+                            description = "The input PDF file",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = MediaType.APPLICATION_PDF_VALUE,
+                                            schema = @Schema(type = "string", format = "binary")))
+                    @RequestParam("file")
+                    MultipartFile file,
+            @Parameter(
+                            description =
+                                    "JSON array of field definitions. Each object must include"
+                                            + " name, type, pageIndex, x, y, width, height."
+                                            + " Optional: label, tooltip, required, defaultValue,"
+                                            + " options (for choice/radio), multiSelect.",
+                            example =
+                                    "[{\"name\":\"firstName\",\"type\":\"text\",\"pageIndex\":0,"
+                                            + "\"x\":72,\"y\":72,\"width\":200,\"height\":24}]")
+                    @RequestPart(value = "fields", required = false)
+                    byte[] fieldsPayload)
+            throws IOException {
+
+        String rawFields = decodePart(fieldsPayload);
+        List<FormUtils.NewFormFieldDefinition> definitions =
+                FormPayloadParser.parseNewFieldDefinitions(objectMapper, rawFields);
+        if (definitions.isEmpty()) {
+            throw ExceptionUtils.createIllegalArgumentException(
+                    "error.dataRequired",
+                    "{0} must contain at least one field definition",
+                    "fields payload");
+        }
+
+        return processSingleFile(
+                file, "with_form", document -> FormUtils.createFormFields(document, definitions));
+    }
+
     @PostMapping(value = "/fill", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(
             summary = "Fill PDF form fields",
