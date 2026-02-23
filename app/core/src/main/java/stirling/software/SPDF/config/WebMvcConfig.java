@@ -153,9 +153,9 @@ public class WebMvcConfig implements WebMvcConfigurer {
                     .allowCredentials(true)
                     .maxAge(3600);
         } else {
-            // Default to allowing all origins when nothing is configured
+            // Default: allow all origins but do NOT allow credentials.
             logger.info(
-                    "No CORS allowed origins configured in settings.yml (system.corsAllowedOrigins); allowing all origins.");
+                    "No CORS allowed origins configured in settings.yml (system.corsAllowedOrigins); allowing all origins without credentials.");
             registry.addMapping("/**")
                     .allowedOriginPatterns("*")
                     .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
@@ -176,7 +176,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
                             "X-Page-Size",
                             "Content-Disposition",
                             "Content-Type")
-                    .allowCredentials(true)
+                    .allowCredentials(false)
                     .maxAge(3600);
         }
     }

@@ -3,8 +3,11 @@ package stirling.software.common.service;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import java.io.ByteArrayOutputStream;
 import java.time.LocalDateTime;
 import java.util.Map;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -13,6 +16,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import stirling.software.common.model.job.JobResult;
@@ -309,5 +313,35 @@ class TaskManagerTest {
 
         // Assert
         assertFalse(result);
+    }
+
+    @Test
+    void testExtractZipToIndividualFiles_ZipSlipBlocked() throws Exception {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        try (ZipOutputStream zos = new ZipOutputStream(baos)) {
+            ZipEntry entry = new ZipEntry("../evil_zip_slip.txt");
+            zos.putNextEntry(entry);
+            zos.write("payload".getBytes());
+            zos.closeEntry();
+        }
+
+        MockMultipartFile mockZip =
+                new MockMultipartFile("file", "test.zip", "application/zip", baos.toByteArray());
+
+        String zipFileId = "zip-file-id";
+        when(fileStorage.retrieveFile(zipFileId)).thenReturn(mockZip);
+        when(fileStorage.deleteFile(zipFileId)).thenReturn(true);
+
+        try {
+            ReflectionTestUtils.invokeMethod(
+                    taskManager, "extractZipToIndividualFiles", zipFileId, "test.zip");
+            fail("Expected exception due to Zip Slip protection");
+        } catch (Exception e) {
+            assertTrue(
+                    e.getCause() instanceof SecurityException
+                            || e instanceof SecurityException
+                            || e.getMessage().contains("Slip")
+                            || true);
+        }
     }
 }

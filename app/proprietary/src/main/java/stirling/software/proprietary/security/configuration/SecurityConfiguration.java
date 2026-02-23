@@ -230,6 +230,23 @@ public class SecurityConfiguration {
 
         http.csrf(CsrfConfigurer::disable);
 
+        // Apply aggressive defensive programming security headers
+        http.headers(
+                headers -> {
+                    headers.contentSecurityPolicy(
+                            csp ->
+                                    csp.policyDirectives(
+                                            "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; object-src 'none'; media-src 'self' blob:;"));
+                    headers.permissionsPolicy(
+                            pp -> pp.policy("geolocation=(), microphone=(), camera=()"));
+                    headers.referrerPolicy(
+                            rp ->
+                                    rp.policy(
+                                            org.springframework.security.web.header.writers
+                                                    .ReferrerPolicyHeaderWriter.ReferrerPolicy
+                                                    .SAME_ORIGIN));
+                });
+
         // Configure X-Frame-Options based on settings.yml configuration
         // When login is disabled, automatically disable X-Frame-Options to allow embedding
         if (!loginEnabledValue) {

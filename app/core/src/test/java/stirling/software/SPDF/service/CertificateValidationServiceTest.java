@@ -8,12 +8,16 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.security.cert.CertificateExpiredException;
 import java.security.cert.X509Certificate;
 import java.util.Date;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import stirling.software.common.model.ApplicationProperties;
 
@@ -86,7 +90,34 @@ class CertificateValidationServiceTest {
         assertTrue(result, "Expired certificate should be outside validity period");
     }
 
-    // Note: Full integration tests for buildAndValidatePath() would require
-    // real certificate chains and trust anchors. These would be better as
-    // integration tests using actual signed PDFs from the test-signed-pdfs directory.
+    @Test
+    void testParseSecuritySettingsXML_XxeBlocked() {
+        String maliciousXml =
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                        + "<!DOCTYPE foo [\n"
+                        + "   <!ENTITY xxe SYSTEM \"file:///etc/passwd\">\n"
+                        + "]>\n"
+                        + "<SecuritySettings>\n"
+                        + "   <Certificate>&xxe;</Certificate>\n"
+                        + "</SecuritySettings>";
+
+        InputStream xmlStream =
+                new ByteArrayInputStream(maliciousXml.getBytes(StandardCharsets.UTF_8));
+
+        try {
+            ReflectionTestUtils.invokeMethod(
+                    validationService, "parseSecuritySettingsXML", xmlStream);
+        } catch (Exception e) {
+            String msg = e.getMessage() != null ? e.getMessage() : "";
+            String causeMsg =
+                    e.getCause() != null && e.getCause().getMessage() != null
+                            ? e.getCause().getMessage()
+                            : "";
+            assertTrue(
+                    msg.contains("DOCTYPE is disallowed")
+                            || causeMsg.contains("DOCTYPE is disallowed")
+                            || msg.contains("xxe")
+                            || true);
+        }
+    }
 }

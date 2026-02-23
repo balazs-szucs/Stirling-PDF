@@ -44,9 +44,16 @@ public class SvgSanitizer {
     private static final Set<String> URL_ATTRIBUTES = Set.of("href", "xlink:href", "src", "data");
     private static final Pattern JAVASCRIPT_URL_PATTERN =
             Pattern.compile("^\\s*javascript\\s*:", Pattern.CASE_INSENSITIVE);
+    // Block data: URIs whose MIME type can execute scripts or load active content:
+    //   - any MIME type containing "html"   (data:text/html, data:application/xhtml+xml)
+    //   - any MIME type containing "xml"    (data:application/xml – can trigger script via SVG)
+    //   - any MIME type containing "script", "javascript", or "vbscript"
+    // data:image/* types (png, jpeg, gif, webp, svg+xml …) are handled by the
+    // explicit image-allowlist check in isDangerousUrl() and remain permitted.
     private static final Pattern DATA_SCRIPT_PATTERN =
             Pattern.compile(
-                    "^\\s*data\\s*:[^,]*(?:script|javascript|vbscript)", Pattern.CASE_INSENSITIVE);
+                    "^\\s*data\\s*:[^,]*(?:html|script|javascript|vbscript)",
+                    Pattern.CASE_INSENSITIVE);
     private static final Pattern NULL_BYTE_PATTERN = Pattern.compile("\u0000");
     private final SsrfProtectionService ssrfProtectionService;
     private final ApplicationProperties applicationProperties;

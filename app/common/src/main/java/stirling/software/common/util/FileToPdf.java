@@ -17,9 +17,12 @@ import java.util.zip.ZipOutputStream;
 
 import io.github.pixee.security.ZipSecurity;
 
+import lombok.extern.slf4j.Slf4j;
+
 import stirling.software.common.model.api.converters.HTMLToPdfRequest;
 import stirling.software.common.util.ProcessExecutor.ProcessExecutorResult;
 
+@Slf4j
 public class FileToPdf {
 
     public static byte[] convertHtmlToPdf(
@@ -93,13 +96,27 @@ public class FileToPdf {
             CustomHtmlSanitizer customHtmlSanitizer)
             throws IOException {
         try (TempDirectory tempUnzippedDir = new TempDirectory(tempFileManager)) {
+            Path canonicalBase = tempUnzippedDir.getPath().toRealPath();
             try (ZipInputStream zipIn =
                     ZipSecurity.createHardenedInputStream(
                             new ByteArrayInputStream(Files.readAllBytes(zipFilePath)))) {
                 ZipEntry entry = zipIn.getNextEntry();
                 while (entry != null) {
-                    Path filePath =
-                            tempUnzippedDir.getPath().resolve(sanitizeZipFilename(entry.getName()));
+                    String sanitizedName = sanitizeZipFilename(entry.getName());
+                    if (sanitizedName.isEmpty()) {
+                        zipIn.closeEntry();
+                        entry = zipIn.getNextEntry();
+                        continue;
+                    }
+                    Path filePath = tempUnzippedDir.getPath().resolve(sanitizedName).normalize();
+                    if (!filePath.startsWith(canonicalBase)) {
+                        log.warn(
+                                "Rejected ZIP entry '{}': resolved path escapes target directory",
+                                entry.getName());
+                        zipIn.closeEntry();
+                        entry = zipIn.getNextEntry();
+                        continue;
+                    }
                     if (!entry.isDirectory()) {
                         Files.createDirectories(filePath.getParent());
                         if (entry.getName().toLowerCase(Locale.ROOT).endsWith(".html")
