@@ -28,11 +28,23 @@ public class CacheConfig {
     public CacheManager cacheManager() {
         int keyRetentionDays = applicationProperties.getSecurity().getJwt().getKeyRetentionDays();
         CaffeineCacheManager cacheManager = new CaffeineCacheManager();
+
+        // Default configuration (primarily for JWT keys as per previous implementation)
         cacheManager.setCaffeine(
                 Caffeine.newBuilder()
-                        .maximumSize(1000) // Make configurable?
+                        .maximumSize(1000)
                         .expireAfterWrite(Duration.ofDays(keyRetentionDays))
                         .recordStats());
+
+        // Specific configuration for user lookups to ensure freshness
+        cacheManager.registerCustomCache(
+                "users",
+                Caffeine.newBuilder()
+                        .maximumSize(1000)
+                        .expireAfterWrite(Duration.ofMinutes(30))
+                        .recordStats()
+                        .build());
+
         return cacheManager;
     }
 }

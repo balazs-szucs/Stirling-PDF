@@ -17,6 +17,8 @@ import java.util.UUID;
 import java.util.function.Supplier;
 
 import org.slf4j.MDC;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.context.MessageSource;
 import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -230,6 +232,7 @@ public class UserService implements UserServiceInterface {
     }
 
     @Transactional
+    @CacheEvict(value = "users", key = "#username.toLowerCase()")
     public void deleteUser(String username) {
         Optional<User> userOpt = findByUsernameIgnoreCase(username);
         if (userOpt.isPresent()) {
@@ -317,6 +320,7 @@ public class UserService implements UserServiceInterface {
         return userCount > 0;
     }
 
+    @CacheEvict(value = "users", key = "#username.toLowerCase()")
     public void updateUserSettings(String username, Map<String, String> updates)
             throws SQLException, UnsupportedProviderException {
         Optional<User> userOpt = findByUsernameIgnoreCaseWithSettings(username);
@@ -338,6 +342,7 @@ public class UserService implements UserServiceInterface {
         return userRepository.findByUsername(username);
     }
 
+    @Cacheable(value = "users", key = "#username.toLowerCase()")
     public Optional<User> findByUsernameIgnoreCase(String username) {
         return userRepository.findByUsernameIgnoreCase(username);
     }
@@ -446,6 +451,7 @@ public class UserService implements UserServiceInterface {
      * @throws SQLException If a database error occurs
      * @throws UnsupportedProviderException If an unsupported provider is specified
      */
+    @CacheEvict(value = "users", key = "#request.username.toLowerCase()")
     public User saveUserCore(SaveUserRequest request)
             throws IllegalArgumentException, SQLException, UnsupportedProviderException {
 
