@@ -171,7 +171,7 @@ public class InternalApiClient {
     private String getApiKeyForUser() {
         if (userService == null) return "";
         String username = userService.getCurrentUsername();
-        if (username != null && !username.equals("anonymousUser")) {
+        if (username != null && !"anonymousUser".equals(username)) {
             return userService.getApiKeyForUser(username);
         }
         return userService.getApiKeyForUser(Role.INTERNAL_API_USER.getRoleId());

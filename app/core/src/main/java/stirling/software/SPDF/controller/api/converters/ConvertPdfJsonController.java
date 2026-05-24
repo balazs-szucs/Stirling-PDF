@@ -374,7 +374,7 @@ public class ConvertPdfJsonController {
 
     private boolean isPdfJsonDebugDumpEnabled() {
         String env = System.getenv("SPDF_PDFJSON_DUMP");
-        if (env != null && env.equalsIgnoreCase("true")) {
+        if (env != null && "true".equalsIgnoreCase(env)) {
             return true;
         }
         return Boolean.getBoolean("spdf.pdfjson.dump");
@@ -382,7 +382,7 @@ public class ConvertPdfJsonController {
 
     private boolean isPdfJsonRepeatScanEnabled() {
         String env = System.getenv("SPDF_PDFJSON_REPEAT_SCAN");
-        if (env != null && env.equalsIgnoreCase("true")) {
+        if (env != null && "true".equalsIgnoreCase(env)) {
             return true;
         }
         return Boolean.getBoolean("spdf.pdfjson.repeatScan");

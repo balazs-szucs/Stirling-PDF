@@ -1084,7 +1084,7 @@ public class PdfJsonConversionService {
             // All other font types may need ToUnicode CMap or encoding from the dictionary
             // Conservative approach: better to keep extra data than lose encoding info
             String subtype = font.getSubtype();
-            boolean isType3 = subtype != null && subtype.equalsIgnoreCase("Type3");
+            boolean isType3 = subtype != null && "Type3".equalsIgnoreCase(subtype);
 
             if (hasUsableProgram && isType3) {
                 font.setCosDictionary(null);
@@ -1363,7 +1363,7 @@ public class PdfJsonConversionService {
 
     private boolean isPdfJsonDebugAnalyzeEnabled() {
         String env = System.getenv("SPDF_PDFJSON_ANALYZE");
-        if (env != null && env.equalsIgnoreCase("true")) {
+        if (env != null && "true".equalsIgnoreCase(env)) {
             return true;
         }
         return Boolean.getBoolean("spdf.pdfjson.analyze");
@@ -2428,7 +2428,7 @@ public class PdfJsonConversionService {
         }
 
         // Times family: Times, TimesRoman, TimesNewRoman, TNR
-        if (normalized.contains("times") || normalized.equals("tnr")) {
+        if (normalized.contains("times") || "tnr".equals(normalized)) {
             if (normalized.contains("bold") && normalized.contains("italic")) {
                 return Standard14Fonts.FontName.TIMES_BOLD_ITALIC;
             }
@@ -4666,8 +4666,8 @@ public class PdfJsonConversionService {
             String subtype = fontModel.getSubtype();
             boolean preferDictionary =
                     subtype != null
-                            && (subtype.equalsIgnoreCase("TrueType")
-                                    || subtype.equalsIgnoreCase("Type0"));
+                            && ("TrueType".equalsIgnoreCase(subtype)
+                                    || "Type0".equalsIgnoreCase(subtype));
 
             if (preferDictionary) {
                 PDFont restored = restoreFontFromDictionary(document, fontModel);

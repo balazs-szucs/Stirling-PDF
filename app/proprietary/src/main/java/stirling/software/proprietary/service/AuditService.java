@@ -759,18 +759,18 @@ public class AuditService {
 
         // Polling endpoints excluded from STANDARD level auditing.
         // Use exact/prefix matching to avoid accidental exclusions on unrelated paths.
-        return path.equals("/api/v1/auth/me")
-                || path.equals("/api/v1/app-config")
-                || path.equals("/api/v1/footer-info")
-                || path.equals("/api/v1/admin/license-info")
-                || path.equals("/api/v1/endpoints-availability")
-                || path.equals("/health")
+        return "/api/v1/auth/me".equals(path)
+                || "/api/v1/app-config".equals(path)
+                || "/api/v1/footer-info".equals(path)
+                || "/api/v1/admin/license-info".equals(path)
+                || "/api/v1/endpoints-availability".equals(path)
+                || "/health".equals(path)
                 || path.startsWith("/health/")
-                || path.equals("/metrics")
+                || "/metrics".equals(path)
                 || path.startsWith("/metrics/")
-                || path.equals("/actuator/health")
+                || "/actuator/health".equals(path)
                 || path.startsWith("/actuator/health/")
-                || path.equals("/actuator/metrics")
+                || "/actuator/metrics".equals(path)
                 || path.startsWith("/actuator/metrics/");
     }
 
@@ -798,8 +798,8 @@ public class AuditService {
                 || endpoint.startsWith("/api/v1/admin/settings/")
                 || endpoint.startsWith("/api/v1/user/")
                 || endpoint.startsWith("/api/v1/users/")
-                || endpoint.equals("/api/v1/admin/license-info")
-                || endpoint.equals("/login");
+                || "/api/v1/admin/license-info".equals(endpoint)
+                || "/login".equals(endpoint);
     }
 
     /**

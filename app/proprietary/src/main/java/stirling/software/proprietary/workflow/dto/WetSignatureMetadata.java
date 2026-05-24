@@ -80,7 +80,7 @@ public class WetSignatureMetadata {
      * @throws IllegalArgumentException if validation fails
      */
     public boolean validate() {
-        if (type.equals("canvas") || type.equals("image")) {
+        if ("canvas".equals(type) || "image".equals(type)) {
             if (!data.startsWith("data:image/")) {
                 throw new IllegalArgumentException(
                         "Image wet signature data must start with data:image/ prefix");
