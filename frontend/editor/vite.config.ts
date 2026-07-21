@@ -219,6 +219,7 @@ export default defineConfig(async ({ mode }) => {
         ],
       }),
       compressStaticCopyPlugin(),
+      bundleSizeDebuggerPlugin(),
     ],
     resolve: {
       // Global alias so @shared resolves for ALL importers — including the
@@ -253,9 +254,16 @@ export default defineConfig(async ({ mode }) => {
       target: "esnext",
       rollupOptions: {
         output: {
-          manualChunks: {
-            "vendor-react": ["react", "react-dom"],
-            "pdf-engine": ["@embedpdf/engines", "@embedpdf/pdfium"],
+          manualChunks(id) {
+            if (id.includes("node_modules")) {
+              if (id.includes("pdfjs-dist")) {
+                return "vendor-pdfjs";
+              }
+              if (id.includes("@embedpdf")) {
+                return "vendor-embedpdf";
+              }
+              return "vendor-core";
+            }
           },
         },
       },

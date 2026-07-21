@@ -54,6 +54,7 @@ export default function OnboardingModalSlide({
               src={`${BASE_PATH}/modern-logo/logo512.png`}
               alt="Stirling icon"
               className={styles.downloadIcon}
+              loading="lazy"
             />
           </div>
         </div>
@@ -101,6 +102,7 @@ export default function OnboardingModalSlide({
           <img
             src={`${BASE_PATH}/branding/StirlingPDFLogoNoTextLightHC.svg`}
             alt="Stirling logo"
+            loading="lazy"
           />
         )}
       </div>
