@@ -1,12 +1,32 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, lazy, Suspense } from "react";
 import { useTranslation } from "react-i18next";
 import { useToolWorkflow } from "@app/contexts/ToolWorkflowContext";
-import { WatchedFolderWorkbenchView } from "@app/components/watchedFolders/WatchedFolderWorkbenchView";
+import { LoadingFallback } from "@app/components/shared/LoadingFallback";
 import { seedDefaultFolders } from "@app/data/watchedFolderPresets";
 import { useWatchedFolderUrlSync } from "@app/hooks/useWatchedFolderUrlSync";
 
 export const WATCHED_FOLDER_VIEW_ID = "watchedFolder";
 export const WATCHED_FOLDER_WORKBENCH_ID = "custom:watchedFolder" as const;
+
+const LazyWatchedFolderWorkbenchView = lazy(() =>
+  import("@app/components/watchedFolders/WatchedFolderWorkbenchView").then(
+    (m) => ({ default: m.WatchedFolderWorkbenchView }),
+  ),
+);
+
+function WatchedFolderWorkbenchViewWrapper(props: {
+  data: {
+    folderId: string | null;
+    pendingFileId?: string;
+    pendingFileIds?: string[];
+  };
+}) {
+  return (
+    <Suspense fallback={<LoadingFallback />}>
+      <LazyWatchedFolderWorkbenchView {...props} />
+    </Suspense>
+  );
+}
 
 export default function WatchedFoldersRegistration() {
   const { t } = useTranslation();
@@ -38,7 +58,7 @@ export default function WatchedFoldersRegistration() {
       id: WATCHED_FOLDER_VIEW_ID,
       workbenchId: WATCHED_FOLDER_WORKBENCH_ID,
       label: t("watchedFolders.sidebarTitle", "Watched Folders"),
-      component: WatchedFolderWorkbenchView,
+      component: WatchedFolderWorkbenchViewWrapper,
       // Show the standard workbench bar (view switcher) so users can navigate
       // back to Viewer / Active Files instead of being stranded in this view.
       hideTopControls: false,
