@@ -8,6 +8,7 @@ pub mod platform;
 pub mod print;
 pub mod updater;
 pub mod window;
+pub mod pdfium;
 
 pub use backend::{cleanup_backend, get_backend_port, start_backend};
 pub use files::{add_opened_file, clear_opened_files, get_opened_files, pop_opened_files};
@@ -48,3 +49,8 @@ pub use updater::{
     can_install_updates, check_for_update, download_and_install_update, get_app_version,
     restart_app,
 };
+pub use pdfium::{
+    pdfium_native_close_document, pdfium_native_extract_text, pdfium_native_get_page_count,
+    pdfium_native_open_document, pdfium_native_render_page,
+};
+

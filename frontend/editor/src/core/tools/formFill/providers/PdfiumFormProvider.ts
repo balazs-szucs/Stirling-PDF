@@ -13,6 +13,7 @@
  * FormUtils.createWidgetCoordinates() does, so the same overlay code works
  * for both providers.
  */
+import { isTauriPlatform } from "@app/utils/tauriUtils";
 import { PDF_FORM_FIELD_TYPE } from "@app/services/pdfiumService";
 import { FPDF_ANNOT_WIDGET, FLAT_PRINT } from "@app/utils/pdfiumBitmapUtils";
 import type {
@@ -21,6 +22,7 @@ import type {
   WidgetCoordinates,
   ButtonAction,
 } from "@app/tools/formFill/types";
+
 import type { IFormDataProvider } from "@app/tools/formFill/providers/types";
 import type {
   PDFDict,
@@ -189,8 +191,12 @@ export class PdfiumFormProvider implements IFormDataProvider {
     data: ArrayBuffer,
     fields: PdfiumFormField[],
   ): Promise<void> {
+    if (isTauriPlatform()) {
+      return;
+    }
     try {
       const m = await getPdfiumModule();
+
       const docPtr = await openRawDocumentSafe(data);
       try {
         const formInfoPtr = m.PDFiumExt_OpenFormFillInfo();

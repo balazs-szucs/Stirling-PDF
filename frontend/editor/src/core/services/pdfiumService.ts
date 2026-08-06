@@ -74,14 +74,37 @@ function wasmUrl(): string {
   return pdfiumWasmUrl;
 }
 
+import { isTauriPlatform } from "@app/utils/tauriUtils";
+import {
+  nativePdfEngineAdapter,
+  NativePdfEngineAdapter,
+} from "@app/services/pdfiumNativeEngine";
+
+/**
+ * Deterministic PDF Engine Router:
+ * - Desktop (isTauriPlatform() === true): Exclusively returns NativePdfEngineAdapter backed by native Rust FFI.
+ *   Hard fails if native loading fails. NO try/catch fallback to WASM.
+ * - Web (isTauriPlatform() === false): Returns WASM PDFium module.
+ */
+export async function getPdfEngine(): Promise<
+  NativePdfEngineAdapter | WrappedPdfiumModule
+> {
+  if (isTauriPlatform()) {
+    await nativePdfEngineAdapter.init();
+    return nativePdfEngineAdapter;
+  }
+  return getPdfiumModule();
+}
+
 /**
  * Get (or lazily initialise) the raw `WrappedPdfiumModule`.
  *
  * This is the low-level PDFium WASM interface with all C functions wrapped.
- * Prefer `withDocument()` for document-scoped work.
+ * On desktop builds (Tauri), this function throws an error because WASM is disabled.
  */
 export async function getPdfiumModule(): Promise<WrappedPdfiumModule> {
   if (_module) return _module;
+
   if (!_initPromise) {
     // Ensure eager compilation has started if PDF service is requested before idle timeout
     startEagerWasmCompilation();
@@ -433,7 +456,14 @@ export async function extractFormFields(
   data: ArrayBuffer | Uint8Array,
   password?: string,
 ): Promise<PdfiumFormField[]> {
+  if (isTauriPlatform()) {
+    console.debug(
+      "[extractFormFields] Desktop mode: returning empty form fields list for WASM helper",
+    );
+    return [];
+  }
   const m = await getPdfiumModule();
+
   let docPtr: number;
   try {
     docPtr = await openRawDocumentSafe(data, password);
@@ -853,7 +883,14 @@ export async function extractSignatures(
   data: ArrayBuffer | Uint8Array,
   password?: string,
 ): Promise<PdfiumSignature[]> {
+  if (isTauriPlatform()) {
+    console.debug(
+      "[extractSignatures] Desktop mode: returning empty signatures list",
+    );
+    return [];
+  }
   const m = await getPdfiumModule();
+
   const docPtr = await openRawDocumentSafe(data, password);
 
   try {
@@ -940,7 +977,22 @@ export async function renderPageToBitmap(
   scale: number = 1,
   password?: string,
 ): Promise<ImageData> {
+  if (isTauriPlatform()) {
+    console.debug(
+      `[renderPageToBitmap] Desktop mode: rendering page ${pageIndex} via NativePdfEngineAdapter...`,
+    );
+    const doc = await nativePdfEngineAdapter.openDocument(data, password);
+    try {
+      const page = await doc.renderPage(pageIndex, scale);
+      const clamped = new Uint8ClampedArray(page.data.length);
+      clamped.set(page.data);
+      return new ImageData(clamped, page.width, page.height);
+    } finally {
+      await doc.close();
+    }
+  }
   const m = await getPdfiumModule();
+
   const docPtr = await openRawDocumentSafe(data, password);
 
   try {
@@ -1007,7 +1059,14 @@ export async function extractLinksFromPage(
   pageIndex: number,
   password?: string,
 ): Promise<{ links: PdfiumLink[]; pageWidth: number; pageHeight: number }> {
+  if (isTauriPlatform()) {
+    console.debug(
+      "[extractLinksFromPage] Desktop mode: returning empty links list",
+    );
+    return { links: [], pageWidth: 0, pageHeight: 0 };
+  }
   const m = await getPdfiumModule();
+
   const docPtr = await openRawDocumentSafe(data, password);
 
   try {
@@ -1202,7 +1261,14 @@ export async function getMetadata(
   data: ArrayBuffer | Uint8Array,
   password?: string,
 ): Promise<Record<string, string>> {
+  if (isTauriPlatform()) {
+    console.debug(
+      "[getMetadata] Desktop mode: returning empty metadata record",
+    );
+    return {};
+  }
   const m = await getPdfiumModule();
+
   const docPtr = await openRawDocumentSafe(data, password);
   try {
     const tags = [
@@ -1246,7 +1312,14 @@ export async function extractSignatureFieldRects(
   data: ArrayBuffer | Uint8Array,
   password?: string,
 ): Promise<PdfiumSignatureFieldRect[]> {
+  if (isTauriPlatform()) {
+    console.debug(
+      "[extractSignatureFieldRects] Desktop mode: returning empty signature field rects list",
+    );
+    return [];
+  }
   const m = await getPdfiumModule();
+
   const docPtr = await openRawDocumentSafe(data, password);
   try {
     const formInfoPtr = m.PDFiumExt_OpenFormFillInfo();
@@ -1518,7 +1591,14 @@ export async function renderSignatureFieldAppearances(
   data: ArrayBuffer | Uint8Array,
   password?: string,
 ): Promise<SignatureFieldAppearance[]> {
+  if (isTauriPlatform()) {
+    console.debug(
+      "[renderSignatureFieldAppearances] Desktop mode: returning empty signature field appearances list",
+    );
+    return [];
+  }
   const m = await getPdfiumModule();
+
   const docPtr = await openRawDocumentSafe(data, password);
 
   try {
@@ -1782,7 +1862,14 @@ export async function renderButtonFieldAppearances(
   data: ArrayBuffer | Uint8Array,
   password?: string,
 ): Promise<SignatureFieldAppearance[]> {
+  if (isTauriPlatform()) {
+    console.debug(
+      "[renderButtonFieldAppearances] Desktop mode: returning empty button appearances list",
+    );
+    return [];
+  }
   const m = await getPdfiumModule();
+
   const docPtr = await openRawDocumentSafe(data, password);
 
   try {

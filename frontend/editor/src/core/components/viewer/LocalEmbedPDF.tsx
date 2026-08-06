@@ -101,6 +101,7 @@ import { DocumentReadyWrapper } from "@app/components/viewer/DocumentReadyWrappe
 import { ActiveDocumentProvider } from "@app/components/viewer/ActiveDocumentContext";
 import { pdfiumWasmUrl } from "@app/services/wasmPrecompiler";
 import { FormFieldOverlay } from "@app/tools/formFill/FormFieldOverlay";
+
 import { ButtonAppearanceOverlay } from "@app/tools/formFill/ButtonAppearanceOverlay";
 import SignatureFieldOverlay from "@app/components/viewer/SignatureFieldOverlay";
 import { CommentsSidebar } from "@app/components/viewer/CommentsSidebar";
@@ -378,10 +379,12 @@ export function LocalEmbedPDF({
     ];
   }, [pdfUrl, enableAnnotations, exportFileName]);
 
-  // Initialize the engine with the React hook - use local WASM for offline support
-  const { engine, isLoading, error } = usePdfiumEngine({
-    wasmUrl: pdfiumWasmUrl,
-  });
+  const {
+    engine,
+    isLoading,
+    error: wasmError,
+  } = usePdfiumEngine({ wasmUrl: pdfiumWasmUrl });
+  const error = wasmError as Error | null;
 
   // Early return if no file or URL provided
   if (!file && !url) {

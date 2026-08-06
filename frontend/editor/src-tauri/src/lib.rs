@@ -45,7 +45,13 @@ use commands::{
     restart_app,
     target_window_label,
     MAIN_WINDOW_LABEL,
+    pdfium_native_close_document,
+    pdfium_native_extract_text,
+    pdfium_native_get_page_count,
+    pdfium_native_open_document,
+    pdfium_native_render_page,
 };
+
 use commands::connection::apply_provisioning_if_present;
 use state::connection_state::AppConnectionState;
 use utils::{add_log, get_tauri_logs};
@@ -198,7 +204,13 @@ pub fn run() {
       get_update_mode,
       set_update_mode,
       restart_app,
+      pdfium_native_open_document,
+      pdfium_native_get_page_count,
+      pdfium_native_render_page,
+      pdfium_native_extract_text,
+      pdfium_native_close_document,
     ])
+
     .build(tauri::generate_context!())
     .expect("error while building tauri application")
     .run(|app_handle, event| {
