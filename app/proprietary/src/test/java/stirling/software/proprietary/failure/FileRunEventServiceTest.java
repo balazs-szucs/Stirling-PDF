@@ -130,7 +130,8 @@ class FileRunEventServiceTest {
             FileRunEvent event = given(FailureKind.INPUT_PASSWORD_PROTECTED, TEAM, "f1");
             acknowledge(event, ACTOR);
 
-            assertThat(service.list(FileRunEventStatus.ACKNOWLEDGED, null, 10)).hasSize(1);
+            assertThat(service.list(FileRunEventStatus.ACKNOWLEDGED, false, null, 10))
+                    .hasSize(1);
             assertThat(service.dispatch(event.id(), "DISMISS", Map.of()).status())
                     .isEqualTo(FileRunEventStatus.DISMISSED);
         }
@@ -170,9 +171,30 @@ class FileRunEventServiceTest {
 
             assertThat(resolved.status()).isEqualTo(FileRunEventStatus.RESOLVED);
             assertThat(resolved.statusActor()).isEqualTo(ACTOR);
-            assertThat(service.list(null, null, 10))
+            assertThat(service.list(null, false, null, 10))
                     .as("resolved work is not open work")
                     .isEmpty();
+            assertThat(service.list(null, true, null, 10))
+                    .as("but it is still on the record, with its outcome")
+                    .extracting(FileRunEvent::status)
+                    .containsExactly(FileRunEventStatus.RESOLVED);
+        }
+
+        @Test
+        void listsEverySettledDispositionInTheClosedQueue() {
+            FileRunEvent dismissed = given(FailureKind.UNKNOWN, TEAM, "f-dismissed");
+            FileRunEvent resolved = given(FailureKind.UNKNOWN, TEAM, "f-resolved");
+            FileRunEvent open = given(FailureKind.UNKNOWN, TEAM, "f-open");
+            service.dispatch(dismissed.id(), "DISMISS", Map.of());
+            service.resolve(resolved.id());
+
+            assertThat(service.list(null, true, null, 10))
+                    .extracting(FileRunEvent::status)
+                    .containsExactlyInAnyOrder(FileRunEventStatus.DISMISSED, FileRunEventStatus.RESOLVED);
+            assertThat(service.list(null, false, null, 10))
+                    .as("the open queue keeps only what still needs a decision")
+                    .extracting(FileRunEvent::id)
+                    .containsExactly(open.id());
         }
 
         @Test
@@ -215,12 +237,12 @@ class FileRunEventServiceTest {
         void aRecurrenceReopensIt() {
             // RESOLVED claims one attempt worked, not that the problem is gone for good.
             service.report(new EditorFailureReport("compress", "E004", List.of("f-1"), "boom"));
-            FileRunEvent event = service.list(null, null, 10).getFirst();
+            FileRunEvent event = service.list(null, false, null, 10).getFirst();
             service.resolve(event.id());
 
             service.report(new EditorFailureReport("compress", "E004", List.of("f-1"), "boom"));
 
-            assertThat(service.list(null, null, 10))
+            assertThat(service.list(null, false, null, 10))
                     .singleElement()
                     .extracting(FileRunEvent::status)
                     .isEqualTo(FileRunEventStatus.NEW);
@@ -232,11 +254,11 @@ class FileRunEventServiceTest {
             // into the closed row and the queue never shows the failure again.
             service.report(new EditorFailureReport("compress", "E001", List.of("f-1"), "boom"));
             service.forgetFiles(List.of("f-1"));
-            assertThat(service.list(null, null, 10)).isEmpty();
+            assertThat(service.list(null, false, null, 10)).isEmpty();
 
             service.report(new EditorFailureReport("compress", "E001", List.of("f-1"), "boom"));
 
-            assertThat(service.list(null, null, 10))
+            assertThat(service.list(null, false, null, 10))
                     .singleElement()
                     .extracting(FileRunEvent::status)
                     .isEqualTo(FileRunEventStatus.NEW);
@@ -247,12 +269,12 @@ class FileRunEventServiceTest {
             // Dismiss is a decision about the incident, not a claim about the document, so it
             // outlasts a repeat where FILE_REMOVED and RESOLVED do not.
             service.report(new EditorFailureReport("compress", "E001", List.of("f-1"), "boom"));
-            FileRunEvent event = service.list(null, null, 10).getFirst();
+            FileRunEvent event = service.list(null, false, null, 10).getFirst();
             service.dispatch(event.id(), "DISMISS", Map.of());
 
             service.report(new EditorFailureReport("compress", "E001", List.of("f-1"), "boom"));
 
-            assertThat(service.list(null, null, 10)).isEmpty();
+            assertThat(service.list(null, false, null, 10)).isEmpty();
         }
     }
 
@@ -601,7 +623,7 @@ class FileRunEventServiceTest {
             given(FailureKind.UNKNOWN, TEAM, "mine");
             given(FailureKind.UNKNOWN, 99L, "theirs");
 
-            assertThat(service.list(null, null, 50))
+            assertThat(service.list(null, false, null, 50))
                     .extracting(FileRunEvent::fileId)
                     .containsExactly("mine");
         }
@@ -614,7 +636,7 @@ class FileRunEventServiceTest {
             store.record(RecordFailure.forEditor(FailureKind.UNKNOWN, TEAM, "colleague@example.com", "theirs", "boom"));
             when(authority.canEditPolicies()).thenReturn(false);
 
-            assertThat(service.list(null, null, 50))
+            assertThat(service.list(null, false, null, 50))
                     .extracting(FileRunEvent::fileId)
                     .containsExactly("mine");
         }
@@ -627,7 +649,7 @@ class FileRunEventServiceTest {
             when(authority.canEditPolicies()).thenReturn(false);
             when(userService.getCurrentUsername()).thenReturn(null);
 
-            assertThat(service.list(null, null, 50)).isEmpty();
+            assertThat(service.list(null, false, null, 50)).isEmpty();
         }
 
         @Test
@@ -664,7 +686,7 @@ class FileRunEventServiceTest {
             given(FailureKind.UNKNOWN, TEAM, "mine");
             when(authority.currentUserTeamId()).thenReturn(null);
 
-            assertThat(service.list(null, null, 50)).isEmpty();
+            assertThat(service.list(null, false, null, 50)).isEmpty();
         }
 
         @Test
@@ -692,7 +714,7 @@ class FileRunEventServiceTest {
             given(FailureKind.UNKNOWN, null, "unteamed");
             given(FailureKind.UNKNOWN, TEAM, "teamed");
 
-            assertThat(unsecured.list(null, null, 50))
+            assertThat(unsecured.list(null, false, null, 50))
                     .extracting(FileRunEvent::fileId)
                     .containsExactly("unteamed");
         }
@@ -774,7 +796,7 @@ class FileRunEventServiceTest {
         void classifiesTheReportedCodeAndStampsItAsEditorOrigin() {
             service.report(new EditorFailureReport("remove-password", "E004", List.of("f-1"), "boom"));
 
-            FileRunEvent event = store.list(TEAM, null, null, null, 10).getFirst();
+            FileRunEvent event = store.list(TEAM, null, false, null, null, 10).getFirst();
             assertThat(event.kind()).isEqualTo(FailureKind.INPUT_PASSWORD_PROTECTED);
             assertThat(event.origin()).isEqualTo(FailureOrigin.TOOL);
             assertThat(event.fileId()).isEqualTo("f-1");
@@ -787,7 +809,7 @@ class FileRunEventServiceTest {
             // session.
             service.report(new EditorFailureReport("compress", "E004", List.of("f-1"), "boom"));
 
-            FileRunEvent event = store.list(TEAM, null, null, null, 10).getFirst();
+            FileRunEvent event = store.list(TEAM, null, false, null, null, 10).getFirst();
             assertThat(event.teamId()).isEqualTo(TEAM);
             assertThat(event.actor()).isEqualTo(ACTOR);
         }
@@ -802,7 +824,7 @@ class FileRunEventServiceTest {
 
             service.report(new EditorFailureReport("compress", "E004", List.of("f-1"), "boom"));
 
-            assertThat(store.list(TEAM, null, null, null, 10))
+            assertThat(store.list(TEAM, null, false, null, null, 10))
                     .singleElement()
                     .extracting(FileRunEvent::teamId)
                     .isEqualTo(TEAM);
@@ -812,21 +834,23 @@ class FileRunEventServiceTest {
         void recordsAnUnrecognisedCodeAsUnknownRatherThanDroppingIt() {
             service.report(new EditorFailureReport("ocr", "E999", List.of("f-1"), "no idea"));
 
-            assertThat(store.list(TEAM, null, null, null, 10).getFirst().kind()).isEqualTo(FailureKind.UNKNOWN);
+            assertThat(store.list(TEAM, null, false, null, null, 10).getFirst().kind())
+                    .isEqualTo(FailureKind.UNKNOWN);
         }
 
         @Test
         void recordsAnAbsentCodeAsUnknown() {
             service.report(new EditorFailureReport("ocr", null, List.of("f-1"), "network died"));
 
-            assertThat(store.list(TEAM, null, null, null, 10).getFirst().kind()).isEqualTo(FailureKind.UNKNOWN);
+            assertThat(store.list(TEAM, null, false, null, null, 10).getFirst().kind())
+                    .isEqualTo(FailureKind.UNKNOWN);
         }
 
         @Test
         void recordsOneIncidentPerFileSoEachDocumentStaysActionable() {
             service.report(new EditorFailureReport("compress", "E004", List.of("f-1", "f-2", "f-3"), "boom"));
 
-            assertThat(store.list(TEAM, null, null, null, 10))
+            assertThat(store.list(TEAM, null, false, null, null, 10))
                     .hasSize(3)
                     .extracting(FileRunEvent::fileId)
                     .containsExactlyInAnyOrder("f-1", "f-2", "f-3");
@@ -837,7 +861,7 @@ class FileRunEventServiceTest {
             service.report(new EditorFailureReport("compress", "E004", List.of("f-1"), "boom"));
             service.report(new EditorFailureReport("compress", "E004", List.of("f-1"), "boom again"));
 
-            assertThat(store.list(TEAM, null, null, null, 10))
+            assertThat(store.list(TEAM, null, false, null, null, 10))
                     .singleElement()
                     .extracting(FileRunEvent::occurrences)
                     .isEqualTo(2);
@@ -847,7 +871,7 @@ class FileRunEventServiceTest {
         void recordsOneUnattributedIncidentWhenNoFileWasNamed() {
             service.report(new EditorFailureReport("compress", "E004", List.of(), "boom"));
 
-            assertThat(store.list(TEAM, null, null, null, 10))
+            assertThat(store.list(TEAM, null, false, null, null, 10))
                     .singleElement()
                     .extracting(FileRunEvent::fileId)
                     .isNull();
@@ -863,7 +887,7 @@ class FileRunEventServiceTest {
 
             service.report(new EditorFailureReport("compress", "E004", many, "boom"));
 
-            assertThat(store.list(TEAM, null, null, null, 200)).hasSize(60);
+            assertThat(store.list(TEAM, null, false, null, null, 200)).hasSize(60);
         }
 
         @Test
@@ -872,7 +896,7 @@ class FileRunEventServiceTest {
             // detail, never in fileId.
             service.report(new EditorFailureReport("remove-password", "E004", List.of("f-1"), "boom"));
 
-            FileRunEvent event = store.list(TEAM, null, null, null, 10).getFirst();
+            FileRunEvent event = store.list(TEAM, null, false, null, null, 10).getFirst();
             assertThat(event.detail()).contains("remove-password");
             assertThat(event.fileId()).isEqualTo("f-1");
         }
@@ -883,7 +907,7 @@ class FileRunEventServiceTest {
             // editor failure has no run to give a reviewer context.
             service.report(new EditorFailureReport("compress", "E004", List.of("f-1"), "Failed on Q4 report.pdf"));
 
-            assertThat(store.list(TEAM, null, null, null, 10).getFirst().detail())
+            assertThat(store.list(TEAM, null, false, null, null, 10).getFirst().detail())
                     .isEqualTo("compress: Failed on Q4 report.pdf");
         }
 
@@ -922,7 +946,7 @@ class FileRunEventServiceTest {
             reportedBy("alice@example.com", "a-1");
             reportedBy("bob@example.com", "b-1");
 
-            assertThat(store.list(TEAM, null, null, null, 10))
+            assertThat(store.list(TEAM, null, false, null, null, 10))
                     .extracting(FileRunEvent::actor)
                     .containsExactlyInAnyOrder("alice@example.com", "bob@example.com");
         }
@@ -932,7 +956,7 @@ class FileRunEventServiceTest {
             reportedBy("alice@example.com", "a-1");
             reportedBy("alice@example.com", "a-2");
 
-            assertThat(store.list(TEAM, null, null, null, 10))
+            assertThat(store.list(TEAM, null, false, null, null, 10))
                     .extracting(FileRunEvent::fileId)
                     .containsExactlyInAnyOrder("a-1", "a-2");
         }
@@ -942,7 +966,7 @@ class FileRunEventServiceTest {
             reportedBy("alice@example.com", "a-1");
             reportedBy("alice@example.com", "a-1");
 
-            assertThat(store.list(TEAM, null, null, null, 10))
+            assertThat(store.list(TEAM, null, false, null, null, 10))
                     .singleElement()
                     .extracting(FileRunEvent::occurrences)
                     .isEqualTo(2);
@@ -962,7 +986,7 @@ class FileRunEventServiceTest {
             reported("f-1");
 
             assertThat(service.forgetFiles(List.of("f-1"))).isEqualTo(1);
-            assertThat(service.list(null, null, 10))
+            assertThat(service.list(null, false, null, 10))
                     .as("the open queue is what the reviewer works from")
                     .isEmpty();
         }
@@ -972,7 +996,7 @@ class FileRunEventServiceTest {
             reported("f-1");
             service.forgetFiles(List.of("f-1"));
 
-            assertThat(service.list(FileRunEventStatus.FILE_REMOVED, null, 10))
+            assertThat(service.list(FileRunEventStatus.FILE_REMOVED, false, null, 10))
                     .singleElement()
                     .satisfies(event -> {
                         assertThat(event.fileId()).isEqualTo("f-1");
@@ -983,13 +1007,14 @@ class FileRunEventServiceTest {
         @Test
         void aReviewersDismissKeepsItsMeaningAndItsActor() {
             reported("f-1");
-            FileRunEvent event = service.list(null, null, 10).getFirst();
+            FileRunEvent event = service.list(null, false, null, 10).getFirst();
             service.dispatch(event.id(), "DISMISS", Map.of());
 
             assertThat(service.forgetFiles(List.of("f-1")))
                     .as("only open rows move; a closed one has already been decided")
                     .isZero();
-            assertThat(service.list(FileRunEventStatus.DISMISSED, null, 10)).hasSize(1);
+            assertThat(service.list(FileRunEventStatus.DISMISSED, false, null, 10))
+                    .hasSize(1);
         }
 
         @Test
@@ -1017,7 +1042,7 @@ class FileRunEventServiceTest {
 
             assertThat(service.forgetFiles(List.of())).isZero();
             assertThat(service.forgetFiles(java.util.Arrays.asList(null, "  "))).isZero();
-            assertThat(service.list(null, null, 10)).hasSize(1);
+            assertThat(service.list(null, false, null, 10)).hasSize(1);
         }
     }
 }

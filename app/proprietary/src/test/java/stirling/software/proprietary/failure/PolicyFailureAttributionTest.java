@@ -202,7 +202,7 @@ class PolicyFailureAttributionTest {
     private FileRunEvent asMember(String reader) {
         lenient().when(userService.getCurrentUsername()).thenReturn(reader);
         lenient().when(authority.canEditPolicies()).thenReturn(false);
-        List<FileRunEvent> visible = service.list(null, null, 10);
+        List<FileRunEvent> visible = service.list(null, false, null, 10);
         return visible.isEmpty() ? null : visible.getFirst();
     }
 
@@ -210,7 +210,7 @@ class PolicyFailureAttributionTest {
     private FileRunEvent asReviewer(String reader) {
         lenient().when(userService.getCurrentUsername()).thenReturn(reader);
         lenient().when(authority.canEditPolicies()).thenReturn(true);
-        return service.list(null, null, 10).getFirst();
+        return service.list(null, false, null, 10).getFirst();
     }
 
     @Nested

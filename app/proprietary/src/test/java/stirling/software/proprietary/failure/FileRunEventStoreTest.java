@@ -257,7 +257,7 @@ class FileRunEventStoreTest {
             store.record(failure(FailureKind.UNKNOWN, TEAM, "mine", "a"));
             store.record(failure(FailureKind.UNKNOWN, OTHER_TEAM, "theirs", "b"));
 
-            assertThat(store.list(TEAM, null, null, null, 50))
+            assertThat(store.list(TEAM, null, false, null, null, 50))
                     .extracting(FileRunEvent::fileId)
                     .containsExactly("mine");
         }
@@ -269,7 +269,7 @@ class FileRunEventStoreTest {
             store.record(failure(FailureKind.UNKNOWN, null, "unteamed", "a"));
             store.record(failure(FailureKind.UNKNOWN, TEAM, "teamed", "b"));
 
-            assertThat(store.list(null, null, null, null, 50))
+            assertThat(store.list(null, null, false, null, null, 50))
                     .extracting(FileRunEvent::fileId)
                     .containsExactly("unteamed");
         }
@@ -281,8 +281,8 @@ class FileRunEventStoreTest {
             FileRunEvent event = store.record(failure(FailureKind.UNKNOWN, TEAM, "f1", "boom"));
             store.applyStatus(event.id(), TEAM, FileRunEventStatus.DISMISSED, "reviewer");
 
-            assertThat(store.list(TEAM, null, null, null, 10)).isEmpty();
-            assertThat(store.list(TEAM, FileRunEventStatus.DISMISSED, null, null, 10))
+            assertThat(store.list(TEAM, null, false, null, null, 10)).isEmpty();
+            assertThat(store.list(TEAM, FileRunEventStatus.DISMISSED, false, null, null, 10))
                     .hasSize(1);
         }
 
@@ -291,7 +291,7 @@ class FileRunEventStoreTest {
             FileRunEvent event = store.record(failure(FailureKind.UNKNOWN, TEAM, "f1", "boom"));
             store.applyStatus(event.id(), TEAM, FileRunEventStatus.ACKNOWLEDGED, "reviewer");
 
-            assertThat(store.list(TEAM, null, null, null, 10)).hasSize(1);
+            assertThat(store.list(TEAM, null, false, null, null, 10)).hasSize(1);
         }
 
         @Test
@@ -300,7 +300,7 @@ class FileRunEventStoreTest {
             store.record(failure(FailureKind.INPUT_PASSWORD_PROTECTED, TEAM, "closed", "b"));
             store.applyStatus(open.id(), TEAM, FileRunEventStatus.ACKNOWLEDGED, "me");
 
-            assertThat(store.list(TEAM, FileRunEventStatus.ACKNOWLEDGED, null, null, 50))
+            assertThat(store.list(TEAM, FileRunEventStatus.ACKNOWLEDGED, false, null, null, 50))
                     .extracting(FileRunEvent::fileId)
                     .containsExactly("open");
         }
