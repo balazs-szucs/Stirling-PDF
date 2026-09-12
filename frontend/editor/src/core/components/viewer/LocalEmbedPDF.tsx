@@ -960,11 +960,14 @@ export function LocalEmbedPDF({
   // Field-appearance overlays cache per-page bitmaps keyed by document. Drop
   // them when the document leaves so a closed file's Blob and full buffer
   // are not pinned until the next open. (Document switches already reset
-  // the caches by source identity; this covers close and unmount.)
+  // the caches by source identity; this covers close and unmount.) The
+  // cleanup is unconditional so unmounting with a document open still
+  // releases the caches.
   useEffect(() => {
-    if (file || url) return;
-    clearSignatureFieldOverlayCache();
-    clearButtonAppearanceOverlayCache();
+    if (!file && !url) {
+      clearSignatureFieldOverlayCache();
+      clearButtonAppearanceOverlayCache();
+    }
     return () => {
       clearSignatureFieldOverlayCache();
       clearButtonAppearanceOverlayCache();
