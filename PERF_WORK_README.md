@@ -38,6 +38,8 @@ Perf commits (oldest → newest):
 | `118ee1718` | `/AcroForm` byte gate: form/signature/button scans never run for form-less PDFs |
 | `2a2528796` | `EPDF_GetPageBoxByIndex`/`EPDF_GetPageRotationByIndex` metadata reads (no page load); skip the duplicate rotated thumbnail render when rotation is 0 |
 | `2e6d1c38b` | Signature/button overlays resolve per rendered page instead of all pages |
+| `bc519ae07` | Local `@embedpdf/engines` 2.15.0 patch via postinstall: worker→main render-result transferables + precompiled `WebAssembly.Module` handoff; `useLocalPdfiumEngine`; bootstrap marks |
+| `3cd84a5e3` | Brotli/gzip the hashed pdfium wasm asset (Vite compression `include`) |
 
 ## Measured results (production build, Chromium, same harness)
 
@@ -73,6 +75,57 @@ opens the document and walks every page. See backlog item 1.
 
 First page ~280-400 ms, 0 long tasks on the branch.
 
+## Second pass (WS1: worker boundary + WS2: bootstrap/caching)
+
+Commits `bc519ae07` and `3cd84a5e3`. Same production harness, same fixtures.
+
+### Engine worker boundary (local `@embedpdf/engines` 2.15.0 patch)
+
+The harness now instruments worker targets too: `Worker.prototype.postMessage`
+bytes on the main thread, and inside every worker `self.postMessage` bytes /
+transfer lists, `WebAssembly.instantiate` / `WebAssembly.Instance` compiles and
+memory buffers, and wasm resource timings. Numbers (median unless noted):
+
+| Signal | before | after |
+| --- | --- | --- |
+| scroll 5 pages, worker→main bitmap bytes, transferred | 0 of 44.7 MB | **44.3 of 44.7 MB** |
+| engine worker wasm HTTP fetches | 1 | **0** |
+| engine worker pdfium compile | 3 ms (fetch + instantiate) | ~1 ms (handed `WebAssembly.Module`) |
+| large-40mb first page | 720 ms (667/720/743) | ~692 ms (637/662/692/708/716 + one 852 outlier) |
+| pages-500 first page | ~370 ms (272/358/382/405) | **~186 ms** (175/182/186/258/349) |
+| main-thread WASM high-water | 50.6 / 17.8 / 66.9 MB | unchanged |
+| worker WASM high-water (huge / form) | 188.1 / 46.4 MB | 188.1 / 46.4 MB |
+| main→worker document bytes | 40.4 / 155 / 30.9 MB cloned | unchanged (see backlog) |
+
+The 155 MB document clone also shows up as a single `openDocumentBuffer`
+`postMessage` of up to 44.9 ms on the main thread — evidence for backlog 2.
+Huge/form first pages are unchanged within run variance (huge 677-1122 ms,
+form 650-671 ms after; their open path does not cross the patched boundary).
+
+The ~60 ms single long task that appears in roughly two of three large-40mb
+runs is pre-existing: 2/3 pre-patch runs show it too (65/60 ms), and
+`postMessage` never exceeds 3 ms. Not a regression.
+
+Cross-browser smoke (`engine-patch-smoke.local.spec.ts`, Chromium/Firefox/WebKit):
+page renders with zero page errors; wasm requests inside all workers = 0 in all
+three engines. WebKit 26 accepted the structured clone; the fallback for older
+WebKit is exercised only by the try/catch path.
+
+### Wasm delivery
+
+- `vite-plugin-compression2` no longer skips `.wasm`: the hashed asset now ships
+  `dist/assets/pdfium-*.wasm.br` = **1.65 MB** (from 4.63 MB, -64%) and `.gz`
+  2.14 MB. `WebMvcConfig` already serves `/assets/**` with
+  `EncodedResourceResolver`, so production picks the `.br` sibling; `vite
+  preview` does not, which is why harness `transferSize` still shows 4.63 MB.
+- Bootstrap marks (cold run, localhost): eager compile starts ~49-56 ms and
+  ends ~72-82 ms (≈25 ms fetch+compile), engine created ~365-374 ms, no worker
+  fetch/compile. The compiled module is reused by the worker instead of being
+  fetched and compiled twice.
+- In-session repeats reuse `pdfiumWasmModulePromise`; cross-session repeats are
+  covered by the immutable `/assets/**` cache. No IndexedDB tier is warranted
+  at these numbers; revisit only if real-world cache-miss bootstrap dominates.
+
 ## Root causes found (evidence)
 
 - Opening the viewer made ~7-11 full-file reads/copies. Attribution came from
@@ -98,20 +151,34 @@ Paths:
 - Excluded via `.git/info/exclude` (not committed).
 
 What the harness measures per run: in-page marks to first page, long-task
-total, CDP `Performance` CPU metrics, JS heap after forced GC, blob URL
-counts, `Blob`/`Response.arrayBuffer` call count + bytes + stacks, main-thread
-`WebAssembly.Memory` high-water series, DOM/canvas counts.
+total + per-task details, CDP `Performance` CPU metrics, JS heap after forced
+GC, blob URL counts, `Blob`/`Response.arrayBuffer` call count + bytes + stacks,
+main-thread `WebAssembly.Memory` high-water series, DOM/canvas counts,
+main→worker `postMessage` bytes/transfers + max synchronous duration, and per
+worker target: `self.postMessage` bytes/transfers, wasm compile/instantiate,
+wasm resource timings and worker `WebAssembly.Memory` sizes. Bootstrap marks
+(`pdfium-eager-compile-start|end`, `pdfium-engine-created`) and pdfium wasm
+resource timings are reported too.
 
 Known limitations:
 
-- `wasmBuffersMB` covers the main thread only. The engine worker's WASM heap
-  and the structured-clone copy into the worker are not measured yet.
-- `wasmLive`/`wasmPeak` in the harness report 0 (wrapping
+- Main-thread WASM heap and the worker's WASM heap are both reported now, but
+  `wasmLive`/`wasmPeak` in the harness still report 0 (wrapping
   `instance.exports.malloc` did not take effect); use high-water instead.
 - `performance.measureUserAgentSpecificMemory()` is unavailable without
   cross-origin isolation; tests do not set COOP/COEP.
 - Runs must use the production preview (`CI=1`) because dev StrictMode
   double-invokes effects and skews memory/timing.
+
+Cross-browser smoke (no CDP): `engine-patch-smoke.local.spec.ts` (also
+git-excluded) opens the large fixture and logs main-thread transfer counts,
+per-worker wasm resource entries and page errors. Run per project:
+
+```bash
+cd frontend/editor
+CI=1 npx playwright test --project=stubbed-webkit \
+  src/core/tests/stubbed/engine-patch-smoke.local.spec.ts --workers=1 --retries=0
+```
 
 Commands (from the repo root):
 
@@ -129,6 +196,10 @@ CI=1 PERF_LABEL=<label> task e2e:stubbed -- \
 # point the first test at another fixture
 PERF_LARGE_FIXTURE=$PWD/frontend/editor/.perf-local/huge-150mb.pdf \
 PERF_SETTLE_MS=15000 CI=1 task e2e:stubbed -- \
+  src/core/tests/stubbed/perf-baseline.local.spec.ts --grep "large-40mb" --workers=1 --retries=0
+
+# also scroll the 40 MB fixture (render-transfer attribution)
+PERF_LARGE_SCROLL=1 CI=1 PERF_LABEL=<label> task e2e:stubbed -- \
   src/core/tests/stubbed/perf-baseline.local.spec.ts --grep "large-40mb" --workers=1 --retries=0
 
 # optional: copy stacks / wasm series / all console logs
@@ -159,30 +230,53 @@ PERF_STACKS=1 PERF_SERIES=1 PERF_LOGS=1 ...
 - Overlays `SignatureFieldOverlay.tsx` / `ButtonAppearanceOverlay.tsx` — module
   caches are now per source + page.
 - `AppProviders.tsx` — app-level worker engine; `fontFallback` is memoised
-  (a fresh object per render recreates the engine in a loop).
+  (a fresh object per render recreates the engine in a loop). Engine creation
+  now goes through `useLocalPdfiumEngine`.
 - `wasmPrecompiler.ts` — keeps the `{ module }` container and the
-  `compileStreaming` → ArrayBuffer/MIME fallback.
+  `compileStreaming` → ArrayBuffer/MIME fallback; marks the eager compile for
+  bootstrap measurements.
+- `core/hooks/useLocalPdfiumEngine.ts` — mirrors the upstream React hook, but
+  awaits `pdfiumWasmModulePromise` (capped at 3 s) and passes the compiled
+  module to `createPdfiumEngine`. Own the hook rather than patching
+  `@embedpdf/engines/react` so the extra option stays typed.
+- `scripts/patch-embedpdf-engines.mjs` — postinstall patch for
+  `@embedpdf/engines` 2.15.0 only. It asserts the exact version and every
+  anchor, and no-ops once applied. It (a) transfers whole-buffer
+  `{data,width,height}` worker responses ≥64 KB, (b) accepts
+  `options.wasmModule` and instantiates it synchronously in the worker, and
+  (c) retries the `wasmInit` post without the module when structured clone
+  throws (older WebKit). A version bump must re-verify all anchors and update
+  `EXPECTED_VERSION`.
+- `editor/vite.config.ts` — the `compression()` plugin now includes `.wasm`, so
+  the hashed pdfium asset gets `.br`/`.gz` siblings.
+- The patch deliberately does **not** transfer the document bytes main→worker:
+  the buffer comes from `documentBytesCache` and other main-thread scans hold
+  it across awaits, so a transfer would detach it mid-read. The worker keeps
+  receiving a structured clone (155 MB for the huge fixture).
 
 ## Backlog for the next pass (ranked, with evidence)
 
 1. **Per-page form state** — `extractFormFields` still walks all pages on the
-   main thread (form fixture WASM 66.9 MB, first page ~770 ms). Make form
+   main thread (form fixture WASM 66.9 MB, first page ~650-770 ms). Make form
    fields resolve per page while preserving save/validation semantics. Highest
    remaining memory win for form documents.
-2. **Local engine patches (no upstream)** — measured/known gaps:
-   - worker `postMessage` copies render results and the request payload
-     (`WebWorkerEngine.proxy` already accepts `transferables`; the exported
-     `createPdfiumEngine` never passes them). A locally owned worker around
-     `@embedpdf/engines/worker` internals, or patch-package, are the options.
-   - the worker fetches + `arrayBuffer()` + compiles the wasm (no streaming);
-     pass a precompiled `WebAssembly.Module` (structured-cloneable) or use
-     `compileStreaming` when the server sends `application/wasm`.
+2. **Remaining local engine gaps (no upstream)** — transfers and precompiled
+   module handoff are done (`bc519ae07`); what is left:
+   - the document bytes are still structured-cloned main→worker (155 MB for the
+     huge fixture). Doing this safely needs an ownership handoff that survives
+     the main-thread scans reading through `documentBytesCache` (re-read on
+     detach plus auditing every consumer that holds the buffer across awaits).
    - `PdfCache` page TTL (5 s) / max pages (10) are not configurable from
-     `createPdfiumEngine`; expose or patch for scroll-heavy use.
-3. **Cold/warm bootstrap + caching measurements** — measure first-open vs
-   reload with the wasm HTTP cache, check cache headers on the served
-   `pdfium.wasm`, and evaluate an IndexedDB copy of the compiled module or
-   bytes. No numbers exist yet.
+     `createPdfiumEngine`; expose or patch for scroll-heavy use and measure.
+   - only the ESM entry is patched; a consumer resolving the CJS entry gets the
+     unpatched engine (graceful, no transfers).
+3. **CLOSED — cold/warm bootstrap + caching** — solved without an IndexedDB
+   tier: the hashed wasm now ships `.br`/`.gz` (`3cd84a5e3`), `/assets/**` is
+   already immutable via `WebMvcConfig` + `EncodedResourceResolver`, the worker
+   no longer fetches or compiles wasm at all (module handoff), and the
+   in-session promise is reused. Harness/worker marks report ~50-80 ms eager
+   compile and no worker wasm activity. Reopen only if production cold-cache
+   numbers show network bootstrap dominating.
 4. **OPFS/JSPI streaming (Chrome 137+/Firefox 153+; not Safari/WebKit)** —
    `FPDF_LoadCustomDocument` with synchronous block reads from an OPFS
    `createSyncAccessHandle()` inside a worker. Relevant for multi-hundred-MB
@@ -195,9 +289,9 @@ PERF_STACKS=1 PERF_SERIES=1 PERF_LOGS=1 ...
    dimensions and per-page rotations for PageEditor are read today.
 7. **Split into reviewable PRs** (when the owner asks): suggested order
    #7691 → #7878 → perf PRs (bytes/cache/queue + shared session + gates +
-   metadata/index + per-page overlays). Rebuild history by replaying the
-   focused commits; the branch currently carries merge commits from the three
-   source branches.
+   metadata/index + per-page overlays + engine patch/build compression). Rebuild
+   history by replaying the focused commits; the branch currently carries merge
+   commits from the three source branches.
 8. **Fix or drop the branch's stale perf specs** —
    `pdf-render-benchmark.spec.ts` and `pdf-viewer-memory.spec.ts` fail on
    `.file-sidebar-file-item`, a selector the upstream sidebar refactor removed.
@@ -215,6 +309,15 @@ PERF_STACKS=1 PERF_SERIES=1 PERF_LOGS=1 ...
 - The 40 MB path (`< LARGE_PDF_PARSE_LIMIT = 100 MB`) parses the full file for
   the thumbnail; the 155 MB path uses a 2 MB linearized prefix.
 - `.perf-local` fixtures are large (up to 155 MB). Do not commit them.
+- `scripts/patch-embedpdf-engines.mjs` runs from `postinstall`; an existing
+  checkout needs one `npm install` (or `node scripts/patch-embedpdf-engines.mjs`)
+  after pulling. It fails loudly if `@embedpdf/engines` is not exactly 2.15.0
+  or an anchor moved.
+- All three engines verified (smoke spec): Chromium, Firefox and WebKit 26
+  render with zero worker wasm fetches. The `DataCloneError` fallback in the
+  patch is only reachable on older WebKit, which has no test here.
+- The main→worker document clone is intentionally still in place; do not add a
+  transfer without addressing `documentBytesCache` ownership (see backlog 2).
 
 ## Verification before any change leaves the branch
 
@@ -234,3 +337,6 @@ CI=1 task e2e:stubbed -- \
   src/core/tests/stubbed/pdf-text-editor-cropbox.spec.ts \
   --workers=1 --retries=0
 ```
+
+Last verified after `3cd84a5e3`: typecheck/lint clean, 3420/3420 vitest,
+46/46 viewer e2e, engine smoke green on Chromium/Firefox/WebKit.
