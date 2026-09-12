@@ -16,6 +16,7 @@
 import { PDF_FORM_FIELD_TYPE } from "@app/services/pdfiumService";
 import { getDocumentBytes } from "@app/services/documentBytesCache";
 import { runPdfiumScan } from "@app/services/pdfiumScanQueue";
+import { hasAcroForm } from "@app/utils/asciiBytes";
 import { FPDF_ANNOT_WIDGET, FLAT_PRINT } from "@app/utils/pdfiumBitmapUtils";
 import type {
   FormField,
@@ -147,6 +148,7 @@ export class PdfiumFormProvider implements IFormDataProvider {
   async fetchFields(file: File | Blob): Promise<FormField[]> {
     try {
       const arrayBuffer = await getDocumentBytes(file);
+      if (!hasAcroForm(new Uint8Array(arrayBuffer))) return [];
       const pdfiumFields = await runPdfiumScan(async () => {
         const fields = await extractFormFields(arrayBuffer);
         // Enrich with alternate names (tooltips)
