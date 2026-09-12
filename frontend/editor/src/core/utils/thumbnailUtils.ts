@@ -9,6 +9,7 @@ import {
   renderPdfiumPageDataUrl,
   readPdfiumPageMetadata,
 } from "@app/utils/pdfiumPageRender";
+import { getDocumentBytes } from "@app/services/documentBytesCache";
 
 export interface ThumbnailWithMetadata {
   thumbnail: string; // Always returns a thumbnail (placeholder if needed)
@@ -374,7 +375,7 @@ export async function generateThumbnailPairWithMetadata(file: File): Promise<{
     }
     const buffer = isLarge
       ? await file.slice(0, LINEARIZED_PREFIX_BYTES).arrayBuffer()
-      : await file.arrayBuffer();
+      : await getDocumentBytes(file);
     const pair = await renderPdfThumbnailPairPdfium(buffer, scale, !isLarge);
 
     const toPublic = (r: PdfiumRenderResult): ThumbnailWithMetadata =>
