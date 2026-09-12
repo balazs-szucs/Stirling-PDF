@@ -4,15 +4,28 @@
  *
  *  Chromium-only because the retained-heap reading needs CDP GC; the other
  *  engines skip. Mirrors the loop used during the viewer perf pass; keep the
- *  iteration count small enough for PR CI. */
+ *  iteration count small enough for PR CI.
+ *
+ *  SOAK_FIXTURE overrides the cycled document (default: the small annotation
+ *  sample). Point it at the form fixture to exercise the field-appearance
+ *  overlay caches, which the default fixture never touches (no AcroForm).
+ *  PERF_SNAPSHOTS=1 dumps heap snapshots at cycles 5 and N to .perf-local/.
+ *  PERF_FINALIZERS=1 registers each cycle's rendered page element in a
+ *  FinalizationRegistry and logs collection lag (warn-only: finalizer timing
+ *  is not guaranteed, so it is a signal, never an assertion).
+ */
 
 import path from "path";
+import { writeFile } from "node:fs/promises";
 import { test, expect } from "@app/tests/helpers/stub-test-base";
 
-const SAMPLE_PDF = path.join(
-  import.meta.dirname,
-  "../test-fixtures/annotation-text-sample.pdf",
-);
+const SAMPLE_PDF =
+  process.env.SOAK_FIXTURE ??
+  path.join(
+    import.meta.dirname,
+    "../test-fixtures/annotation-text-sample.pdf",
+  );
+const SNAPSHOT_DIR = path.join(import.meta.dirname, "../../../../.perf-local");
 const ITERATIONS = Number(process.env.SOAK_ITERATIONS ?? 12);
 
 type Sample = {
@@ -22,6 +35,7 @@ type Sample = {
   nodes: number;
   listeners: number;
   blobs: number;
+  timers: number;
   mainWasmPages: number;
   workerWasmPages: number;
 };
@@ -85,9 +99,95 @@ test.describe("viewer memory soak", { tag: "@memory-soak" }, () => {
           created: number;
           revoked: number;
           memories: WebAssembly.Memory[];
+          pendingAsync: Set<object>;
+          pendingStacks: Map<object, string>;
         };
       };
-      w.__soak = { created: 0, revoked: 0, memories: [] };
+      w.__soak = {
+        created: 0,
+        revoked: 0,
+        memories: [],
+        pendingAsync: new Set(),
+        pendingStacks: new Map(),
+      };
+      // Pending-timer census: every schedule mints a token, fire/cancel
+      // retires it. Extra callback arguments and RAF timestamps pass
+      // through untouched, so app timing semantics do not change.
+      const pendingAsync: Set<object> = w.__soak.pendingAsync;
+      const pendingStacks: Map<object, string> = w.__soak.pendingStacks;
+      const liveTokens = new Map<number, object>();
+      const retire = (id: number) => {
+        const token = liveTokens.get(id);
+        if (token) {
+          liveTokens.delete(id);
+          pendingAsync.delete(token);
+          pendingStacks.delete(token);
+        }
+      };
+      const mintToken = () => {
+        const token = {};
+        pendingAsync.add(token);
+        pendingStacks.set(token, new Error().stack ?? "");
+        return token;
+      };
+      const origSetTimeout = window.setTimeout.bind(window);
+      const origClearTimeout = window.clearTimeout.bind(window);
+      const origSetInterval = window.setInterval.bind(window);
+      const origClearInterval = window.clearInterval.bind(window);
+      const origRaf = window.requestAnimationFrame.bind(window);
+      const origCancelRaf = window.cancelAnimationFrame.bind(window);
+      window.setTimeout = ((handler: TimerHandler, timeout?: number, ...args: unknown[]) => {
+        if (typeof handler !== "function") {
+          return origSetTimeout(handler, timeout, ...(args as []));
+        }
+        const token = mintToken();
+        const id = origSetTimeout(
+          (...inner: unknown[]) => {
+            retire(id);
+            (handler as (...a: unknown[]) => void)(...inner);
+          },
+          timeout,
+          ...(args as []),
+        );
+        liveTokens.set(id, token);
+        return id;
+      }) as typeof window.setTimeout;
+      window.clearTimeout = ((id?: number) => {
+        if (id !== undefined) retire(id);
+        return origClearTimeout(id as number);
+      }) as typeof window.clearTimeout;
+      window.setInterval = ((handler: TimerHandler, timeout?: number, ...args: unknown[]) => {
+        if (typeof handler !== "function") {
+          return origSetInterval(handler, timeout, ...(args as []));
+        }
+        const token = mintToken();
+        const id = origSetInterval(
+          (...inner: unknown[]) => {
+            (handler as (...a: unknown[]) => void)(...inner);
+          },
+          timeout,
+          ...(args as []),
+        );
+        liveTokens.set(id, token);
+        return id;
+      }) as typeof window.setInterval;
+      window.clearInterval = ((id?: number) => {
+        if (id !== undefined) retire(id);
+        return origClearInterval(id as number);
+      }) as typeof window.clearInterval;
+      window.requestAnimationFrame = ((callback: FrameRequestCallback) => {
+        const token = mintToken();
+        const id = origRaf((time) => {
+          retire(id);
+          callback(time);
+        });
+        liveTokens.set(id, token);
+        return id;
+      }) as typeof window.requestAnimationFrame;
+      window.cancelAnimationFrame = ((id: number) => {
+        retire(id);
+        return origCancelRaf(id);
+      }) as typeof window.cancelAnimationFrame;
       const create = URL.createObjectURL.bind(URL);
       URL.createObjectURL = (obj: Blob | MediaSource) => {
         w.__soak.created++;
@@ -142,6 +242,22 @@ test.describe("viewer memory soak", { tag: "@memory-soak" }, () => {
     await cdp.send("HeapProfiler.enable");
     await cdp.send("Runtime.enable");
 
+    const snapshotChunks: string[] = [];
+    cdp.on("HeapProfiler.addHeapSnapshotChunk", (params) => {
+      snapshotChunks.push(params.chunk as string);
+    });
+    const dumpHeapSnapshot = async (iter: number) => {
+      snapshotChunks.length = 0;
+      await cdp.send("HeapProfiler.takeHeapSnapshot", { reportProgress: false });
+      const file = path.join(
+        SNAPSHOT_DIR,
+        `soak-snapshot-iter${iter}.heapsnapshot`,
+      );
+      await writeFile(file, snapshotChunks.join(""));
+      snapshotChunks.length = 0;
+      console.log(`[MEMORY-SOAK-SNAPSHOT] ${file}`);
+    };
+
     const read = async (iter: number, phase: Sample["phase"]): Promise<Sample> => {
       await cdp.send("HeapProfiler.collectGarbage");
       const { usedSize } = await cdp.send("Runtime.getHeapUsage");
@@ -149,7 +265,12 @@ test.describe("viewer memory soak", { tag: "@memory-soak" }, () => {
       const main = await page.evaluate(() => {
         const soak = (
           window as unknown as {
-            __soak: { created: number; revoked: number; memories: WebAssembly.Memory[] };
+            __soak: {
+              created: number;
+              revoked: number;
+              memories: WebAssembly.Memory[];
+              pendingAsync: Set<object>;
+            };
           }
         ).__soak;
         let pages = 0;
@@ -160,7 +281,11 @@ test.describe("viewer memory soak", { tag: "@memory-soak" }, () => {
             /* detached */
           }
         }
-        return { blobs: soak.created - soak.revoked, mainWasmPages: Math.round(pages) };
+        return {
+          blobs: soak.created - soak.revoked,
+          mainWasmPages: Math.round(pages),
+          timers: soak.pendingAsync.size,
+        };
       });
       let workerWasmPages = 0;
       for (const worker of page.workers()) {
@@ -190,6 +315,7 @@ test.describe("viewer memory soak", { tag: "@memory-soak" }, () => {
         nodes,
         listeners: jsEventListeners,
         blobs: main.blobs,
+        timers: main.timers,
         mainWasmPages: main.mainWasmPages,
         workerWasmPages,
       };
@@ -212,6 +338,29 @@ test.describe("viewer memory soak", { tag: "@memory-soak" }, () => {
       await page.waitForTimeout(500);
       samples.push(await read(iter, "open"));
 
+      if (process.env.PERF_FINALIZERS) {
+        await page.evaluate((cycle) => {
+          const w = window as unknown as {
+            __fr?: {
+              registry: FinalizationRegistry<string>;
+              finalized: string[];
+            };
+          };
+          if (!w.__fr) {
+            w.__fr = {
+              registry: new FinalizationRegistry((held) => {
+                w.__fr?.finalized.push(held);
+              }),
+              finalized: [],
+            };
+          }
+          const el = document.querySelector(
+            '[data-page-index="0"] img[src^="blob:"], [data-page-index="0"] canvas',
+          );
+          if (el) w.__fr.registry.register(el, `cycle-${cycle}-page0`);
+        }, iter);
+      }
+
       const row = page.locator(".file-sidebar-file-item").first();
       await expect(row).toBeVisible({ timeout: 30_000 });
       await row.hover();
@@ -223,9 +372,64 @@ test.describe("viewer memory soak", { tag: "@memory-soak" }, () => {
       }
       await page.waitForTimeout(500);
       samples.push(await read(iter, "removed"));
+
+      if (process.env.PERF_FINALIZERS) {
+        // Warn-only: finalizer timing is engine-heuristic, so a lagging
+        // count is a lead for snapshot diffing, never a failure.
+        await page.waitForTimeout(2000);
+        const finalized = await page.evaluate(
+          () =>
+            (window as unknown as { __fr?: { finalized: string[] } }).__fr
+              ?.finalized.length ?? 0,
+        );
+        console.log(
+          `[MEMORY-SOAK-FINALIZERS] ${JSON.stringify({ iter, finalized })}`,
+        );
+      }
+      if (process.env.PERF_TIMER_STACKS) {
+        const groups = await page.evaluate(() => {
+          const { pendingStacks } = (
+            window as unknown as {
+              __soak: { pendingStacks: Map<object, string> };
+            }
+          ).__soak;
+          const counts: Record<string, number> = {};
+          for (const stack of pendingStacks.values()) {
+            const key = stack
+              .split("\n")
+              .slice(2, 5)
+              .join(" | ")
+              .replace(/http:\/\/localhost:\d+/g, "HOST")
+              .replace(/:\d+:\d+/g, "");
+            counts[key] = (counts[key] ?? 0) + 1;
+          }
+          return counts;
+        });
+        console.log(
+          `[MEMORY-SOAK-TIMER-GROUPS] ${JSON.stringify({ iter, groups })}`,
+        );
+      }
+      if (
+        process.env.PERF_SNAPSHOTS &&
+        (iter === 5 || iter === ITERATIONS)
+      ) {
+        await dumpHeapSnapshot(iter);
+      }
     }
 
     console.log(`[MEMORY-SOAK] ${JSON.stringify(samples)}`);
+    if (process.env.PERF_TIMER_STACKS) {
+      const stacks = await page.evaluate(() =>
+        Array.from(
+          (
+            window as unknown as {
+              __soak: { pendingStacks: Map<object, string> };
+            }
+          ).__soak.pendingStacks.values(),
+        ).slice(0, 200),
+      );
+      console.log(`[MEMORY-SOAK-TIMER-STACKS] ${JSON.stringify(stacks)}`);
+    }
     for (const phase of ["open", "removed"] as const) {
       const series = samples.filter((s) => s.phase === phase);
       const early = series.filter((s) => s.iter <= 3);
@@ -241,6 +445,8 @@ test.describe("viewer memory soak", { tag: "@memory-soak" }, () => {
       const blobsLate = median(late.map((s) => s.blobs));
       const nodesEarly = median(early.map((s) => s.nodes));
       const nodesLate = median(late.map((s) => s.nodes));
+      const listenersEarly = median(early.map((s) => s.listeners));
+      const listenersLate = median(late.map((s) => s.listeners));
       const workerPagesEarly = median(early.map((s) => s.workerWasmPages));
       const workerPagesLate = median(late.map((s) => s.workerWasmPages));
 
@@ -256,6 +462,14 @@ test.describe("viewer memory soak", { tag: "@memory-soak" }, () => {
         nodesLate - nodesEarly,
         `${phase}: DOM nodes grew over ${ITERATIONS} cycles`,
       ).toBeLessThanOrEqual(50);
+      // Event listeners attach per mounted interactive component, so they
+      // drift only when a removed document leaves components behind.
+      // Measured drift is 0 on both phases over 12 cycles; 10 keeps the
+      // sentinel an order below the node bound while tolerating warm-up.
+      expect(
+        listenersLate - listenersEarly,
+        `${phase}: event listeners grew over ${ITERATIONS} cycles`,
+      ).toBeLessThanOrEqual(10);
       // Wasm memory only grows, so a growing worker page count means PDFium
       // caches are not being recycled with the document. The bound tolerates
       // allocator slack while catching per-cycle accumulation.
