@@ -53,6 +53,9 @@ export const pdfiumWasmModulePromise = new Promise<WasmModuleContainer | null>(
 export function startEagerWasmCompilation(): void {
   if (compilationStarted) return;
   compilationStarted = true;
+  if (typeof performance !== "undefined") {
+    performance.mark("pdfium-eager-compile-start");
+  }
 
   if (typeof WebAssembly !== "object") {
     resolvePromise(null);
@@ -88,6 +91,11 @@ export function startEagerWasmCompilation(): void {
   };
 
   compileWithFallback()
-    .then((module) => resolvePromise(module ? { module } : null))
+    .then((module) => {
+      if (typeof performance !== "undefined") {
+        performance.mark("pdfium-eager-compile-end");
+      }
+      resolvePromise(module ? { module } : null);
+    })
     .catch(() => resolvePromise(null));
 }

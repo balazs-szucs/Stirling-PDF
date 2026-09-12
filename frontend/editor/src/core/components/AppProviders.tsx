@@ -50,9 +50,10 @@ function ScarfTrackingInitializer() {
   return null;
 }
 
-import { PdfEngineProvider, usePdfiumEngine } from "@embedpdf/engines/react";
+import { PdfEngineProvider } from "@embedpdf/engines/react";
 import { pdfiumWasmUrl } from "@app/services/wasmPrecompiler";
 import { getLocalFontFallbackConfig } from "@app/services/pdfiumFontFallback";
+import { useLocalPdfiumEngine } from "@app/hooks/useLocalPdfiumEngine";
 
 function PosthogTrackingInitializer() {
   usePosthogTracking();
@@ -129,11 +130,10 @@ export function AppProviders({
   appConfigProviderProps,
 }: AppProvidersProps) {
   const [queryClient] = useState(createAppQueryClient);
-  // Stable identity: usePdfiumEngine recreates the engine whenever this prop changes.
+  // Stable identity: useLocalPdfiumEngine recreates the engine whenever this prop changes.
   const fontFallback = useMemo(() => getLocalFontFallbackConfig(), []);
-  const { engine, isLoading, error } = usePdfiumEngine({
+  const { engine, isLoading, error } = useLocalPdfiumEngine({
     wasmUrl: pdfiumWasmUrl,
-    worker: true,
     encoderPoolSize:
       typeof navigator !== "undefined" && navigator.hardwareConcurrency
         ? Math.min(2, navigator.hardwareConcurrency)
