@@ -3,6 +3,7 @@ import {
   thumbnailGenerationService,
   type ThumbnailResult,
 } from "@app/services/thumbnailGenerationService";
+import { getDocumentBytes } from "@app/services/documentBytesCache";
 import { createQuickKey } from "@app/types/fileContext";
 import { FileId } from "@app/types/file";
 
@@ -22,10 +23,6 @@ let batchTimer: number | null = null;
 
 // Track active thumbnail requests to prevent duplicates across components
 const activeRequests = new Map<string, Promise<string | null>>();
-
-// Cache ArrayBuffers to avoid reading the same file multiple times. Weak keys:
-// a deleted File must not keep its full buffer alive after the queue drains.
-const fileArrayBufferCache = new WeakMap<File, ArrayBuffer>();
 
 // Batch processing configuration
 const BATCH_SIZE = 10; // Process thumbnails in batches of 10 for faster initial load
@@ -78,12 +75,9 @@ async function processRequestQueue() {
         try {
           const pageNumbers = requests.map((req) => req.pageNumber);
 
-          // Get or create cached ArrayBuffer to avoid reading file multiple times
-          let arrayBuffer = fileArrayBufferCache.get(file);
-          if (!arrayBuffer) {
-            arrayBuffer = await file.arrayBuffer();
-            fileArrayBufferCache.set(file, arrayBuffer);
-          }
+          // Read-only scans share the one cached buffer per Blob instead of
+          // minting a second full copy for the thumbnail queue.
+          const arrayBuffer = await getDocumentBytes(file);
 
           // Use quickKey for PDF document caching (same metadata, consistent format)
           const fileId = createQuickKey(file) as FileId;
@@ -127,7 +121,6 @@ async function processRequestQueue() {
     }
   } finally {
     isProcessingQueue = false;
-    // The WeakMap releases buffers with their Files; nothing to clear here.
   }
 }
 
