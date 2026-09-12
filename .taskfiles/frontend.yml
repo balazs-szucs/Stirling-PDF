@@ -27,6 +27,12 @@ tasks:
     env:
       CI: '{{ .CI | default "false" }}'
 
+  check:embedpdf-patch:
+    desc: "Verify the local @embedpdf/engines patch is applied"
+    deps: [install]
+    cmds:
+      - npm run check:embedpdf-patch
+
   prepare:env:
     internal: true
     run: when_changed
@@ -205,7 +211,7 @@ tasks:
 
   build:
     desc: "Production build (default mode)"
-    deps: [prepare]
+    deps: [prepare, check:embedpdf-patch]
     cmds:
       - npx vite build editor
 
@@ -496,6 +502,7 @@ tasks:
   check:
     desc: "Quick quality gate for local development"
     cmds:
+      - task: check:embedpdf-patch
       - task: typecheck
       - task: lint
       - task: format:check

@@ -11,6 +11,10 @@ RUN npm ci
 
 COPY frontend .
 
+# postinstall applies the local @embedpdf/engines patch; fail the image if a
+# future lockfile/ignore-scripts change skips it.
+RUN npm run check:embedpdf-patch
+
 # Generate material-symbols icon subset (normally done by task prepare:icons).
 RUN node editor/scripts/generate-icons.js
 

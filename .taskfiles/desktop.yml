@@ -53,7 +53,7 @@ tasks:
 
   build:
     desc: "Build Tauri desktop app (production)"
-    deps: [prepare]
+    deps: [prepare, ':frontend:check:embedpdf-patch']
     dir: editor
     cmds:
       - npx tauri build
