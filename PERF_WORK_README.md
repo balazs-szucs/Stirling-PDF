@@ -57,6 +57,13 @@ idle machine; an interleaved re-run on a loaded machine measured medians of
 1113 ms baseline vs 889 ms branch). Only the interleaved A/B, not any single
 absolute value, is the evidence.
 
+Memory method: "WASM high-water" is the max of a **1 s interval** sample of the
+wrapped `WebAssembly.Memory.buffer.byteLength` (main and worker), so it is a
+lower bound on transient peaks. "Heap" figures are CDP JS heap read after
+`HeapProfiler.collectGarbage`. A 12-cycle GC-normalized soak now runs in
+`viewer-memory-soak.spec.ts`; it asserts a flat object-URL count and bounded
+heap/node growth after file removal.
+
 ### `huge-150mb.pdf` (155 MB, 60 pages)
 
 | Metric | before | final |
@@ -148,7 +155,26 @@ same build, `image/png` temporarily substituted):
 
 BMP removes one main-thread RGBA copy and the encoder-worker round trip; the
 raw blobs are larger in memory but the post-GC heap sample is unchanged. Keep
-BMP. (n=2 per arm — a human trial or a longer run would firm this up.)
+BMP: the mechanism is sound and the worker-boundary byte counts are
+deterministic. **The timing rows are provisional — n=2 per arm.** On 40 MB the
+first-page spread (733/798 vs 817/738) is inside run noise, i.e. no measurable
+difference there; the pages-500 arm looked faster (255/355 vs 370/397) but its
+spread overlaps too, and a colder run measured 349 ms. Nothing here justifies a
+headline number; re-measure with the idle-machine protocol before quoting one.
+
+Output-fidelity check (production build, same viewport, `pixelmatch`): branch
+BMP vs upstream PNG element screenshots differ by 0.62% (40 MB p0) and 2.28% /
+2.52% (500 p pages 0/499), concentrated on antialiased text edges. Same-arm
+captures are pixel-identical (0.000% across two runs), so this is a real
+encoder-path difference, not layout or harness jitter: BMP writes PDFium's RGBA
+bytes straight out, while the PNG path goes through canvas `putImageData` /
+`toBlob`, whose premultiplied-alpha round-trip shifts low-alpha edge pixels.
+The worst page (pages-500 p0) was reviewed as an image alongside its baseline
+capture and is visually identical — same text, layout and toolbar — so the
+delta is encode-level, not structural. No screenshot snapshot test is committed
+because cross-platform PNG baselines are brittle; if pixel parity with the
+pre-BMP build ever matters, decode both paths in one session and diff the RGBA,
+not the composited screenshots.
 
 ## Phase 2 (felt moments) — U1 reading continuity (REVERTED)
 
@@ -203,6 +229,11 @@ Known limitations:
 - Main-thread WASM heap and the worker's WASM heap are both reported now, but
   `wasmLive`/`wasmPeak` in the harness still report 0 (wrapping
   `instance.exports.malloc` did not take effect); use high-water instead.
+  The committed soak (`viewer-memory-soak.spec.ts`) instead reports wasm
+  **pages** (`buffer.byteLength / 64 KiB`, the unit memory is committed in) for
+  both main and workers — bytes mix in unrelated allocations.
+- The 1 s high-water sampling is a lower bound; a 50-100 ms poll would close
+  most of the transient-peak gap cheaply if a claim depends on it.
 - `performance.measureUserAgentSpecificMemory()` is unavailable without
   cross-origin isolation; tests do not set COOP/COEP.
 - Runs must use the production preview (`CI=1`) because dev StrictMode
@@ -278,18 +309,34 @@ PERF_STACKS=1 PERF_SERIES=1 PERF_LOGS=1 ...
   module to `createPdfiumEngine`. Own the hook rather than patching
   `@embedpdf/engines/react` so the extra option stays typed.
 - `scripts/patch-embedpdf-engines.mjs` — postinstall patch for
-  `@embedpdf/engines` 2.15.0 only (`npm run check:embedpdf-patch` verifies an
-  applied patch, e.g. after `npm ci --ignore-scripts`). It asserts the exact
-  version and every anchor, and no-ops once applied. Alternatives rejected:
-  patch-package (the embedded worker source is one 600 KB line, so the committed
-  diff would be ~1.2 MB), a Vite transform (dev pre-bundling and vitest load the
-  dep outside the transform pipeline), vendoring the package (duplicates the
-  bundle). The newest published engines version is 2.15.0; revisit on 3.0.
+  `@embedpdf/engines` 2.15.0 only. It asserts the exact version and every
+  anchor, and no-ops once applied. Alternatives rejected: patch-package (the
+  embedded worker source is one 600 KB line, so the committed diff would be
+  ~1.2 MB), a Vite transform (dev pre-bundling and vitest load the dep outside
+  the transform pipeline), vendoring the package (duplicates the bundle).
   The patch (a) transfers whole-buffer `{data,width,height}` worker responses
   ≥64 KB, (b) accepts `options.wasmModule` and instantiates it synchronously in
   the worker, and (c) retries the `wasmInit` post without the module when
   structured clone throws (older WebKit). A version bump must re-verify all
   anchors and update `EXPECTED_VERSION`.
+  **CI/Docker coverage**: `frontend:build` depends on the new
+  `frontend:check:embedpdf-patch` task, `frontend:check` runs it,
+  `desktop:build` and the Tauri workflow run it, and
+  `docker/frontend/Dockerfile` runs `npm run check:embedpdf-patch` right after
+  `COPY frontend .`. An unpatched build therefore fails instead of silently
+  shipping zero transfers. To reproduce:
+  `npm ci --ignore-scripts && npm run check:embedpdf-patch` exits 1.
+  **Own-worker evaluation (2026-09): not available on the pinned version.**
+  The official quickstart ("create your own `webworker.ts` with
+  `PdfiumEngineRunner`, wrap it with `WebWorkerEngine`") describes an API that
+  is ahead of the published package: `@embedpdf/engines@2.15.0` is still the
+  latest on npm and its root/index does **not** export `PdfiumEngineRunner`
+  (it exists unexported at `dist/lib/pdfium/runner.js`), so owning the worker
+  would still need a deep import or an exports patch, and the runner's
+  constructor only accepts an `ArrayBuffer` — there is no precompiled
+  `WebAssembly.Module` option upstream either. Re-evaluate when a release that
+  exports the runner lands (3.0): our `useLocalPdfiumEngine` already keeps the
+  engine creation seam, so the swap is contained.
 - `editor/vite.config.ts` — the `compression()` plugin now includes `.wasm`, so
   the hashed pdfium asset gets `.br`/`.gz` siblings.
 - The patch deliberately does **not** transfer the document bytes main→worker:
@@ -300,15 +347,26 @@ PERF_STACKS=1 PERF_SERIES=1 PERF_LOGS=1 ...
 ## Backlog for the next pass (ranked, with evidence)
 
 1. **Per-page form state** — `extractFormFields` still walks all pages on the
-   main thread (form fixture WASM 66.9 MB, first page ~650-770 ms). Make form
-   fields resolve per page while preserving save/validation semantics. Highest
-   remaining memory win for form documents.
+   main thread (form fixture main WASM 66.9 MB, first page ~650-770 ms). The
+   remaining cost over an image-only document of the same size is ~16 MB of
+   main WASM, not the 325 MB pre-gate figure, so profile before committing to a
+   refactor. Make form fields resolve per page while preserving
+   save/validation semantics — this is a product-level change and needs owner
+   sign-off before coding.
 2. **Remaining local engine gaps (no upstream)** — transfers and precompiled
    module handoff are done (`bc519ae07`); what is left:
    - the document bytes are still structured-cloned main→worker (155 MB for the
-     huge fixture). Doing this safely needs an ownership handoff that survives
-     the main-thread scans reading through `documentBytesCache` (re-read on
-     detach plus auditing every consumer that holds the buffer across awaits).
+     huge fixture, 9.9-44.9 ms synchronous depending on load). The clean fix is
+     ownership inversion: let the worker own the canonical buffer and serve
+     main-thread scan reads from it, instead of sharing the
+     `documentBytesCache` buffer (transfer neuters the source too, so sharing
+     cannot work).
+   - worker recycle threshold: wasm pages only grow within an instance, and the
+     app-level engine worker keeps its 188 MB steady state after the huge
+     document closes. Terminate/respawn the engine worker when its page count
+     crosses a threshold after a large document; the 12-cycle soak shows
+     repeated small opens are already flat (284 main / 284 worker pages), so
+     this only matters for the huge-document case.
    - `PdfCache` page TTL (5 s) / max pages (10) are not configurable from
      `createPdfiumEngine`; expose or patch for scroll-heavy use and measure.
    - only the ESM entry is patched; a consumer resolving the CJS entry gets the
@@ -322,9 +380,13 @@ PERF_STACKS=1 PERF_SERIES=1 PERF_LOGS=1 ...
    numbers show network bootstrap dominating.
 4. **OPFS/JSPI streaming (Chrome 137+/Firefox 153+; not Safari/WebKit)** —
    `FPDF_LoadCustomDocument` with synchronous block reads from an OPFS
-   `createSyncAccessHandle()` inside a worker. Relevant for multi-hundred-MB
-   files because the engine worker holds its own copy; document the Safari
-   gap for the Tauri desktop build.
+   `createSyncAccessHandle()` inside a worker. Verified present in the pinned
+   `@embedpdf/pdfium@2.15.0` build (3 references in the glue + a typed export,
+   same check that validated `EPDF_*ByIndex`), so the native side exists; the
+   synchronous JS callback remains the constraint and is exactly why this is
+   scoped to JSPI engines. Relevant for multi-hundred-MB files because the
+   engine worker holds its own copy; document the Safari/WebKit gap for the
+   Tauri desktop build.
 5. **Pre-render / prefetch** — tile or next-page prefetch based on scroll
    direction; no measurements yet.
 6. **Defer all-page metadata further** — hydration still pages through every
@@ -355,7 +417,10 @@ PERF_STACKS=1 PERF_SERIES=1 PERF_LOGS=1 ...
 - `scripts/patch-embedpdf-engines.mjs` runs from `postinstall`; an existing
   checkout needs one `npm install` (or `node scripts/patch-embedpdf-engines.mjs`)
   after pulling. It fails loudly if `@embedpdf/engines` is not exactly 2.15.0
-  or an anchor moved; `npm run check:embedpdf-patch` verifies an applied patch.
+  or an anchor moved; `npm run check:embedpdf-patch` verifies an applied patch,
+  and `frontend:build`, `frontend:check`, `desktop:build`,
+  `docker/frontend/Dockerfile` and the Tauri workflow all run that check so a
+  silent unpatched build cannot ship (see the patch bullet above).
 - All three engines verified (smoke spec): Chromium, Firefox and WebKit 26
   render with zero worker wasm fetches. The `DataCloneError` fallback in the
   patch is only reachable on older WebKit, which has no test here.
@@ -396,18 +461,25 @@ Chromium/Firefox/WebKit.
   `.pdf-page-skeleton` CSS + tokens). Off-screen pages now render nothing; the
   open sequence is one spinner whose label changes from "Loading PDF Engine..."
   to "Preparing document...".
-- **`/AcroForm` byte gate kept for viewer opens, with an exhaustive escape
-  hatch**: removing the gate entirely made the eager overlay extract fields on
-  every open and raised large-40mb main-thread WASM from 50.6 to 87.6 MB, so
-  the fast path stays. `PdfiumFormProvider.fetchFields(file, { exhaustive })`
-  skips the literal scan only by default; the Form Fill refresh passes
-  `exhaustive: true` so a catalog hidden in a compressed object stream
-  (`qpdf --object-streams=generate`) is still found. Backlog: a worker-side
-  `FPDF_GetFormType` probe would remove the heuristic without the main-thread
-  copy. `hasAcroForm` is documented as an overlay-only heuristic and has a
-  regression test for both paths.
+- **`/AcroForm` byte gate confirmed by an exact catalog probe**: removing the
+  gate entirely made the eager overlay extract fields on every open and raised
+  large-40mb main-thread WASM from 50.6 to 87.6 MB, so the literal scan stays
+  the fast path. A literal miss is no longer treated as "no form": under
+  `LARGE_PDF_PARSE_LIMIT` (where thumbnail hydration opens the document on the
+  main thread anyway) `PdfiumFormProvider` now reads the catalog's
+  `FPDF_GetFormType` (0 none, 1 AcroForm, 2/3 XFA) without loading pages, and
+  only extracts when it is non-zero. At or above the limit the probe is skipped
+  so a 100 MB+ file never pays a full main-thread copy just to check. `null`
+  from the probe (API absent) falls through to extraction rather than reading
+  as "no form". The Form Fill refresh still passes `exhaustive: true`.
+  `hasAcroForm` remains an overlay-only fast path; the regression test covers
+  probe-miss, probe-hit, unknown and over-limit cases.
 - **Chunk-load recovery**: `vite:preloadError` and the ErrorBoundary now reload
   once when a lazy chunk fails (WebKit reports "Importing a module script
   failed"), instead of parking the user on "Something went wrong".
 - **Thumbnail buffer cache** is a `WeakMap` now, so a deleted File cannot pin
   its full ArrayBuffer.
+- **Viewer URL cache eviction**: `useFileWithUrl`'s 25-entry LRU pinned up to 25
+  full documents; removing a file now evicts and revokes its cached object URL
+  (`evictFileUrl` from the file lifecycle). The committed memory soak
+  (`viewer-memory-soak.spec.ts`, Chromium) keeps the object-URL count flat.
