@@ -175,18 +175,23 @@ async function renderPdfThumbnailPairPdfium(
 
   try {
     const pageCount = m.FPDF_GetPageCount(docPtr);
+    const firstMeta = await readPdfiumPageMetadata(docPtr, 0);
+    const firstRotation = firstMeta?.rotation ?? 0;
     const unrotatedThumb = await renderPdfiumPageDataUrl(docPtr, 0, scale, {
       applyRotation: false,
     });
-    const rotatedThumb = await renderPdfiumPageDataUrl(docPtr, 0, scale, {
-      applyRotation: true,
-    });
+    // Both variants are pixel-identical when the page has no rotation.
+    const rotatedThumb =
+      firstRotation === 0
+        ? unrotatedThumb
+        : await renderPdfiumPageDataUrl(docPtr, 0, scale, {
+            applyRotation: true,
+          });
     if (!unrotatedThumb || !rotatedThumb) {
       throw new Error("PDFium: failed to render page 0");
     }
 
-    const firstMeta = await readPdfiumPageMetadata(docPtr, 0);
-    const pageRotations: number[] = [firstMeta?.rotation ?? 0];
+    const pageRotations: number[] = [firstRotation];
     const pageDimensions: Array<{ width: number; height: number }> = [
       { width: firstMeta?.width ?? 0, height: firstMeta?.height ?? 0 },
     ];

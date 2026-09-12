@@ -161,6 +161,41 @@ export async function readPdfiumPageMetadata(
   pageIndex: number,
 ): Promise<{ width: number; height: number; rotation: number } | null> {
   const m = await getPdfiumModule();
+
+  // Index APIs read crop box + rotation without loading the page, so a
+  // whole-document metadata sweep allocates nothing per page.
+  if (
+    typeof m.EPDF_GetPageBoxByIndex === "function" &&
+    typeof m.EPDF_GetPageRotationByIndex === "function"
+  ) {
+    const rectPtr = m.pdfium.wasmExports.malloc(4 * 4);
+    try {
+      // FS_RECTF is left, top, right, bottom; CROP falls back to MEDIA.
+      const hasCrop = m.EPDF_GetPageBoxByIndex(docPtr, pageIndex, 1, rectPtr);
+      if (
+        hasCrop ||
+        m.EPDF_GetPageBoxByIndex(docPtr, pageIndex, 0, rectPtr)
+      ) {
+        const heap = (m.pdfium as typeof m.pdfium & ExtendedPdfiumRuntime)
+          .HEAPU8;
+        const rect = new Float32Array(heap.buffer, rectPtr, 4);
+        const rawRotation = Number(
+          m.EPDF_GetPageRotationByIndex(docPtr, pageIndex),
+        );
+        const index = (rawRotation | 0) & 3;
+        // FPDF_GetPageWidthF reports rotated dimensions; mirror that swap so
+        // callers see the same size they saw when this loaded the page.
+        const width = index & 1 ? rect[1] - rect[3] : rect[2] - rect[0];
+        const height = index & 1 ? rect[2] - rect[0] : rect[1] - rect[3];
+        if (width > 0 && height > 0) {
+          return { width, height, rotation: index * 90 };
+        }
+      }
+    } finally {
+      m.pdfium.wasmExports.free(rectPtr);
+    }
+  }
+
   const pagePtr = m.FPDF_LoadPage(docPtr, pageIndex);
   if (!pagePtr) return null;
   try {
