@@ -83,21 +83,3 @@ export function useFileWithUrl(
 
   return result;
 }
-
-/**
- * Hook variant that returns cleanup function separately
- */
-export function useFileWithUrlAndCleanup(file: File | null): {
-  fileObj: { file: File; url: string } | null;
-  cleanup: () => void;
-} {
-  return useMemo(() => {
-    if (!file) return { fileObj: null, cleanup: () => {} };
-
-    const url = URL.createObjectURL(file);
-    const fileObj = { file, url };
-    const cleanup = () => URL.revokeObjectURL(url);
-
-    return { fileObj, cleanup };
-  }, [file]);
-}
