@@ -13,6 +13,7 @@ import { fileURLToPath } from "node:url";
 
 const EXPECTED_VERSION = "2.15.0";
 const MARKER = "STIRLING_LOCAL_EMBEDPDF_PATCH";
+const checkOnly = process.argv.includes("--check");
 const enginesDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "../node_modules/@embedpdf/engines",
@@ -24,7 +25,7 @@ if (!existsSync(target) || !existsSync(packageJsonPath)) {
   console.error(
     "[patch-embedpdf-engines] @embedpdf/engines is not installed; skipping",
   );
-  process.exit(0);
+  process.exit(checkOnly ? 1 : 0);
 }
 
 const installedVersion = JSON.parse(readFileSync(packageJsonPath, "utf8")).version;
@@ -37,6 +38,28 @@ if (installedVersion !== EXPECTED_VERSION) {
 }
 
 let source = readFileSync(target, "utf8");
+const patchedSnippets = [
+  "(wasmUrl || event.data.wasmModule)",
+  "let wasmBinary = event.data.wasmModule;",
+  "new WebAssembly.Instance(wasmBinary, imports)",
+  "imageData.byteOffset === 0",
+  "wasmModule: precompiledWasmModule",
+  "delete wasmInitMessage.wasmModule",
+];
+if (checkOnly) {
+  const missing = patchedSnippets.filter((snippet) => !source.includes(snippet));
+  if (missing.length > 0) {
+    console.error(
+      `[patch-embedpdf-engines] check failed: ${missing.length} patched snippet(s) missing. ` +
+        "Run `npm install` (or `npm run postinstall`) to apply the local engine patch.",
+    );
+    process.exit(1);
+  }
+  console.log(
+    `[patch-embedpdf-engines] check passed for @embedpdf/engines@${installedVersion}`,
+  );
+  process.exit(0);
+}
 if (source.includes(MARKER)) {
   process.exit(0);
 }

@@ -21,6 +21,18 @@ will sit alongside it as siblings. Shared tooling — `package.json`, `node_modu
 `.storybook/`, oxlint, oxfmt — lives at `frontend/` so every app installs
 once and lints with the same config.
 
+## Local dependency patches
+
+`npm install` applies a local patch to the pinned `@embedpdf/engines` version
+(`scripts/patch-embedpdf-engines.mjs`, wired as `postinstall`): render results
+are transferred instead of cloned from the engine worker, and the worker reuses
+the `WebAssembly.Module` the app already compiled instead of fetching and
+compiling pdfium.wasm again. The script asserts the exact version and every
+patch anchor and is a no-op once applied. If a build runs with
+`--ignore-scripts`, apply it with `npm run postinstall` and verify with
+`npm run check:embedpdf-patch`. Remove the script and hook when the pinned
+engine supports both natively.
+
 ## Environment Variables
 
 The editor's environment variables live in committed `.env` files at
