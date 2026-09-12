@@ -143,6 +143,11 @@ export async function getPdfiumModule(): Promise<WrappedPdfiumModule> {
  * Next call to getPdfiumModule() will create a fresh instance.
  */
 export function resetPdfiumModule(): void {
+  try {
+    releaseSharedDocument();
+  } catch {
+    // Module already unusable; dropping the references is the cleanup.
+  }
   _module = null;
   _initPromise = null;
   _docDataPtrs.clear();
@@ -325,6 +330,32 @@ export class PdfiumOpenError extends Error {
 }
 
 /**
+ * One open document shared by every scan of the same bytes.
+ *
+ * Reopening per scan copies the whole file into the WASM heap again and leaves
+ * PDFium's internal caches behind, so the heap high-water grows with each
+ * scan. `openRawDocument` hands out the shared handle, `closeRawDocument`
+ * drops a reference, and the document is closed for real when different bytes
+ * arrive with no readers left or `releaseSharedDocument()` runs. Password
+ * opens are never shared.
+ */
+interface SharedDocument {
+  data: ArrayBuffer | Uint8Array;
+  docPtr: number;
+  refs: number;
+}
+let sharedDocument: SharedDocument | null = null;
+
+function closeDocumentNow(m: WrappedPdfiumModule, docPtr: number): void {
+  m.FPDF_CloseDocument(docPtr);
+  const dataPtr = _docDataPtrs.get(docPtr);
+  if (dataPtr) {
+    m.pdfium.wasmExports.free(dataPtr);
+    _docDataPtrs.delete(docPtr);
+  }
+}
+
+/**
  * Load a PDF into PDFium memory and return the document pointer.
  * Caller MUST call `closeRawDocument(docPtr)` when finished.
  */
@@ -333,6 +364,12 @@ export async function openRawDocument(
   password?: string,
 ): Promise<number> {
   const m = await getPdfiumModule();
+
+  if (!password && sharedDocument && sharedDocument.data === data) {
+    sharedDocument.refs++;
+    return sharedDocument.docPtr;
+  }
+
   const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
   const len = bytes.length;
   const ptr = m.pdfium.wasmExports.malloc(len);
@@ -343,8 +380,21 @@ export async function openRawDocument(
     m.pdfium.wasmExports.free(ptr);
     throw new PdfiumOpenError(m.FPDF_GetLastError());
   }
-  // Keep the buffer alive — freed in closeRawDocument()
+  // Keep the buffer alive — freed by closeDocumentNow()
   _docDataPtrs.set(docPtr, ptr);
+
+  if (!password) {
+    // A scan still reading the previous document keeps it open; only adopt the
+    // new one once its refs drop to zero.
+    if (sharedDocument && sharedDocument.refs <= 0) {
+      closeDocumentNow(m, sharedDocument.docPtr);
+      sharedDocument = null;
+    }
+    if (!sharedDocument) {
+      sharedDocument = { data, docPtr, refs: 1 };
+    }
+  }
+
   return docPtr;
 }
 
@@ -360,7 +410,8 @@ export async function openRawDocumentSafe(
 }
 
 /**
- * Close a raw document pointer and free its backing data buffer.
+ * Close a raw document pointer. Shared documents only lose a reference; the
+ * handle stays open for the next scan of the same bytes.
  */
 export async function closeRawDocument(docPtr: number): Promise<void> {
   const m = await getPdfiumModule();
@@ -368,18 +419,29 @@ export async function closeRawDocument(docPtr: number): Promise<void> {
 }
 
 /**
- * Synchronous close + buffer free — for use inside `finally` blocks that
- * already have the module reference.
+ * Synchronous release — for use inside `finally` blocks that already have the
+ * module reference.
  */
 export function closeDocAndFreeBuffer(
   m: WrappedPdfiumModule,
   docPtr: number,
 ): void {
-  m.FPDF_CloseDocument(docPtr);
-  const dataPtr = _docDataPtrs.get(docPtr);
-  if (dataPtr) {
-    m.pdfium.wasmExports.free(dataPtr);
-    _docDataPtrs.delete(docPtr);
+  if (sharedDocument && sharedDocument.docPtr === docPtr) {
+    if (sharedDocument.refs > 0) {
+      sharedDocument.refs--;
+      return;
+    }
+  }
+  closeDocumentNow(m, docPtr);
+}
+
+/** Drop the shared document, e.g. when the active file changes or on teardown. */
+export function releaseSharedDocument(): void {
+  if (!sharedDocument) return;
+  const session = sharedDocument;
+  sharedDocument = null;
+  if (_module) {
+    closeDocumentNow(_module, session.docPtr);
   }
 }
 
