@@ -18,6 +18,8 @@ import {
   extractSignatures,
   type SignatureFieldAppearance,
 } from "@app/services/pdfiumService";
+import { getDocumentBytes } from "@app/services/documentBytesCache";
+import { runPdfiumScan } from "@app/services/pdfiumScanQueue";
 
 interface SignatureFieldOverlayProps {
   pageIndex: number;
@@ -50,11 +52,12 @@ async function resolveFields(
   _cachedSource = source;
 
   _cachePromise = (async () => {
-    const buf = await source.arrayBuffer();
-    const [appearances, signatures] = await Promise.all([
-      renderSignatureFieldAppearances(buf),
-      extractSignatures(buf),
-    ]);
+    const buf = await getDocumentBytes(source);
+    const { appearances, signatures } = await runPdfiumScan(async () => {
+      const appearances = await renderSignatureFieldAppearances(buf);
+      const signatures = await extractSignatures(buf);
+      return { appearances, signatures };
+    });
 
     return appearances.map((f, i) => {
       // Positional correlation is only reliable when both arrays have the same
