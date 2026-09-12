@@ -17,6 +17,7 @@ import {
   renderSignatureFieldAppearances,
   extractSignatures,
   type SignatureFieldAppearance,
+  type PdfiumSignature,
 } from "@app/services/pdfiumService";
 import { getDocumentBytes } from "@app/services/documentBytesCache";
 import { runPdfiumScan } from "@app/services/pdfiumScanQueue";
@@ -43,42 +44,44 @@ interface ResolvedSignatureField extends SignatureFieldAppearance {
   time?: string;
 }
 let _cachedSource: File | Blob | null = null;
-let _cachedFields: ResolvedSignatureField[] = [];
-let _cachePromise: Promise<ResolvedSignatureField[]> | null = null;
+const _pageCache = new Map<number, Promise<ResolvedSignatureField[]>>();
+let _signaturesPromise: Promise<PdfiumSignature[]> | null = null;
 
-async function resolveFields(
+async function resolvePageFields(
   source: File | Blob,
+  pageIndex: number,
 ): Promise<ResolvedSignatureField[]> {
-  if (source === _cachedSource && _cachePromise) return _cachePromise;
-  _cachedSource = source;
+  if (source !== _cachedSource) {
+    _cachedSource = source;
+    _pageCache.clear();
+    _signaturesPromise = null;
+  }
+  const cached = _pageCache.get(pageIndex);
+  if (cached) return cached;
 
-  _cachePromise = (async () => {
+  const pending = (async () => {
     const buf = await getDocumentBytes(source);
     if (!hasAcroForm(new Uint8Array(buf))) return [];
-    const { appearances, signatures } = await runPdfiumScan(async () => {
-      const appearances = await renderSignatureFieldAppearances(buf);
-      const signatures = await extractSignatures(buf);
-      return { appearances, signatures };
-    });
+    if (!_signaturesPromise) {
+      _signaturesPromise = runPdfiumScan(() => extractSignatures(buf));
+    }
+    const signatures = await _signaturesPromise;
+    const appearances = await runPdfiumScan(() =>
+      renderSignatureFieldAppearances(buf, undefined, [pageIndex]),
+    );
 
-    return appearances.map((f, i) => {
-      // Positional correlation is only reliable when both arrays have the same
-      // length — i.e. one signature object per signature field in document order.
-      // When the counts differ we cannot safely attribute reason/time per-field,
-      // so we fall back to a whole-document "is signed" indicator.
-      const exactMatch = appearances.length === signatures.length;
-      const matchedSig = exactMatch ? signatures[i] : undefined;
-      return {
-        ...f,
-        isSigned: exactMatch ? i < signatures.length : signatures.length > 0,
-        reason: matchedSig?.reason,
-        time: matchedSig?.time,
-      };
-    });
+    // A single signature per single field is the one case where reason/time
+    // can be attributed without knowing the document-wide field order.
+    const exactMatch = appearances.length === 1 && signatures.length === 1;
+    return appearances.map((f) => ({
+      ...f,
+      isSigned: signatures.length > 0,
+      reason: exactMatch ? signatures[0].reason : undefined,
+      time: exactMatch ? signatures[0].time : undefined,
+    }));
   })();
-
-  _cachedFields = await _cachePromise;
-  return _cachedFields;
+  _pageCache.set(pageIndex, pending);
+  return pending;
 }
 
 function SignatureBitmapCanvas({
@@ -129,7 +132,7 @@ function SignatureFieldOverlayInner({
       return;
     }
     let cancelled = false;
-    resolveFields(pdfSource)
+    resolvePageFields(pdfSource, pageIndex)
       .then((res) => {
         if (!cancelled) setFields(res);
       })
@@ -139,16 +142,13 @@ function SignatureFieldOverlayInner({
     return () => {
       cancelled = true;
     };
-  }, [pdfSource]);
+  }, [pdfSource, pageIndex]);
 
   const pageFields = useMemo(
     // A staged move or delete leaves this bitmap stranded at the original rect, on top of the
     // editor chrome, so it is dropped until the edit is applied and the appearance re-extracted.
-    () =>
-      fields.filter(
-        (f) => f.pageIndex === pageIndex && !staleNames.has(f.fieldName),
-      ),
-    [fields, pageIndex, staleNames],
+    () => fields.filter((f) => !staleNames.has(f.fieldName)),
+    [fields, staleNames],
   );
 
   if (pageFields.length === 0) return null;

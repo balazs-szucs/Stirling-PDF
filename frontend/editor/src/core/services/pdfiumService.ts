@@ -1842,6 +1842,7 @@ async function renderWidgetAppearance(
 export async function renderSignatureFieldAppearances(
   data: ArrayBuffer | Uint8Array,
   password?: string,
+  pageIndexes?: number[],
 ): Promise<SignatureFieldAppearance[]> {
   const m = await getPdfiumModule();
   const docPtr = await openRawDocumentSafe(data, password);
@@ -1851,8 +1852,10 @@ export async function renderSignatureFieldAppearances(
     const formEnvPtr = m.PDFiumExt_InitFormFillEnvironment(docPtr, formInfoPtr);
     const pageCount = m.FPDF_GetPageCount(docPtr);
     const results: SignatureFieldAppearance[] = [];
+    const pages = pageIndexes ?? Array.from({ length: pageCount }, (_, i) => i);
 
-    for (let pageIdx = 0; pageIdx < pageCount; pageIdx++) {
+    for (const pageIdx of pages) {
+      if (pageIdx < 0 || pageIdx >= pageCount) continue;
       const pagePtr = m.FPDF_LoadPage(docPtr, pageIdx);
       if (!pagePtr) continue;
       if (formEnvPtr) m.FORM_OnAfterLoadPage(pagePtr, formEnvPtr);
@@ -2110,6 +2113,7 @@ export async function renderSignatureFieldAppearances(
 export async function renderButtonFieldAppearances(
   data: ArrayBuffer | Uint8Array,
   password?: string,
+  pageIndexes?: number[],
 ): Promise<SignatureFieldAppearance[]> {
   const m = await getPdfiumModule();
   const docPtr = await openRawDocumentSafe(data, password);
@@ -2119,8 +2123,10 @@ export async function renderButtonFieldAppearances(
     const formEnvPtr = m.PDFiumExt_InitFormFillEnvironment(docPtr, formInfoPtr);
     const pageCount = m.FPDF_GetPageCount(docPtr);
     const buttonResults: SignatureFieldAppearance[] = [];
+    const pages = pageIndexes ?? Array.from({ length: pageCount }, (_, i) => i);
 
-    for (let pageIdx = 0; pageIdx < pageCount; pageIdx++) {
+    for (const pageIdx of pages) {
+      if (pageIdx < 0 || pageIdx >= pageCount) continue;
       const pagePtr = m.FPDF_LoadPage(docPtr, pageIdx);
       if (!pagePtr) continue;
       if (formEnvPtr) m.FORM_OnAfterLoadPage(pagePtr, formEnvPtr);
