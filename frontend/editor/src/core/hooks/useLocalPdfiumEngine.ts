@@ -45,11 +45,15 @@ export function useLocalPdfiumEngine({
         startEagerWasmCompilation();
         // Never block engine creation on a compile that a test harness or an
         // offline deployment may leave pending; the worker fetches the URL itself
-        // when no module is handed over.
+        // when no module is handed over. The fallback timer is cleared on
+        // settle so a fast compile does not leave a 3s straggler behind.
+        let precompileTimer: ReturnType<typeof setTimeout> | undefined;
         const precompiled = await Promise.race([
           pdfiumWasmModulePromise,
-          new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000)),
-        ]);
+          new Promise<null>((resolve) => {
+            precompileTimer = setTimeout(() => resolve(null), 3000);
+          }),
+        ]).finally(() => clearTimeout(precompileTimer));
         const options: CreatePdfiumEngineOptions & {
           wasmModule?: WebAssembly.Module;
         } = { logger, encoderPoolSize, fontFallback };

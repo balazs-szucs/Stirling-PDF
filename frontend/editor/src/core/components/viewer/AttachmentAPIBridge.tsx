@@ -36,14 +36,20 @@ export function AttachmentAPIBridge() {
     try {
       const task = attachmentCapability.getAttachments();
 
+      // The fallback must not outlive the race: every fetch would otherwise
+      // leave a 10s timer (plus its closure) pending after it resolves.
+      let timeoutId: ReturnType<typeof setTimeout> | undefined;
       const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(
+        timeoutId = setTimeout(
           () => reject(new Error("Attachment fetch timeout after 10 seconds")),
           10000,
         );
       });
 
-      const result = await Promise.race([task.toPromise(), timeoutPromise]);
+      const result = await Promise.race([
+        task.toPromise(),
+        timeoutPromise,
+      ]).finally(() => clearTimeout(timeoutId));
       setState({
         attachments: result ?? [],
         isLoading: false,
