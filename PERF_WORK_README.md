@@ -483,3 +483,79 @@ Chromium/Firefox/WebKit.
   full documents; removing a file now evicts and revokes its cached object URL
   (`evictFileUrl` from the file lifecycle). The committed memory soak
   (`viewer-memory-soak.spec.ts`, Chromium) keeps the object-URL count flat.
+
+## Memory-hunt pass (static-only; loaded machine, no new timing/memory numbers)
+
+Conditions: load avg ~12, several processes >5% CPU sustained, so the
+interleaved-A/B protocol could not run. Every finding below is
+PARTIALLY CONFIRMED (static proof + primary-source doc leg; the idle-machine
+empirical leg is still open). No class-A code shipped. A/B arm worktree
+`../sp-baseline` at `77b325cf1` exists for the next pass. The working tree
+carries one pre-existing uncommitted change (soak-spec timer census,
+`SOAK_FIXTURE`, `PERF_SNAPSHOTS`, `PERF_FINALIZERS`); it was reviewed
+statically only (typecheck/lint clean) and left uncommitted.
+
+Ruled out (no finding, do not re-hunt without new evidence):
+
+- `HEAPU8` staleness in the viewer path: the pinned glue reassigns
+  `Module['HEAPU8']` on every growth (`@embedpdf/pdfium/dist/index.js`
+  `updateMemoryViews`), and every src use site reads `.HEAPU8` fresh with no
+  malloc between acquisition and last read. Copies precede `free()`.
+- Worker→main render transfers: whole-buffer views ≥64 KB transfer and
+  `respond()` returns immediately with no post-transfer read; partial views
+  fall back to clone (`frontend/scripts/patch-embedpdf-engines.mjs`).
+- Doc/page/annot/bitmap pairing: `extractFormFields`, `fileAnalyzer`,
+  `enrichWithAlternateNames` and all sampled overlay paths close pages,
+  annons, bitmaps and docs in `finally` blocks.
+- Canvas pool (`pdfiumPageRender.ts`): zeroed on release, `POOL_MAX` 4.
+- `SearchInterface`/`ZoomAPIBridge` intervals: cleared on hide/unmount.
+- IndexedDB handles: one cached connection per storage service.
+- `pdfiumDocBuilder._decodeImage` URLs: revoked on load, error and catch.
+
+New backlog (ranked; full greenlight table in the hunt report):
+
+1. Overlay caches skip unmount cleanup when a document is open
+   (`LocalEmbedPDF.tsx` clear effect early-returns while `file || url` is set,
+   so unmounting with a doc open pins the Blob + full buffer until the next
+   open). Always return the cleanup.
+2. `sharedDocument` at zero refs is never closed; `releaseSharedDocument`
+   runs only from `resetPdfiumModule` (`pdfiumService.ts`). A closed
+   document's malloc'd bytes + PDFium caches stay committed until the next
+   different-bytes open. Release on document-leave with hysteresis.
+3. `destroyThumbnails` drops queued thumbnail requests without settling them
+   (`useThumbnailGeneration.ts`); awaiting callers dangle. Decide
+   reject-vs-resolve-null, then settle on destroy.
+4. Bare-Blob `useFileWithUrl` keys are un-evictable except via the 25-entry
+   LRU (`useFileWithUrl.ts`); current bare-Blob callers are small, so this
+   is latent. Route large bare-Blob URLs through an evictable key.
+5. Thumbnail `pdfDocumentCache` double-accounts `sharedDocument` refs, and
+   `clearPDFCacheForFile` closes without checking its own refCount: a narrow
+   use-after-close race against an in-flight render. Gate the close on
+   refCount, or stop sharing the pointer between the two caches.
+6. `readPdfiumPageMetadata` reads rotation after creating heap views
+   (`pdfiumPageRender.ts`); a growing call between would stale them (today
+   degrades to the fallback path). Call rotation first, then read the heap.
+7. `LocalEmbedPDF` url-without-File branch fetches a full second copy
+   outside `documentBytesCache`. Verify whether url-only opens occur; if so,
+   route through the cache.
+8. `SignaturePreviewLayer` has no `pointercancel` handler, so a cancelled
+   drag keeps element-scoped listeners for the element lifetime. Add the
+   symmetric removal.
+
+Allocator reality (pinned `@embedpdf/pdfium` 2.15.0, verified by export
+inspection, 630 exports): no `mallinfo`/`sbrk`/heap-stats exports (only
+`malloc`/`free` among allocator names), one `memory` export, 138 `EPDF_*`
+extensions including `FPDF_GetFormType`. Fragmentation therefore has no
+direct telemetry; high-water-vs-growth-per-open stays the proxy, and the
+worker 188 MB floor is releasable only by respawn (proposal unchanged).
+
+Buffer ownership at steady state (40.4 MB fixture, committed logs):
+main `documentBytesCache` 1 × 40.4 MB (shared by reference with viewer
+`pdfBuffer` state, 0 extra) + main WASM 50.6 MB + worker structured clone
+40.4 MB transient + worker WASM ≈50.6 MB + transferred BMP bitmaps (5.3 of
+5.4 MB, post-GC JS heap ~18 MB total). 155 MB fixture: main cache 155 MB +
+main WASM 17.8 MB (prefix path, no main-thread open) + worker clone 155 MB
+(~45 ms sync post) + worker WASM 188.1 MB. Form fixture: main WASM 66.9 MB
+(all-page `extractFormFields` pass) + worker 46.4 MB. No site was found
+where a reallocation-copy occurs, so resizable-ArrayBuffer has no applicable
+target; not proposed.
