@@ -13,6 +13,20 @@ import { isFileObject } from "@app/types/fileContext";
 const globalUseFileWithUrlCache = new Map<string, string>();
 const MAX_CACHE_SIZE = 25;
 
+// Identity keys for bare Blobs: size alone collides across distinct Blobs,
+// so each Blob object mints one stable key for its lifetime instead.
+const blobIdentityKeys = new WeakMap<Blob, string>();
+let blobIdentityCounter = 0;
+
+function blobIdentityKey(blob: Blob): string {
+  let key = blobIdentityKeys.get(blob);
+  if (!key) {
+    key = `blob-identity-${++blobIdentityCounter}`;
+    blobIdentityKeys.set(blob, key);
+  }
+  return key;
+}
+
 /**
  * Drop and revoke a cached URL by its stable key. Call when the file leaves
  * the workbench so a deleted document cannot stay pinned by the LRU.
@@ -45,7 +59,7 @@ export function useFileWithUrl(
       stableKey ||
       (file instanceof File
         ? `${file.name}-${file.size}-${file.lastModified}`
-        : `blob-${file.size}`);
+        : blobIdentityKey(file));
 
     let url = globalUseFileWithUrlCache.get(key);
     if (!url) {
