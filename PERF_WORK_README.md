@@ -145,6 +145,28 @@ BMP removes one main-thread RGBA copy and the encoder-worker round trip; the
 raw blobs are larger in memory but the post-GC heap sample is unchanged. Keep
 BMP. (n=2 per arm — a human trial or a longer run would firm this up.)
 
+## Phase 2 (felt moments) — U1 reading continuity
+
+Phase 2 audits flows, not milliseconds: `ux/ux-flows.md` ranks every viewer
+flow by tier gap × frequency. The first implemented flow is reopen continuity
+(`86111af5a`): device-local reading position (page + in-page fraction + zoom)
+keyed by the file's `quickKey`, restored on reopen with a non-blocking
+"Resumed where you left off — [Go to start]" toast. Anchors are fractions of
+the page box, so they survive zoom/viewport changes; rotated pages and spreads
+restore the page only. `?uxstudy=1` records intent→truth events on
+`window.__uxSession`.
+
+Files: `core/components/viewer/ReadingPositionBridge.tsx`,
+`readingPositionAnchor.ts` (+ unit tests), `core/services/readingPositionStore.ts`,
+`uxSession.ts`, store `stirling-pdf-reading` in `indexedDBManager.ts`. Toolbar
+now shows page N/M + a document percent.
+
+Verification: `viewer-reading-position.spec.ts`, 3426 vitest, 49 viewer e2e,
+typecheck/lint/comment-lint clean. Rails: pages-500 first page A/B (bridge
+disabled vs enabled) measured no delta; the absolute numbers during that run
+were environment-loaded (the machine had a busy Firefox at 23% CPU), which is
+why the A/B, not the raw value, is the evidence.
+
 ## Root causes found (evidence)
 
 - Opening the viewer made ~7-11 full-file reads/copies. Attribution came from
