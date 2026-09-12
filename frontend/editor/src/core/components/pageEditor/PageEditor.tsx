@@ -69,7 +69,8 @@ const PageEditor = ({ onFunctionsReady }: PageEditorProps) => {
 
   const [visiblePageIds, setVisiblePageIds] = useState<string[]>([]);
   const thumbnailRequestsRef = useRef<Set<string>>(new Set());
-  const { requestThumbnail, getThumbnailFromCache } = useThumbnailGeneration();
+  const { requestThumbnail, getThumbnailFromCache, destroyThumbnails } =
+    useThumbnailGeneration();
   const handleVisibleItemsChange = useCallback((items: PDFPage[]) => {
     setVisiblePageIds((prev) => {
       const ids = items.map((item) => item.id);
@@ -338,6 +339,10 @@ const PageEditor = ({ onFunctionsReady }: PageEditorProps) => {
   useEffect(() => {
     setVisiblePageIds([]);
   }, [displayDocumentId]);
+
+  // Rendered page thumbnails cache process-wide; drop them when the tool
+  // unmounts so closed documents do not linger to the LRU cap.
+  useEffect(() => () => destroyThumbnails(), [destroyThumbnails]);
 
   useEffect(() => {
     return () => {
