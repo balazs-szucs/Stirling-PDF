@@ -559,3 +559,57 @@ main WASM 17.8 MB (prefix path, no main-thread open) + worker clone 155 MB
 (all-page `extractFormFields` pass) + worker 46.4 MB. No site was found
 where a reallocation-copy occurs, so resizable-ArrayBuffer has no applicable
 target; not proposed.
+
+## Memory-hunt implementation pass (2026-09-12; aload machine, counts not timings)
+
+Follow-up to the static-only section above: the owner greenlit implementation.
+Machine stayed loaded (load 3-8, several procs >5%), so no timing A/B is
+claimed anywhere; every number below is a deterministic count (tests,
+CDP counters, timer census) or a drift ratio, each reproduced. The
+`../sp-baseline` worktree was removed after use, and the previously
+uncommitted soak-spec scratch is now committed (`f6bfbc02d`). Branch
+`viewer-perf-recon` stays local-only, never pushed.
+
+Shipped (one commit each, typecheck + lint clean per commit):
+
+| Commit | Fix | Evidence |
+| --- | --- | --- |
+| `16f4bb6d8` | Delete dead `useProgressivePagePreviews` (own full copy + worker) and leak-by-design `useFileWithUrlAndCleanup` | Zero importers repo-wide; full suite 3430/3430 after |
+| `bf0c5b4f7` + test | `evictLeastRecentlyUsedPDF` no-op spin -> uncached bypass + `try/finally` release | New hang test wedges pre-fix (zero output in 60 s), passes in <1 s post-fix |
+| `bf0c5b4f7` | `addThumbnailToCache` replace double-count | New unit test; spec 3/3 |
+| `9b7d92afa` + `8c0fbf4e1` | Overlay module caches pin closed doc; cleanup made unconditional after review caught the unmount-with-open hole | typecheck/lint; form-fixture soak exercises the path |
+| `290fe972d` | Thumbnail queue's second full copy -> `getDocumentBytes` | typecheck/lint |
+| `2bf8d5a1f` | `destroyThumbnails` unreachable -> PageEditor unmount | typecheck/lint |
+| `37db8f0f6` + test | Bare-Blob URL keys `blob-${size}` collide -> WeakMap identity keys (audit: both live callers pass Files, path was latent) | 2 new unit tests |
+| `79ef97cd3` | Thumbnail fallback full reads -> `getDocumentBytes` | thumbnailUtils spec 8/8 |
+| `f6bfbc02d` | Soak: `SOAK_FIXTURE`, timer/RAF census + stacks, `PERF_SNAPSHOTS`, `PERF_FINALIZERS`, listeners budget (measured drift 0, bound 10) | Default green; form fixture trips heap at 1.39x (budget working); snapshot pair parses (2.74M -> 2.82M heap nodes, DOM flat) |
+| `fcc1d0b34` | `Promise.race` fallback timers never cleared (`AttachmentAPIBridge` 10 s x N retries, `useLocalPdfiumEngine` 3 s) | 25-cycle timer census: drift 22->60 with 14 `getAttachments` zombies before; promise group 0->0, zero such zombies after; all budgets hold both runs |
+
+Verification shape at end: full vitest 3430/3430, touched specs 3x3 green,
+48 e2e + 1 pre-existing skip, engine smoke 3/3 browsers, soak green on
+default (12-cycle x4, 25-cycle x2), form-fixture soak fails only on the heap
+budget (new finding F11 below, not a regression: the budget never covered
+form docs).
+
+New open findings (all with reproduction logs under `.perf-local/`,
+`result-soak-hunt-*` + one `soak-snapshot-iter{5,12}.heapsnapshot` pair):
+
+- **F10: form-fixture retained-heap drift 1.39x over 12 cycles** (+9.7 MB,
+  both phases; nodes/listeners/URLs flat). Suspect: per-file form state
+  (`FormValuesStore`, pending/modified/deleted/skipped collections in
+  `FormFillContext.tsx`) with no `REMOVE_FILES` handling anywhere in
+  formFill. Next step: diff the committed snapshot pair.
+- **F11: main-thread WASM +~40 pages/cycle reopening the same form bytes**
+  (1799 -> 2159 pp over 12 cycles; worker flat 742 pp). Each soak cycle
+  re-uploads (new Blob identity), so this is the H3 fragmentation proxy
+  measured: close + reopen ratchets the main module high-water. Needs the
+  same-Blob-identity control to separate reopen cost from allocator
+  ratchet; feeds the worker-respawn proposal.
+- **Warm-up timer plateau (~+28 by cycle ~10, flat to cycle 25):** Mantine
+  `Us`-chain timeouts (~11-32x, needs dev-readable stacks to attribute),
+  embedpdf scroll/throttle debounces (vendor code, out of scope). Bounded
+  per session, not per cycle; no action beyond confirming the plateau on a
+  longer run.
+- Bare-Blob keys are now identity-stable but still only LRU-evictable;
+  `destroyThumbnails` still settles nothing for in-flight requesters
+  (backlog items 3-4 above stand).
