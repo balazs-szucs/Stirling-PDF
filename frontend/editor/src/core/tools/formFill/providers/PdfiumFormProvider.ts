@@ -14,6 +14,8 @@
  * for both providers.
  */
 import { PDF_FORM_FIELD_TYPE } from "@app/services/pdfiumService";
+import { getDocumentBytes } from "@app/services/documentBytesCache";
+import { runPdfiumScan } from "@app/services/pdfiumScanQueue";
 import { FPDF_ANNOT_WIDGET, FLAT_PRINT } from "@app/utils/pdfiumBitmapUtils";
 import type {
   FormField,
@@ -144,11 +146,15 @@ export class PdfiumFormProvider implements IFormDataProvider {
 
   async fetchFields(file: File | Blob): Promise<FormField[]> {
     try {
-      const arrayBuffer = await file.arrayBuffer();
-      const pdfiumFields = await extractFormFields(arrayBuffer);
-
-      // Enrich with alternate names (tooltips)
-      await this.enrichWithAlternateNames(arrayBuffer, pdfiumFields);
+      const arrayBuffer = await getDocumentBytes(file);
+      const pdfiumFields = await runPdfiumScan(async () => {
+        const fields = await extractFormFields(arrayBuffer);
+        // Enrich with alternate names (tooltips)
+        if (fields.length > 0) {
+          await this.enrichWithAlternateNames(arrayBuffer, fields);
+        }
+        return fields;
+      });
 
       // Enrich combo/listbox fields with export/display values from pdf-lib
       const optMap = await this.extractDisplayOptions(

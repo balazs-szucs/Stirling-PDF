@@ -395,6 +395,7 @@ import { BookmarkAPIBridge } from "@app/components/viewer/BookmarkAPIBridge";
 import { AttachmentAPIBridge } from "@app/components/viewer/AttachmentAPIBridge";
 import { PrintAPIBridge } from "@app/components/viewer/PrintAPIBridge";
 import { isPdfFile } from "@app/utils/fileUtils";
+import { getDocumentBytes } from "@app/services/documentBytesCache";
 import { useTranslation } from "react-i18next";
 import { LinkLayer } from "@app/components/viewer/LinkLayer";
 import { TextSelectionHandler } from "@app/components/viewer/TextSelectionHandler";
@@ -929,8 +930,7 @@ export function LocalEmbedPDF({
     let cancelled = false;
     setPdfBuffer(null);
     if (file && typeof (file as Blob).arrayBuffer === "function") {
-      (file as Blob)
-        .arrayBuffer()
+      getDocumentBytes(file as Blob)
         .then((buf) => {
           if (!cancelled) setPdfBuffer(buf);
         })

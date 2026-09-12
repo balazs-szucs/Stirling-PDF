@@ -14,6 +14,8 @@ import {
   renderButtonFieldAppearances,
   type SignatureFieldAppearance,
 } from "@app/services/pdfiumService";
+import { getDocumentBytes } from "@app/services/documentBytesCache";
+import { runPdfiumScan } from "@app/services/pdfiumScanQueue";
 
 interface ButtonAppearanceOverlayProps {
   pageIndex: number;
@@ -29,9 +31,9 @@ async function resolveButtonAppearances(
 ): Promise<SignatureFieldAppearance[]> {
   if (source === _cachedSource && _cachePromise) return _cachePromise;
   _cachedSource = source;
-  _cachePromise = source
-    .arrayBuffer()
-    .then((buf) => renderButtonFieldAppearances(buf));
+  _cachePromise = getDocumentBytes(source).then((buf) =>
+    runPdfiumScan(() => renderButtonFieldAppearances(buf)),
+  );
   return _cachePromise;
 }
 function ButtonBitmapCanvas({
