@@ -539,6 +539,17 @@ export const DATABASE_CONFIGS = {
       },
     ],
   } as DatabaseConfig,
+
+  READING_POSITIONS: {
+    name: "stirling-pdf-reading",
+    version: 1,
+    stores: [
+      {
+        name: "positions",
+        keyPath: "key",
+      },
+    ],
+  } as DatabaseConfig,
 } as const;
 
 export const indexedDBManager = IndexedDBManager.getInstance();

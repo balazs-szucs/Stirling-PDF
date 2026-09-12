@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Paper, Group, Menu, NumberInput, Slider } from "@mantine/core";
+import { Paper, Group, Menu, NumberInput, Slider, Text } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 import { useViewer } from "@app/contexts/ViewerContext";
 import { useIsPhone } from "@app/hooks/useIsMobile";
@@ -147,6 +147,14 @@ export function PdfViewerToolbar({
     BASE_INPUT_WIDTH_PX + totalPagesDigits * PX_PER_DIGIT,
   );
 
+  const readingPercent =
+    Number.isFinite(pageInput) && pageInput > 0 && scrollState.totalPages > 0
+      ? Math.min(
+          100,
+          Math.max(0, Math.round((pageInput / scrollState.totalPages) * 100)),
+        )
+      : 0;
+
   return (
     <Paper
       className="pdf-viewer-toolbar"
@@ -193,6 +201,7 @@ export function PdfViewerToolbar({
 
       {/* Page Input */}
       <NumberInput
+        aria-label={t("viewer.pageNavigation", "Page navigation")}
         value={pageInput}
         onChange={(value) => {
           const page = Number(value);
@@ -220,6 +229,15 @@ export function PdfViewerToolbar({
       <span style={{ fontWeight: 500, fontSize: 16 }}>
         / {scrollState.totalPages}
       </span>
+
+      <Text
+        size="sm"
+        c="dimmed"
+        aria-label={t("viewer.readingProgress", "Reading progress")}
+        style={{ fontWeight: 500, minWidth: "2.5rem", textAlign: "center" }}
+      >
+        {readingPercent}%
+      </Text>
 
       {/* Next Page Button */}
       <ActionIcon

@@ -374,6 +374,7 @@ import { CustomSearchLayer } from "@app/components/viewer/CustomSearchLayer";
 import { ZoomAPIBridge } from "@app/components/viewer/ZoomAPIBridge";
 import { Center, Loader, Stack, Text } from "@mantine/core";
 import { ScrollAPIBridge } from "@app/components/viewer/ScrollAPIBridge";
+import { ReadingPositionBridge } from "@app/components/viewer/ReadingPositionBridge";
 import { SelectionAPIBridge } from "@app/components/viewer/SelectionAPIBridge";
 import { PanAPIBridge } from "@app/components/viewer/PanAPIBridge";
 import { SpreadAPIBridge } from "@app/components/viewer/SpreadAPIBridge";
@@ -1365,6 +1366,13 @@ export function LocalEmbedPDF({
         >
           <ZoomAPIBridge />
           <ScrollAPIBridge />
+          <ReadingPositionBridge
+            fileKey={
+              file
+                ? ((file as { quickKey?: string }).quickKey ?? fileStableKey)
+                : null
+            }
+          />
           <SelectionAPIBridge />
           <FormCreationInteractionLock />
           <PanAPIBridge />
