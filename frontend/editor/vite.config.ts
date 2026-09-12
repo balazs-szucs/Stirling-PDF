@@ -280,6 +280,10 @@ export default defineConfig(async ({ mode, command }) => {
       }),
       compression({
         threshold: 1024,
+        // The default include list omits wasm; the hashed pdfium asset is the
+        // largest eagerly-fetched file, and WebMvcConfig serves /assets/** with
+        // EncodedResourceResolver, so a .br sibling cuts its transfer ~64%.
+        include: /\.(html|xml|css|json|js|mjs|svg|yaml|yml|toml|wasm)$/,
         exclude: [/\.(png|jpg|jpeg|gif|webp|woff|woff2)$/],
         algorithms: [
           defineAlgorithm("gzip", { level: 9 }),
