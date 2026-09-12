@@ -217,13 +217,13 @@ tasks:
 
   build:core:
     desc: "Build for core mode"
-    deps: [prepare]
+    deps: [prepare, check:embedpdf-patch]
     cmds:
       - npx vite build editor --mode core
 
   build:proprietary:
     desc: "Build for proprietary mode"
-    deps: [prepare]
+    deps: [prepare, check:embedpdf-patch]
     vars:
       PREVIEW: '{{.PREVIEW | default ""}}'
     cmds:
@@ -234,6 +234,7 @@ tasks:
     deps:
       - task: prepare
         vars: { MODE: saas }
+      - task: check:embedpdf-patch
     cmds:
       - npx vite build editor --mode saas
 
@@ -242,12 +243,13 @@ tasks:
     deps:
       - task: prepare
         vars: { MODE: desktop }
+      - task: check:embedpdf-patch
     cmds:
       - npx vite build editor --mode desktop
 
   build:prototypes:
     desc: "Build for prototypes mode"
-    deps: [prepare]
+    deps: [prepare, check:embedpdf-patch]
     cmds:
       - npx vite build editor --mode prototypes
 
