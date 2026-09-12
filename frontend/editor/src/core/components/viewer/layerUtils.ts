@@ -1,5 +1,6 @@
 import type { PDFObject } from "@cantoo/pdf-lib";
 import { getDocumentBytes } from "@app/services/documentBytesCache";
+import { containsAscii } from "@app/utils/asciiBytes";
 
 export interface LayerInfo {
   id: string;
@@ -128,28 +129,6 @@ function parseOrderTokens(
 
 const LAYER_SCAN_SIZE_LIMIT = 100 * 1024 * 1024;
 const LAYER_MARKER = "/OCProperties";
-
-// Latin-1 decoding is byte-for-byte, so a byte scan answers the same question
-// without materialising a multi-megabyte string for layer-less documents.
-function containsAscii(bytes: Uint8Array, ascii: string): boolean {
-  const first = ascii.charCodeAt(0);
-  if (ascii.length === 1) return bytes.indexOf(first) !== -1;
-  let from = 0;
-  while (from <= bytes.length - ascii.length) {
-    const idx = bytes.indexOf(first, from);
-    if (idx === -1 || idx > bytes.length - ascii.length) return false;
-    let match = true;
-    for (let j = 1; j < ascii.length; j++) {
-      if (bytes[idx + j] !== ascii.charCodeAt(j)) {
-        match = false;
-        break;
-      }
-    }
-    if (match) return true;
-    from = idx + 1;
-  }
-  return false;
-}
 
 export async function readPdfLayers(file: Blob): Promise<LayerInfo[]> {
   if (file.size >= LAYER_SCAN_SIZE_LIMIT) return [];
