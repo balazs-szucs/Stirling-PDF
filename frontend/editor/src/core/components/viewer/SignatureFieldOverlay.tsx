@@ -20,6 +20,7 @@ import {
 } from "@app/services/pdfiumService";
 import { getDocumentBytes } from "@app/services/documentBytesCache";
 import { runPdfiumScan } from "@app/services/pdfiumScanQueue";
+import { hasAcroForm } from "@app/utils/asciiBytes";
 
 interface SignatureFieldOverlayProps {
   pageIndex: number;
@@ -53,6 +54,7 @@ async function resolveFields(
 
   _cachePromise = (async () => {
     const buf = await getDocumentBytes(source);
+    if (!hasAcroForm(new Uint8Array(buf))) return [];
     const { appearances, signatures } = await runPdfiumScan(async () => {
       const appearances = await renderSignatureFieldAppearances(buf);
       const signatures = await extractSignatures(buf);
