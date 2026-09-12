@@ -415,8 +415,13 @@ import { FormFieldOverlay } from "@app/tools/formFill/FormFieldOverlay";
 import { FormCreationInteractionLock } from "@app/tools/formFill/FormCreationInteractionLock";
 import { FormFieldCreationOverlay } from "@app/tools/formFill/FormFieldCreationOverlay";
 import { FormFieldEditOverlay } from "@app/tools/formFill/FormFieldEditOverlay";
-import { ButtonAppearanceOverlay } from "@app/tools/formFill/ButtonAppearanceOverlay";
-import SignatureFieldOverlay from "@app/components/viewer/SignatureFieldOverlay";
+import {
+  ButtonAppearanceOverlay,
+  clearButtonAppearanceOverlayCache,
+} from "@app/tools/formFill/ButtonAppearanceOverlay";
+import SignatureFieldOverlay, {
+  clearSignatureFieldOverlayCache,
+} from "@app/components/viewer/SignatureFieldOverlay";
 import { CommentsSidebar } from "@app/components/viewer/CommentsSidebar";
 import { CommentAuthorProvider } from "@app/contexts/CommentAuthorContext";
 import { accountService } from "@app/services/accountService";
@@ -950,6 +955,20 @@ export function LocalEmbedPDF({
       };
     }
     setPdfBuffer(null);
+  }, [file ? fileStableKey : null, url]);
+
+  // Field-appearance overlays cache per-page bitmaps keyed by document. Drop
+  // them when the document leaves so a closed file's Blob and full buffer
+  // are not pinned until the next open. (Document switches already reset
+  // the caches by source identity; this covers close and unmount.)
+  useEffect(() => {
+    if (file || url) return;
+    clearSignatureFieldOverlayCache();
+    clearButtonAppearanceOverlayCache();
+    return () => {
+      clearSignatureFieldOverlayCache();
+      clearButtonAppearanceOverlayCache();
+    };
   }, [file ? fileStableKey : null, url]);
 
   // Keyed by fileStableKey to avoid recomputing on every FileContext re-render.

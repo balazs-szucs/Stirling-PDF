@@ -47,6 +47,18 @@ let _cachedSource: File | Blob | null = null;
 const _pageCache = new Map<number, Promise<ResolvedSignatureField[]>>();
 let _signaturesPromise: Promise<PdfiumSignature[]> | null = null;
 
+/**
+ * Drop the resolved appearances for the current document. The promises
+ * retain the full document buffer in their closures and _cachedSource pins
+ * the Blob itself, so a closed document would otherwise stay alive until
+ * another one opens. Call when the document leaves the viewer.
+ */
+export function clearSignatureFieldOverlayCache(): void {
+  _cachedSource = null;
+  _pageCache.clear();
+  _signaturesPromise = null;
+}
+
 async function resolvePageFields(
   source: File | Blob,
   pageIndex: number,

@@ -27,6 +27,16 @@ interface ButtonAppearanceOverlayProps {
 let _cachedSource: File | Blob | null = null;
 const _pageCache = new Map<number, Promise<SignatureFieldAppearance[]>>();
 
+/**
+ * Drop the resolved appearances for the current document. Same retention
+ * shape as SignatureFieldOverlay: promises hold the document buffer and
+ * _cachedSource pins the Blob past close. Call when the document leaves.
+ */
+export function clearButtonAppearanceOverlayCache(): void {
+  _cachedSource = null;
+  _pageCache.clear();
+}
+
 function resolveButtonAppearances(
   source: File | Blob,
   pageIndex: number,
