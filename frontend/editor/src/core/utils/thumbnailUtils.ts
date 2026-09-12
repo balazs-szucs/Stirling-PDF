@@ -259,7 +259,7 @@ export async function generateThumbnailForFile(file: File): Promise<string> {
       // chunk can fail to open for PDFs larger than that. Retry with the
       // full buffer before falling back to an empty thumbnail.
       try {
-        const fullArrayBuffer = await file.arrayBuffer();
+        const fullArrayBuffer = await getDocumentBytes(file);
         return await generatePDFThumbnail(fullArrayBuffer, scale);
       } catch (error) {
         reportThumbnailFailure(file, error);
@@ -321,7 +321,7 @@ export async function generateThumbnailWithMetadata(
   }
 
   try {
-    const arrayBuffer = await file.arrayBuffer();
+    const arrayBuffer = await getDocumentBytes(file);
     // Always read per-page rotation: PageEditor renders thumbnails upright and
     // uses this as the rotation baseline, so skipping it corrupts saves.
     const result = await renderPdfThumbnailPdfium(
