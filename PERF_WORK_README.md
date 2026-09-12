@@ -126,6 +126,25 @@ WebKit is exercised only by the try/catch path.
   covered by the immutable `/assets/**` cache. No IndexedDB tier is warranted
   at these numbers; revisit only if real-world cache-miss bootstrap dominates.
 
+### BMP render path (#557) — already enabled, A/B verified
+
+`LocalEmbedPDF.tsx` already sets `defaultImageType: "image/bmp"` on the render
+and tiling plugins, so the engine wraps raw RGBA in a BMP header instead of
+running `canvas.toBlob(PNG)` in the encoder pool. Paired harness runs (2 each,
+same build, `image/png` temporarily substituted):
+
+| Signal | PNG | BMP |
+| --- | --- | --- |
+| large-40mb first page | 733/798 ms | 817/738 ms |
+| pages-500 first page | 370/397 ms | **255/355 ms** |
+| main→worker bytes at open (40 MB) | 45.8 MB posted / 5.4 MB transferred | **40.4 MB posted / 0 transferred** |
+| main→worker bytes at open (500 p) | 5.7 MB posted / 5.4 MB transferred | **0.3 MB posted / 0** |
+| heap after open (40 MB) | 17.0 MB | 17.1 MB |
+
+BMP removes one main-thread RGBA copy and the encoder-worker round trip; the
+raw blobs are larger in memory but the post-GC heap sample is unchanged. Keep
+BMP. (n=2 per arm — a human trial or a longer run would firm this up.)
+
 ## Root causes found (evidence)
 
 - Opening the viewer made ~7-11 full-file reads/copies. Attribution came from
@@ -240,13 +259,18 @@ PERF_STACKS=1 PERF_SERIES=1 PERF_LOGS=1 ...
   module to `createPdfiumEngine`. Own the hook rather than patching
   `@embedpdf/engines/react` so the extra option stays typed.
 - `scripts/patch-embedpdf-engines.mjs` — postinstall patch for
-  `@embedpdf/engines` 2.15.0 only. It asserts the exact version and every
-  anchor, and no-ops once applied. It (a) transfers whole-buffer
-  `{data,width,height}` worker responses ≥64 KB, (b) accepts
-  `options.wasmModule` and instantiates it synchronously in the worker, and
-  (c) retries the `wasmInit` post without the module when structured clone
-  throws (older WebKit). A version bump must re-verify all anchors and update
-  `EXPECTED_VERSION`.
+  `@embedpdf/engines` 2.15.0 only (`npm run check:embedpdf-patch` verifies an
+  applied patch, e.g. after `npm ci --ignore-scripts`). It asserts the exact
+  version and every anchor, and no-ops once applied. Alternatives rejected:
+  patch-package (the embedded worker source is one 600 KB line, so the committed
+  diff would be ~1.2 MB), a Vite transform (dev pre-bundling and vitest load the
+  dep outside the transform pipeline), vendoring the package (duplicates the
+  bundle). The newest published engines version is 2.15.0; revisit on 3.0.
+  The patch (a) transfers whole-buffer `{data,width,height}` worker responses
+  ≥64 KB, (b) accepts `options.wasmModule` and instantiates it synchronously in
+  the worker, and (c) retries the `wasmInit` post without the module when
+  structured clone throws (older WebKit). A version bump must re-verify all
+  anchors and update `EXPECTED_VERSION`.
 - `editor/vite.config.ts` — the `compression()` plugin now includes `.wasm`, so
   the hashed pdfium asset gets `.br`/`.gz` siblings.
 - The patch deliberately does **not** transfer the document bytes main→worker:
@@ -312,7 +336,7 @@ PERF_STACKS=1 PERF_SERIES=1 PERF_LOGS=1 ...
 - `scripts/patch-embedpdf-engines.mjs` runs from `postinstall`; an existing
   checkout needs one `npm install` (or `node scripts/patch-embedpdf-engines.mjs`)
   after pulling. It fails loudly if `@embedpdf/engines` is not exactly 2.15.0
-  or an anchor moved.
+  or an anchor moved; `npm run check:embedpdf-patch` verifies an applied patch.
 - All three engines verified (smoke spec): Chromium, Firefox and WebKit 26
   render with zero worker wasm fetches. The `DataCloneError` fallback in the
   patch is only reachable on older WebKit, which has no test here.
