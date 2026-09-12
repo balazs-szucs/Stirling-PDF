@@ -25,18 +25,27 @@ interface ButtonAppearanceOverlayProps {
   pageHeight: number;
 }
 let _cachedSource: File | Blob | null = null;
-let _cachePromise: Promise<SignatureFieldAppearance[]> | null = null;
+const _pageCache = new Map<number, Promise<SignatureFieldAppearance[]>>();
 
-async function resolveButtonAppearances(
+function resolveButtonAppearances(
   source: File | Blob,
+  pageIndex: number,
 ): Promise<SignatureFieldAppearance[]> {
-  if (source === _cachedSource && _cachePromise) return _cachePromise;
-  _cachedSource = source;
-  _cachePromise = getDocumentBytes(source).then((buf) => {
+  if (source !== _cachedSource) {
+    _cachedSource = source;
+    _pageCache.clear();
+  }
+  const cached = _pageCache.get(pageIndex);
+  if (cached) return cached;
+
+  const pending = getDocumentBytes(source).then((buf) => {
     if (!hasAcroForm(new Uint8Array(buf))) return [];
-    return runPdfiumScan(() => renderButtonFieldAppearances(buf));
+    return runPdfiumScan(() =>
+      renderButtonFieldAppearances(buf, undefined, [pageIndex]),
+    );
   });
-  return _cachePromise;
+  _pageCache.set(pageIndex, pending);
+  return pending;
 }
 function ButtonBitmapCanvas({
   imageData,
@@ -82,7 +91,7 @@ function ButtonAppearanceOverlayInner({
       return;
     }
     let cancelled = false;
-    resolveButtonAppearances(pdfSource)
+    resolveButtonAppearances(pdfSource, pageIndex)
       .then((res) => {
         if (!cancelled) setAppearances(res);
       })
@@ -92,14 +101,11 @@ function ButtonAppearanceOverlayInner({
     return () => {
       cancelled = true;
     };
-  }, [pdfSource]);
+  }, [pdfSource, pageIndex]);
 
   const pageAppearances = useMemo(
-    () =>
-      appearances.filter(
-        (a) => a.pageIndex === pageIndex && a.imageData !== null,
-      ),
-    [appearances, pageIndex],
+    () => appearances.filter((a) => a.imageData !== null),
+    [appearances],
   );
 
   if (pageAppearances.length === 0) return null;
