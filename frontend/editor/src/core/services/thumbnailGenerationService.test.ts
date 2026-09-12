@@ -86,3 +86,20 @@ describe("ThumbnailGenerationService document cache", () => {
     expect(openMock).toHaveBeenCalledTimes(2);
   });
 });
+
+describe("ThumbnailGenerationService thumbnail cache accounting", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    thumbnailGenerationService.clearCache();
+    thumbnailGenerationService.clearPDFCache();
+  });
+
+  it("does not double-count a replaced entry", () => {
+    const page = "accounting-page-1";
+    thumbnailGenerationService.addThumbnailToCache(page, "data:image/jpeg;base64,aaa");
+    const afterFirst = thumbnailGenerationService.getCacheStats().sizeBytes;
+    thumbnailGenerationService.addThumbnailToCache(page, "data:image/jpeg;base64,aaa");
+    expect(thumbnailGenerationService.getCacheStats().size).toBe(1);
+    expect(thumbnailGenerationService.getCacheStats().sizeBytes).toBe(afterFirst);
+  });
+});

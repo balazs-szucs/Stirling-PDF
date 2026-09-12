@@ -261,14 +261,18 @@ export class ThumbnailGenerationService {
     const isBlob = thumbnail.startsWith("blob:");
     const sizeBytes = isBlob ? 100 * 1024 : thumbnail.length * 2; // Estimate 100KB for blob vs actual Base64 string length
 
-    // Revoke any existing object URL for the same pageId if it changes
+    // Revoke any existing object URL for the same pageId if it changes,
+    // and release its size reservation: set() overwrites, so keeping the
+    // old bytes counted would inflate the cache until it evicts everything.
     const existing = this.thumbnailCache.get(pageId);
-    if (
-      existing &&
-      existing.thumbnail.startsWith("blob:") &&
-      existing.thumbnail !== thumbnail
-    ) {
-      URL.revokeObjectURL(existing.thumbnail);
+    if (existing) {
+      if (
+        existing.thumbnail.startsWith("blob:") &&
+        existing.thumbnail !== thumbnail
+      ) {
+        URL.revokeObjectURL(existing.thumbnail);
+      }
+      this.currentCacheSize -= existing.sizeBytes;
     }
 
     // Enforce cache size limits
