@@ -9,6 +9,7 @@ import {
   StirlingFileStub,
   ProcessedFilePage,
 } from "@app/types/fileContext";
+import { evictFileUrl } from "@app/hooks/useFileWithUrl";
 
 const DEBUG = process.env.NODE_ENV === "development";
 
@@ -145,6 +146,10 @@ export class FileLifecycleManager {
       this.cleanupTimers.delete(fileId);
     }
     this.fileGenerations.delete(fileId);
+
+    // The viewer caches one object URL per file id (useFileWithUrl); a removed
+    // file must not stay pinned by that cache.
+    evictFileUrl(fileId);
 
     // Clean up blob URLs from file record if we have access to state
     if (stateRef) {

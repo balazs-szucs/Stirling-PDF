@@ -13,6 +13,21 @@ import { isFileObject } from "@app/types/fileContext";
 const globalUseFileWithUrlCache = new Map<string, string>();
 const MAX_CACHE_SIZE = 25;
 
+/**
+ * Drop and revoke a cached URL by its stable key. Call when the file leaves
+ * the workbench so a deleted document cannot stay pinned by the LRU.
+ */
+export function evictFileUrl(key: string): void {
+  const url = globalUseFileWithUrlCache.get(key);
+  if (!url) return;
+  globalUseFileWithUrlCache.delete(key);
+  try {
+    URL.revokeObjectURL(url);
+  } catch {
+    // Best-effort: the entry is gone even if the browser refuses to revoke.
+  }
+}
+
 export function useFileWithUrl(
   file: File | Blob | null,
   stableKey?: string | null,
