@@ -206,7 +206,11 @@ function reducer(state: FormFillState, action: Action): FormFillState {
 export interface FormFillContextValue {
   state: FormFillState;
   /** Fetch form fields for the given file using the active provider */
-  fetchFields: (file: File | Blob, fileId?: string) => Promise<void>;
+  fetchFields: (
+    file: File | Blob,
+    fileId?: string,
+    options?: { exhaustive?: boolean },
+  ) => Promise<void>;
   /** Update a single field value */
   setValue: (fieldName: string, value: string) => void;
   /** Set the currently focused field */
@@ -508,7 +512,11 @@ export function FormFillProvider({
   }, []);
 
   const fetchFields = useCallback(
-    async (file: File | Blob, fileId?: string) => {
+    async (
+      file: File | Blob,
+      fileId?: string,
+      options?: { exhaustive?: boolean },
+    ) => {
       // Increment version so any in-flight fetch for a previous file is discarded.
       // NOTE: setProviderMode() also increments fetchVersionRef to invalidate
       // in-flight fetches when switching providers. This is intentional — the
@@ -569,7 +577,7 @@ export function FormFillProvider({
           providerModeRef.current === "pdfbox";
         let fields = usable
           ? bundled.fields
-          : await providerRef.current.fetchFields(file);
+          : await providerRef.current.fetchFields(file, options);
         // If another fetch or reset happened while we were waiting, discard this result
         if (fetchVersionRef.current !== version) {
           console.debug(

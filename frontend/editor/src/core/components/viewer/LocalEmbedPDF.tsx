@@ -374,7 +374,6 @@ import { CustomSearchLayer } from "@app/components/viewer/CustomSearchLayer";
 import { ZoomAPIBridge } from "@app/components/viewer/ZoomAPIBridge";
 import { Center, Loader, Stack, Text } from "@mantine/core";
 import { ScrollAPIBridge } from "@app/components/viewer/ScrollAPIBridge";
-import { ReadingPositionBridge } from "@app/components/viewer/ReadingPositionBridge";
 import { SelectionAPIBridge } from "@app/components/viewer/SelectionAPIBridge";
 import { PanAPIBridge } from "@app/components/viewer/PanAPIBridge";
 import { SpreadAPIBridge } from "@app/components/viewer/SpreadAPIBridge";
@@ -511,18 +510,7 @@ const LazyPageContent = ({
       ref={containerRef}
       style={{ width: "100%", height: "100%", position: "relative" }}
     >
-      {isVisible ? (
-        children
-      ) : (
-        <div
-          className="pdf-page-skeleton"
-          style={{
-            position: "absolute",
-            inset: 0,
-            backgroundColor: "var(--pdf-page-bg)",
-          }}
-        />
-      )}
+      {isVisible ? children : null}
     </div>
   );
 };
@@ -1366,13 +1354,6 @@ export function LocalEmbedPDF({
         >
           <ZoomAPIBridge />
           <ScrollAPIBridge />
-          <ReadingPositionBridge
-            fileKey={
-              file
-                ? ((file as { quickKey?: string }).quickKey ?? fileStableKey)
-                : null
-            }
-          />
           <SelectionAPIBridge />
           <FormCreationInteractionLock />
           <PanAPIBridge />
@@ -1401,9 +1382,12 @@ export function LocalEmbedPDF({
           <DocumentPermissionsAPIBridge />
           <DocumentReadyWrapper
             fallback={
-              <Center style={{ height: "100%", width: "100%" }}>
-                <ToolLoadingFallback />
-              </Center>
+              <ToolLoadingFallback
+                label={t(
+                  "viewer.preparingDocument",
+                  "Preparing document...",
+                )}
+              />
             }
           >
             {(documentId) => (

@@ -403,7 +403,9 @@ const FormFill = (_props: BaseToolProps) => {
 
   const handleRefresh = useCallback(() => {
     if (currentFile) {
-      fetchFields(currentFile, getFormFillFileId(currentFile) ?? undefined);
+      fetchFields(currentFile, getFormFillFileId(currentFile) ?? undefined, {
+        exhaustive: true,
+      });
     }
   }, [currentFile, fetchFields]);
 

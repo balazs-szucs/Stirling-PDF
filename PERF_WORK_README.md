@@ -47,16 +47,21 @@ Perf commits (oldest → newest):
 
 | Metric | upstream/main | branch start | final |
 | --- | --- | --- | --- |
-| first page rendered | 1055 ms | 873 ms | **715 ms** |
-| long-task blocking | 636 ms | 54 ms | **0 ms** |
+| first page rendered | 1055 ms | 873 ms | **~640-900 ms (load-dependent)** |
+| long-task blocking | 636 ms | 54 ms | **0-70 ms (the ~60 ms task is pre-existing)** |
 | full JS copies | 10 / 242.8 MB | 11 / 283.2 MB | **1 / 40.6 MB** |
 | main-thread WASM high-water | 146.2 MB | 146.2 MB | **50.6 MB** |
+
+Absolute timing here tracks machine load (the original runs were made on an
+idle machine; an interleaved re-run on a loaded machine measured medians of
+1113 ms baseline vs 889 ms branch). Only the interleaved A/B, not any single
+absolute value, is the evidence.
 
 ### `huge-150mb.pdf` (155 MB, 60 pages)
 
 | Metric | before | final |
 | --- | --- | --- |
-| first page | ~720-960 ms | **691 ms** |
+| first page | ~720-960 ms | **677-1122 ms (load-dependent)** |
 | main-thread WASM high-water | **325.1 MB** | **17.8 MB** |
 | full JS copies | 1 full read + slices | 1 full read + slices |
 | crashes / OOM | none | none |
@@ -65,7 +70,7 @@ Perf commits (oldest → newest):
 
 | Metric | all-page scans | per-page lazy |
 | --- | --- | --- |
-| long-task blocking | 64 ms | **0 ms** |
+| long-task blocking | 64 ms | **0-70 ms (mixed runs)** |
 | main-thread WASM high-water | 66.9 MB | 66.9 MB |
 
 The unchanged WASM is the open item: the global `extractFormFields` pass still
@@ -145,27 +150,19 @@ BMP removes one main-thread RGBA copy and the encoder-worker round trip; the
 raw blobs are larger in memory but the post-GC heap sample is unchanged. Keep
 BMP. (n=2 per arm — a human trial or a longer run would firm this up.)
 
-## Phase 2 (felt moments) — U1 reading continuity
+## Phase 2 (felt moments) — U1 reading continuity (REVERTED)
 
-Phase 2 audits flows, not milliseconds: `ux/ux-flows.md` ranks every viewer
-flow by tier gap × frequency. The first implemented flow is reopen continuity
-(`86111af5a`): device-local reading position (page + in-page fraction + zoom)
-keyed by the file's `quickKey`, restored on reopen with a non-blocking
-"Resumed where you left off — [Go to start]" toast. Anchors are fractions of
-the page box, so they survive zoom/viewport changes; rotated pages and spreads
-restore the page only. `?uxstudy=1` records intent→truth events on
-`window.__uxSession`.
+The reopen-continuity feature (`86111af5a`: device-local reading position,
+resume toast, toolbar percent) was reverted after adversarial validation found
+it raced the viewer's initial zoom/layout: it could land on page 1 while the
+toast claimed a resume, then overwrite the stored position with page 0. The
+viewer is a document processor; it does not track where a reader left off.
+See `ux/ux-flows.md` for the reverted-flow note.
 
-Files: `core/components/viewer/ReadingPositionBridge.tsx`,
-`readingPositionAnchor.ts` (+ unit tests), `core/services/readingPositionStore.ts`,
-`uxSession.ts`, store `stirling-pdf-reading` in `indexedDBManager.ts`. Toolbar
-now shows page N/M + a document percent.
-
-Verification: `viewer-reading-position.spec.ts`, 3426 vitest, 49 viewer e2e,
-typecheck/lint/comment-lint clean. Rails: pages-500 first page A/B (bridge
-disabled vs enabled) measured no delta; the absolute numbers during that run
-were environment-loaded (the machine had a busy Firefox at 23% CPU), which is
-why the A/B, not the raw value, is the evidence.
+The page skeleton/shimmer placeholder was also removed: the viewer showed a
+shimmer box that was replaced by a loader label and then content, which read as
+a flash rather than progress. Off-screen pages now render nothing until the
+intersection observer reveals them.
 
 ## Root causes found (evidence)
 
@@ -370,7 +367,7 @@ PERF_STACKS=1 PERF_SERIES=1 PERF_LOGS=1 ...
 ```bash
 task frontend:typecheck
 task frontend:lint
-task frontend:test        # 3420 tests at the time of writing
+task frontend:test        # 3422 tests at the time of writing
 # functional viewer specs, all passing at the time of writing:
 CI=1 task e2e:stubbed -- \
   src/core/tests/stubbed/form-field-editing.spec.ts \
@@ -381,8 +378,36 @@ CI=1 task e2e:stubbed -- \
   src/core/tests/stubbed/viewer-sidebar-add-buttons.spec.ts \
   src/core/tests/stubbed/page-editor-rotation.spec.ts \
   src/core/tests/stubbed/pdf-text-editor-cropbox.spec.ts \
+  src/core/tests/stubbed/workbench-session-restore.spec.ts \
   --workers=1 --retries=0
 ```
 
-Last verified after `3cd84a5e3`: typecheck/lint clean, 3420/3420 vitest,
-46/46 viewer e2e, engine smoke green on Chromium/Firefox/WebKit.
+Last verified after the validation pass: typecheck/lint clean, 3422/3422
+vitest, 48 viewer e2e passed (1 pre-existing skip), engine smoke green on
+Chromium/Firefox/WebKit.
+
+## Validation-pass changes (prod readiness)
+
+- **Reverted `86111af5a`** (reading-position resume + toolbar percent + ux
+  recorder). Restore raced the initial zoom: 3/3 instrumented runs painted the
+  cover under a "Resumed where you left off" toast and overwrote the saved
+  position with page 0. A document processor does not track reading history.
+- **Removed the page skeleton/shimmer** (`LocalEmbedPDF.tsx` LazyPageContent,
+  `.pdf-page-skeleton` CSS + tokens). Off-screen pages now render nothing; the
+  open sequence is one spinner whose label changes from "Loading PDF Engine..."
+  to "Preparing document...".
+- **`/AcroForm` byte gate kept for viewer opens, with an exhaustive escape
+  hatch**: removing the gate entirely made the eager overlay extract fields on
+  every open and raised large-40mb main-thread WASM from 50.6 to 87.6 MB, so
+  the fast path stays. `PdfiumFormProvider.fetchFields(file, { exhaustive })`
+  skips the literal scan only by default; the Form Fill refresh passes
+  `exhaustive: true` so a catalog hidden in a compressed object stream
+  (`qpdf --object-streams=generate`) is still found. Backlog: a worker-side
+  `FPDF_GetFormType` probe would remove the heuristic without the main-thread
+  copy. `hasAcroForm` is documented as an overlay-only heuristic and has a
+  regression test for both paths.
+- **Chunk-load recovery**: `vite:preloadError` and the ErrorBoundary now reload
+  once when a lazy chunk fails (WebKit reports "Importing a module script
+  failed"), instead of parking the user on "Something went wrong".
+- **Thumbnail buffer cache** is a `WeakMap` now, so a deleted File cannot pin
+  its full ArrayBuffer.

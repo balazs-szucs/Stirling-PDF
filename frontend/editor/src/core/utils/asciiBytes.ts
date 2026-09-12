@@ -28,7 +28,14 @@ export function containsAscii(bytes: Uint8Array, ascii: string): boolean {
 
 const acroFormResults = new WeakMap<ArrayBuffer, boolean>();
 
-/** True when the document may contain interactive form fields. */
+/**
+ * Heuristic only: true when the literal `/AcroForm` appears in the raw bytes.
+ *
+ * A PDF can hold its catalog inside a compressed object stream, where the
+ * literal never appears even though the document has form fields. Use this as
+ * a cheap "skip the scan" hint for viewer overlays only; never gate a
+ * correctness path (form extraction) on a false result.
+ */
 export function hasAcroForm(bytes: Uint8Array): boolean {
   const key = bytes.buffer as ArrayBuffer;
   const cached = acroFormResults.get(key);

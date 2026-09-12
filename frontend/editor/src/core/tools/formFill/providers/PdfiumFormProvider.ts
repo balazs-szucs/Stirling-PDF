@@ -145,10 +145,20 @@ export class PdfiumFormProvider implements IFormDataProvider {
   /** Provider identifier — kept as 'pdf-lib' for backwards-compatibility. */
   readonly name = "pdf-lib";
 
-  async fetchFields(file: File | Blob): Promise<FormField[]> {
+  async fetchFields(
+    file: File | Blob,
+    options: { exhaustive?: boolean } = {},
+  ): Promise<FormField[]> {
     try {
       const arrayBuffer = await getDocumentBytes(file);
-      if (!hasAcroForm(new Uint8Array(arrayBuffer))) return [];
+      // The literal scan is a fast path for viewer opens, where the overlay
+      // fetches on every file and a main-thread PDFium copy is expensive. It
+      // cannot see a catalog inside a compressed object stream
+      // (qpdf --object-streams=generate), so callers that must not miss fields
+      // pass exhaustive: true.
+      if (!options.exhaustive && !hasAcroForm(new Uint8Array(arrayBuffer))) {
+        return [];
+      }
       const pdfiumFields = await runPdfiumScan(async () => {
         const fields = await extractFormFields(arrayBuffer);
         // Enrich with alternate names (tooltips)

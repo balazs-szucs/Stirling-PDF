@@ -1,6 +1,10 @@
 import React from "react";
 import { Text, Stack } from "@mantine/core";
 import { Button } from "@app/ui/Button";
+import {
+  isModuleLoadError,
+  reloadOnceForChunkFailure,
+} from "@app/utils/chunkLoadRecovery";
 
 interface ErrorBoundaryState {
   hasError: boolean;
@@ -26,6 +30,12 @@ export default class ErrorBoundary extends React.Component<
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    // A failed chunk import is cached for the document's lifetime; the only
+    // in-app recovery is a reload. Do it before logging so a transient WebKit
+    // load failure never parks the user on the fallback.
+    if (isModuleLoadError(error) && reloadOnceForChunkFailure()) {
+      return;
+    }
     // Enhanced logging for diagnosis
     console.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     console.error("🔴 ErrorBoundary caught an error");

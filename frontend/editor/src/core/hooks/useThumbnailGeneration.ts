@@ -23,8 +23,9 @@ let batchTimer: number | null = null;
 // Track active thumbnail requests to prevent duplicates across components
 const activeRequests = new Map<string, Promise<string | null>>();
 
-// Cache ArrayBuffers to avoid reading the same file multiple times
-const fileArrayBufferCache = new Map<File, ArrayBuffer>();
+// Cache ArrayBuffers to avoid reading the same file multiple times. Weak keys:
+// a deleted File must not keep its full buffer alive after the queue drains.
+const fileArrayBufferCache = new WeakMap<File, ArrayBuffer>();
 
 // Batch processing configuration
 const BATCH_SIZE = 10; // Process thumbnails in batches of 10 for faster initial load
@@ -126,10 +127,7 @@ async function processRequestQueue() {
     }
   } finally {
     isProcessingQueue = false;
-    // Clean up ArrayBuffer cache when queue is empty
-    if (requestQueue.length === 0) {
-      fileArrayBufferCache.clear();
-    }
+    // The WeakMap releases buffers with their Files; nothing to clear here.
   }
 }
 
@@ -196,9 +194,6 @@ export function useThumbnailGeneration() {
     requestQueue.length = 0;
     activeRequests.clear();
     isProcessingQueue = false;
-
-    // Clear ArrayBuffer cache
-    fileArrayBufferCache.clear();
 
     thumbnailGenerationService.destroy();
   }, []);

@@ -19,8 +19,13 @@ export interface IFormDataProvider {
   /**
    * Extract form fields with their coordinates from a PDF file.
    * Returns the same FormField[] shape regardless of provider.
+   * `exhaustive` must be set by callers that cannot tolerate the byte-scan
+   * fast path missing a catalog hidden in a compressed object stream.
    */
-  fetchFields(file: File | Blob): Promise<FormField[]>;
+  fetchFields(
+    file: File | Blob,
+    options?: { exhaustive?: boolean },
+  ): Promise<FormField[]>;
 
   /**
    * Apply filled values to a PDF and return the resulting PDF blob.

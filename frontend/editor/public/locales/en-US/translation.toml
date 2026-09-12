@@ -12224,8 +12224,8 @@ moreOptions = "More"
 nextPage = "Next Page"
 onlyPdfSupported = "This file format is not supported for preview."
 pageNavigation = "Page navigation"
+preparingDocument = "Preparing document..."
 previousPage = "Previous Page"
-readingProgress = "Reading progress"
 saveChangesErrorBody = "The document could not be saved. Try again."
 saveChangesErrorTitle = "Could not save changes"
 singlePageView = "Single Page View"
@@ -12333,10 +12333,6 @@ textStats = "{{lines}} lines · {{size}}"
 [viewer.redaction]
 applyAll = "Apply Redactions"
 removeMark = "Remove this mark"
-
-[viewer.resumePosition]
-goToStart = "Go to start"
-title = "Resumed where you left off"
 
 [viewer.search]
 clear = "Clear search"

@@ -19,6 +19,7 @@ export class PdfBoxFormProvider implements IFormDataProvider {
   readonly name = "pdfbox";
 
   async fetchFields(file: File | Blob): Promise<FormField[]> {
+    // The backend provider has no byte-scan fast path; options are ignored.
     return fetchFormFieldsWithCoordinates(file);
   }
 

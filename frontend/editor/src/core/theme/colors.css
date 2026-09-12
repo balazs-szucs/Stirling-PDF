@@ -137,8 +137,6 @@ html[data-app-theme="light"] {
   --c-onboarding-hero-tile: var(--p-white);
 
   --c-pdf-page-bg: var(--p-white);
-  --c-pdf-shimmer-mid: var(--p-shimmer-light-mid);
-  --c-pdf-shimmer-peak: var(--p-shimmer-light-peak);
 }
 
 /* ── MIDNIGHT (original navy) — also the default portal/Storybook dark ────── */
@@ -190,8 +188,6 @@ html[data-app-theme="midnight"] {
   --c-onboarding-hero-tile: var(--p-navy-900);
 
   --c-pdf-page-bg: var(--p-c-1a1a1a);
-  --c-pdf-shimmer-mid: var(--p-shimmer-dark-mid);
-  --c-pdf-shimmer-peak: var(--p-shimmer-dark-peak);
 }
 
 /* ── Base accent — fixed default (blue buttons); [data-accent="default"] blocks at the end keep surfaces neutral. LIGHT base here, DARK base next. ── */

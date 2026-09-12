@@ -16,8 +16,8 @@ determinate progress + stage text + cancel/degrade.
 
 | # | flow | intent | truth | today | tier (this machine) | tier-gap |
 | --- | --- | --- | --- | --- | --- | --- |
-| 1 | open-doc (any size) | click a file | first readable page | one unconditional `Loader` + "Loading PDF Engine..." for engine init **and** document parse (`LocalEmbedPDF.tsx:1214-1237`, engine state `:1095`). No delay, no skeleton, no stage text, no progress, no cancel; at 15 s only a warning string appears (`:1157-1169`) | measured 0.18–0.35 s (500 p), 0.64–0.85 s (40 MB), 0.68–1.12 s (155 MB) → T2 on this machine; large scans on slow devices reach T3/T4 | **T2:** spinner flashes instantly and names the wrong stage; **T3:** no content-shaped skeleton or stage; **T4:** no determinate progress / cancel / degrade |
-| 2 | reopen / continue reading | reopen a doc I was reading | same page, zoom, mode | **implemented (U1):** `ReadingPositionBridge` persists `(quickKey, pageIndex, x/yFraction, zoomLevel)` in the device-local `stirling-pdf-reading` IndexedDB store and restores it on the next open, with a non-blocking "Resumed where you left off — [Go to start]" toast. Rotation/spread restore the page only (metrics axes rotate); per-doc scroll mode/spread not persisted yet | restored within ±1/4 page; toast only for non-cover positions | page + zoom continuity closed; mode inheritance remains |
+| 1 | open-doc (any size) | click a file | first readable page | one unconditional `Loader` + "Loading PDF Engine..." for engine init, then "Preparing document..." while the document loads (`LocalEmbedPDF.tsx:1215`, `:1383`). No skeleton, no progress, no cancel; at 15 s only a warning string appears (`:1157-1169`) | measured 0.18–0.35 s (500 p), 0.64–0.85 s (40 MB), 0.68–1.12 s (155 MB) → T2 on this machine; large scans on slow devices reach T3/T4 | **T2:** no delayed indicator (spinner shows instantly); **T3:** no content-shaped skeleton or determinate stage; **T4:** no determinate progress / cancel / degrade |
+| 2 | reopen / continue reading | reopen a doc | same page, zoom, mode | **not implemented:** reopen starts at the cover. A resume feature existed briefly and was reverted: its restore raced the initial zoom and could overwrite the stored position with page 0. This is a document processor, not a reading app; per-file reading history stays out of scope unless a product decision says otherwise | n/a | none |
 | 3 | open-password | open an encrypted doc | enter password and continue | dedicated locked state + `Unlock` button → prompt (`EmbedPdfViewer.tsx:1200-1220`) | n/a | core flow met; prompt autocomplete/remember semantics unverified |
 | 4 | open-corrupt / failing page | open a broken file | calm message + next step | non-PDF formats have dedicated viewers/banner (`NonPdfViewer`, `:1171-1208`); engine failure renders the raw `error.message` (`LocalEmbedPDF.tsx:1239-1256`). No per-page failure/retry path found | n/a | human-copy gap; partial-broken docs unverified |
 | 5 | scroll-reading | scroll a long doc | stay anchored, no jank | continuous scroll default; buffer 4 pages ≥4 GB deviceMemory else 2 (`LocalEmbedPDF.tsx:986`, `:1015`); scroll-end 150 ms (`:1008`). No explicit anchor `{page,yFraction}` save/restore | n/a | anchoring under eviction churn unverified; no scroll-freeze measurement |
@@ -34,19 +34,13 @@ determinate progress + stage text + cancel/degrade.
 ## Ranked gaps (worst gap × frequency)
 
 1. **open-doc loading truth** — every open, worst unmet tier (T4 on stress
-   corpus, T2 already violated on fast docs: instant spinner + wrong stage
-   label). Code fixable without product semantics for the skeleton/stage/delay
-   parts; cancel/degrade needs a decision.
-2. **CLOSED — reopen continuity (U1)** — page + in-page fraction + zoom persist
-   device-locally and restore on reopen, with a non-blocking resume toast and a
-   `Go to start` escape. Verified by `viewer-reading-position.spec.ts`, 6 anchor
-   unit tests, and the Phase 1 rails (A/B under load: no delta). Remaining
-   follow-up: persist scroll mode / spread mode, and a continue-reading card in
-   the library.
-3. **page-jump tolerant input + preview** — small, self-contained, visible.
-4. **search tuning** (150 ms, ≥3 chars, drop polling) — small, self-contained.
-5. **thumbnail loading placeholders** — cosmetic, tier-3 only.
-6. **error/offline copy and per-page retry** — real users, low frequency.
+   corpus, T2 already violated on fast docs: instant spinner). Code fixable
+   without product semantics for the delay/stage parts; cancel/degrade needs a
+   decision.
+2. **page-jump tolerant input + preview** — small, self-contained, visible.
+3. **search tuning** (150 ms, ≥3 chars, drop polling) — small, self-contained.
+4. **thumbnail loading placeholders** — cosmetic, tier-3 only.
+5. **error/offline copy and per-page retry** — real users, low frequency.
 
 ## Rude-interruption audit
 
@@ -56,17 +50,14 @@ determinate progress + stage text + cancel/degrade.
   `setInterval(…, 200)` while visible (`SearchInterface.tsx:120-125`) instead of
   subscribing — main-thread work every 200 ms during reading, and a source of
   layout churn risk.
-- Spinner → content transition (`LocalEmbedPDF.tsx:1214`) swaps the whole viewer
-  body; if the eventual skeleton/toolbar appear at different sizes, that is a
-  layout shift at the exact moment of first paint. Fix pairs with gap 1.
+- Spinner → content transition (`LocalEmbedPDF.tsx:1215`) swaps the whole viewer
+  body; if the toolbar appears at a different size, that is a layout shift at the
+  exact moment of first paint. Fix pairs with gap 1.
 
 ## Measurement (U7)
 
-Partial. `uxSession.ts` records intent→truth events behind `?uxstudy=1`
-(currently `resume:record-found`, `resume:offered`, `resume:applied`,
-`resume:go-to-start`, exposed on `window.__uxSession`) but does not yet feed the
-`[PERF-BASELINE]` JSON, count rage clicks, swipe thrash, quit-within-3 s, or
-dwell moments. Extend the same recorder when the next gap is implemented.
+Not implemented. There is no session recorder; count rage clicks, swipe thrash,
+quit-within-3 s, and dwell with a new recorder when the next gap is implemented.
 
 ## Next fix (needs a decision before coding)
 
@@ -82,27 +73,26 @@ dwell moments. Extend the same recorder when the next gap is implemented.
   background and only close the viewer?
 - Also fix the label: engine-ready and document-parsing are different stages.
 - Verification: Phase 1 rails on 40 MB/155 MB + a throttled 4× run; reduced-
-  motion respected; one sampled intent→truth session.
+  motion respected.
 
-## Implemented: U1 reading continuity
+## Reverted: U1 reading continuity
 
-`ReadingPositionBridge.tsx` + `readingPositionStore.ts` + `readingPositionAnchor.ts`:
+A reopen-continuity feature persisted page/offset/zoom in a device-local
+IndexedDB store and restored it with a "Resumed where you left off" toast. It
+was reverted from the branch:
 
-- Persists `(quickKey, pageIndex, xFraction, yFraction, zoomLevel)` to the
-  device-local `stirling-pdf-reading` IndexedDB store (metadata only, no expiry,
-  never localStorage). Writes are scroll/zoom-debounced at 400 ms and flushed on
-  `pagehide`/unmount; capture is suppressed until the stored record is read, so
-  the initial page-1 scroll cannot overwrite it.
-- Restores after layout: applies the stored zoom, waits for the scroller layout,
-  then `scrollToPage({pageNumber, pageCoordinates})` with the fraction mapped
-  back onto the current page box. Rotated pages and dual-page spreads restore the
-  page without the in-page offset.
-- Non-blocking toast for non-cover restores: "Resumed where you left off —
-  [Go to start]"; no toast on a first-open cover position.
-- Toolbar shows page N/M plus a doc percent (`PdfViewerToolbar.tsx`).
-- Not persisted yet: scroll mode / spread mode (stated as follow-up).
+- The restore raced the viewer's initial auto-zoom/layout. Reproduced 3/3 runs:
+  the toolbar read page 3 while the viewport painted page 1, and a capture then
+  overwrote the stored record with page 0 — so the next reopen was guaranteed
+  wrong. The screenshot in the validation report shows the cover page under a
+  "Resumed where you left off" toast.
+- The official spec passed because it asserted element visibility, which is true
+  for a mounted-but-off-screen page.
+- Product call: a document processor should not silently track reading history;
+  any future attempt needs an explicit flag and a decision, not a hard-coded
+  behavior.
 
-Evidence: `viewer-reading-position.spec.ts` (jump to page 2 → reload → page 2
-restored + toast + Go to start), 6 unit tests for the anchor math, and a rails
-A/B on pages-500 (bridge disabled vs enabled under identical load: no delta).
+The shimmery page skeleton that shipped alongside it was removed too: it flashed
+in and out before the loader label and the content, which reads as noise rather
+than progress.
 
