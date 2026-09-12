@@ -454,6 +454,24 @@ export async function getRawPageCount(docPtr: number): Promise<number> {
 }
 
 /**
+ * Read the catalog's form type without loading pages: 0 none, 1 AcroForm,
+ * 2/3 XFA. Returns null when the pinned build cannot answer, so callers can
+ * fall back to extraction instead of reading "unknown" as "no form".
+ */
+export async function readRawFormType(
+  data: ArrayBuffer | Uint8Array,
+): Promise<number | null> {
+  const m = await getPdfiumModule();
+  if (typeof m.FPDF_GetFormType !== "function") return null;
+  const docPtr = await openRawDocumentSafe(data);
+  try {
+    return m.FPDF_GetFormType(docPtr);
+  } finally {
+    closeDocAndFreeBuffer(m, docPtr);
+  }
+}
+
+/**
  * Get raw page dimensions { width, height } for a page.
  */
 export async function getRawPageSize(

@@ -39,10 +39,12 @@ import {
   extractFormFields,
   getPdfiumModule,
   openRawDocumentSafe,
+  readRawFormType,
   readUtf16,
   saveRawDocument,
   type PdfiumFormField,
 } from "@app/services/pdfiumService";
+import { LARGE_PDF_PARSE_LIMIT } from "@app/utils/thumbnailUtils";
 
 /**
  * Map PDFium form field type enum to our FormFieldType string.
@@ -148,7 +150,23 @@ export class PdfiumFormProvider implements IFormDataProvider {
   async fetchFields(file: File | Blob): Promise<FormField[]> {
     try {
       const arrayBuffer = await getDocumentBytes(file);
-      if (!hasAcroForm(new Uint8Array(arrayBuffer))) return [];
+      // The literal scan is a fast path for viewer opens, where the overlay
+      // fetches on every file and a main-thread PDFium copy is expensive. It
+      // cannot see a catalog inside a compressed object stream
+      // (qpdf --object-streams=generate), so a miss is confirmed against the
+      // catalog's form type before the document is treated as form-less.
+      if (!hasAcroForm(new Uint8Array(arrayBuffer))) {
+        // Above the full-parse limit nothing opens the document on the main
+        // thread for thumbnails, so a probe here would cost a second full-file
+        // copy; keep the literal scan as the only check for those files.
+        if (file.size >= LARGE_PDF_PARSE_LIMIT) return [];
+        const formType = await runPdfiumScan(() =>
+          readRawFormType(arrayBuffer),
+        );
+        // null means the pinned build could not answer; extract rather than
+        // miss fields.
+        if (formType === 0) return [];
+      }
       const pdfiumFields = await runPdfiumScan(async () => {
         const fields = await extractFormFields(arrayBuffer);
         // Enrich with alternate names (tooltips)
