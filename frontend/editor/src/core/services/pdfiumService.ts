@@ -486,6 +486,25 @@ export function releaseSharedDocument(): void {
 }
 
 /**
+ * Drop one open-reader reference to a document pointer, closing the underlying
+ * PDFium document only when this pointer is not the shared handle. Synchronous
+ * on purpose: the check-and-close must be atomic, because a caller may hold a
+ * pointer that `releaseSharedDocument()` already closed (double-close on a
+ * closed ptr is a wasm double-free), and an async close could race that
+ * release.
+ */
+export function releaseSharedRef(docPtr: number): void {
+  if (sharedDocument && sharedDocument.docPtr === docPtr) {
+    closeDocAndFreeBuffer(_module!, docPtr);
+    return;
+  }
+  if (_module) {
+    // Private open (password or reader contention): safe to close directly.
+    closeDocAndFreeBuffer(_module, docPtr);
+  }
+}
+
+/**
  * Get page count for a raw document pointer.
  */
 export async function getRawPageCount(docPtr: number): Promise<number> {

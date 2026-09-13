@@ -6,6 +6,7 @@ import { FileId } from "@app/types/file";
 import {
   openRawDocumentSafe,
   closeRawDocument,
+  releaseSharedRef,
 } from "@app/services/pdfiumService";
 import { renderPdfiumPageDataUrl } from "@app/utils/pdfiumPageRender";
 import { THUMBNAIL_MAX_DIMENSION } from "@app/utils/thumbnailUtils";
@@ -339,7 +340,7 @@ export class ThumbnailGenerationService {
   clearPDFCache(): void {
     // Destroy all cached PDF documents using worker manager
     for (const [, cached] of this.pdfDocumentCache) {
-      void closeRawDocument(cached.docPtr);
+      releaseSharedRef(cached.docPtr);
     }
     this.pdfDocumentCache.clear();
   }
@@ -347,7 +348,7 @@ export class ThumbnailGenerationService {
   clearPDFCacheForFile(fileId: FileId): void {
     const cached = this.pdfDocumentCache.get(fileId);
     if (cached) {
-      void closeRawDocument(cached.docPtr);
+      releaseSharedRef(cached.docPtr);
       this.pdfDocumentCache.delete(fileId);
     }
   }

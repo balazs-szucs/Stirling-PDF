@@ -4,6 +4,7 @@ import type { Mock } from "vitest";
 vi.mock("@app/services/pdfiumService", () => ({
   openRawDocumentSafe: vi.fn(),
   closeRawDocument: vi.fn(),
+  releaseSharedRef: vi.fn(),
 }));
 
 vi.mock("@app/utils/pdfiumPageRender", () => ({
@@ -17,12 +18,14 @@ import {
 import {
   openRawDocumentSafe,
   closeRawDocument,
+  releaseSharedRef,
 } from "@app/services/pdfiumService";
 import { renderPdfiumPageDataUrl } from "@app/utils/pdfiumPageRender";
 import type { FileId } from "@app/types/file";
 
 const openMock = openRawDocumentSafe as Mock;
 const closeMock = closeRawDocument as Mock;
+const releaseRefMock = releaseSharedRef as Mock;
 const renderMock = renderPdfiumPageDataUrl as Mock;
 
 const fileId = (n: number | string) => `test-file-${n}` as FileId;
@@ -101,5 +104,31 @@ describe("ThumbnailGenerationService thumbnail cache accounting", () => {
     thumbnailGenerationService.addThumbnailToCache(page, "data:image/jpeg;base64,aaa");
     expect(thumbnailGenerationService.getCacheStats().size).toBe(1);
     expect(thumbnailGenerationService.getCacheStats().sizeBytes).toBe(afterFirst);
+  });
+
+  it("clearPDFCache releases each cached reference exactly once", async () => {
+    const service = new ThumbnailGenerationService();
+    let releaseRenders!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      releaseRenders = resolve;
+    });
+    renderMock.mockImplementation(() => gate.then(() => "data:image/jpeg;base64,x"));
+
+    // Keep both documents in the pdf cache: cleanupCompletedDocument would
+    // drop them after a completed generation.
+    const pending = [
+      service.generateThumbnails(fileId(1), pdfBytes(), [1], {}),
+      service.generateThumbnails(fileId(2), pdfBytes(), [1], {}),
+    ];
+    await settle();
+    releaseRefMock.mockClear();
+
+    service.clearPDFCache();
+    expect(releaseRefMock).toHaveBeenCalledTimes(2);
+    expect(releaseRefMock).toHaveBeenCalledWith(expect.any(Number));
+    expect(closeMock).not.toHaveBeenCalled();
+
+    releaseRenders();
+    await Promise.all(pending);
   });
 });
