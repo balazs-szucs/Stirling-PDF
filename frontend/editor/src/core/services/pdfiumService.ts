@@ -148,11 +148,18 @@ export async function getPdfiumModule(): Promise<WrappedPdfiumModule> {
  * Next call to getPdfiumModule() will create a fresh instance.
  */
 export function resetPdfiumModule(): void {
+  // The whole module (and its linear memory with it) is discarded here, so
+  // closing documents inside it is pointless and can throw on a dead
+  // instance. Drop the shared handle outright instead of releasing it.
   try {
-    releaseSharedDocument();
+    if (sharedDocument && sharedDocument.refs <= 0 && _module) {
+      closeDocumentNow(_module, sharedDocument.docPtr);
+    }
   } catch {
     // Module already unusable; dropping the references is the cleanup.
   }
+  sharedDocument = null;
+  sharedReleasePending = false;
   _module = null;
   _initPromise = null;
   _docDataPtrs.clear();
@@ -343,6 +350,11 @@ export class PdfiumOpenError extends Error {
  * drops a reference, and the document is closed for real when different bytes
  * arrive with no readers left or `releaseSharedDocument()` runs. Password
  * opens are never shared.
+ *
+ * A released-while-busy document closes when its last reader finishes instead
+ * of lingering: `releaseSharedDocument` only arms `sharedReleasePending`, and
+ * the close lands in `closeDocAndFreeBuffer` once refs reach zero. The shared
+ * handle is therefore never closed under an active reader.
  */
 interface SharedDocument {
   data: ArrayBuffer | Uint8Array;
@@ -350,6 +362,7 @@ interface SharedDocument {
   refs: number;
 }
 let sharedDocument: SharedDocument | null = null;
+let sharedReleasePending = false;
 
 function closeDocumentNow(m: WrappedPdfiumModule, docPtr: number): void {
   m.FPDF_CloseDocument(docPtr);
@@ -394,6 +407,7 @@ export async function openRawDocument(
     if (sharedDocument && sharedDocument.refs <= 0) {
       closeDocumentNow(m, sharedDocument.docPtr);
       sharedDocument = null;
+      sharedReleasePending = false;
     }
     if (!sharedDocument) {
       sharedDocument = { data, docPtr, refs: 1 };
@@ -434,17 +448,38 @@ export function closeDocAndFreeBuffer(
   if (sharedDocument && sharedDocument.docPtr === docPtr) {
     if (sharedDocument.refs > 0) {
       sharedDocument.refs--;
+    }
+    if (sharedDocument.refs === 0 && sharedReleasePending) {
+      closeDocumentNow(m, docPtr);
+      sharedDocument = null;
+      sharedReleasePending = false;
       return;
     }
+    // At zero refs with no pending release the handle lingers for the next
+    // same-bytes scan by design. Return explicitly: falling through would
+    // double-close the document and leave `sharedDocument` pointing at it.
+    return;
   }
   closeDocumentNow(m, docPtr);
 }
 
-/** Drop the shared document, e.g. when the active file changes or on teardown. */
+/**
+ * Drop the shared document, e.g. when its file leaves the workbench.
+ * Closing waits for in-flight readers: with refs outstanding only the pending
+ * flag is armed and the last `closeDocAndFreeBuffer` closes for real.
+ */
 export function releaseSharedDocument(): void {
-  if (!sharedDocument) return;
+  if (!sharedDocument) {
+    sharedReleasePending = false;
+    return;
+  }
+  if (sharedDocument.refs > 0) {
+    sharedReleasePending = true;
+    return;
+  }
   const session = sharedDocument;
   sharedDocument = null;
+  sharedReleasePending = false;
   if (_module) {
     closeDocumentNow(_module, session.docPtr);
   }
