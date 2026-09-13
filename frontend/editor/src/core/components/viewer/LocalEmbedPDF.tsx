@@ -974,6 +974,19 @@ export function LocalEmbedPDF({
     };
   }, [file ? fileStableKey : null, url]);
 
+  // Debug handle for the live plugin registry. It also keeps the registry
+  // (and every config object on it) reachable after unmount, so drop it with
+  // the viewer instead of leaving it on window.
+  useEffect(
+    () => () => {
+      if (typeof window !== "undefined") {
+        delete (window as unknown as { __embedPdfRegistry?: PluginRegistry })
+          .__embedPdfRegistry;
+      }
+    },
+    [],
+  );
+
   // Keyed by fileStableKey to avoid recomputing on every FileContext re-render.
   const exportFileName = useMemo(() => {
     if (fileName) return fileName;
@@ -1287,6 +1300,25 @@ export function LocalEmbedPDF({
               (
                 window as unknown as { __embedPdfRegistry?: PluginRegistry }
               ).__embedPdfRegistry = registry;
+            }
+            // The plugin registration config keeps `initialDocuments` for the
+            // lifetime of the registry. The document-manager plugin has already
+            // opened that buffer by the time onInitialized runs (it keeps its
+            // own loadOptions copy until the document loads, then deletes it),
+            // so clear the config's reference: otherwise the whole document
+            // ArrayBuffer stays pinned behind the registry after the viewer
+            // closes, on top of the worker's own copy. Replacing the property
+            // (not mutating the array) avoids touching the plugins memo that
+            // the next registry initialization will reuse.
+            try {
+              const documentManagerConfig = registry.getPluginConfig<{
+                initialDocuments?: unknown[];
+              }>("document-manager");
+              if (Array.isArray(documentManagerConfig?.initialDocuments)) {
+                documentManagerConfig.initialDocuments = [];
+              }
+            } catch {
+              // Registry layout changed or plugin absent: nothing to clear.
             }
             // v2.0: Use registry.getPlugin() to access plugin APIs
             const annotationPlugin = registry.getPlugin("annotation");
