@@ -70,5 +70,4 @@ describe("processedFile.pages consumer contracts (R4)", () => {
       height: null,
     });
   });
-
 });
