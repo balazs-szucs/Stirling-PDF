@@ -24,7 +24,6 @@ vi.mock("@app/services/pdfiumService", () => ({
 
 import { allowConsole } from "@app/tests/failOnConsole";
 
-
 import { getDocumentBytes } from "@app/services/documentBytesCache";
 import {
   extractFormFields,
@@ -121,7 +120,14 @@ describe("PdfiumFormProvider", () => {
         flags: 0,
         options: [],
         widgets: [
-          { pageIndex: 0, x: 50, y: 150, width: 15, height: 15, exportValue: "CustomVal" },
+          {
+            pageIndex: 0,
+            x: 50,
+            y: 150,
+            width: 15,
+            height: 15,
+            exportValue: "CustomVal",
+          },
         ],
       },
       {
@@ -162,7 +168,14 @@ describe("PdfiumFormProvider", () => {
       readOnly: true,
       multiline: false,
       widgets: [
-        { pageIndex: 0, x: 50, y: 150, width: 15, height: 15, exportValue: "CustomVal" },
+        {
+          pageIndex: 0,
+          x: 50,
+          y: 150,
+          width: 15,
+          height: 15,
+          exportValue: "CustomVal",
+        },
       ],
     });
   });
@@ -176,4 +189,3 @@ describe("PdfiumFormProvider", () => {
     expect(fields).toEqual([]);
   });
 });
-
