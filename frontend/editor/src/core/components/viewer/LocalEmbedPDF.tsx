@@ -918,6 +918,12 @@ export function LocalEmbedPDF({
 
   const [pdfBuffer, setPdfBuffer] = useState<ArrayBuffer | null>(null);
 
+  // The annotation plugin keeps `onGlobal` listeners for the registry's whole
+  // life (no plugin destroy override clears them), and this component's
+  // listener shares the component scope that also holds `pdfBuffer`. Without
+  // the unsubscribe the listener pins the document bytes after unmount.
+  const annotationUnsubscribeRef = useRef<(() => void) | null>(null);
+
   // Read file/url directly into an ArrayBuffer on the main thread so EmbedPDF's worker
   // receives the document data via buffer rather than failing to fetch partitioned blob URLs.
   useEffect(() => {
@@ -979,6 +985,8 @@ export function LocalEmbedPDF({
   // the viewer instead of leaving it on window.
   useEffect(
     () => () => {
+      annotationUnsubscribeRef.current?.();
+      annotationUnsubscribeRef.current = null;
       if (typeof window !== "undefined") {
         delete (window as unknown as { __embedPdfRegistry?: PluginRegistry })
           .__embedPdfRegistry;
@@ -1338,7 +1346,9 @@ export function LocalEmbedPDF({
 
               ANNOTATION_TOOLS.forEach(ensureTool);
 
-              annotationApi.onAnnotationEvent((event: AnnotationEvent) => {
+              annotationUnsubscribeRef.current?.();
+              annotationUnsubscribeRef.current =
+                annotationApi.onAnnotationEvent((event: AnnotationEvent) => {
                 if (event.type === "create" && event.committed) {
                   setAnnotations((prev) => [
                     ...prev,
