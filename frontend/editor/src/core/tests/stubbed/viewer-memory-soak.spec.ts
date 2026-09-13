@@ -395,9 +395,11 @@ test.describe("viewer memory soak", { tag: "@memory-soak" }, () => {
           ).__soak;
           const counts: Record<string, number> = {};
           for (const stack of pendingStacks.values()) {
+            // Six app frames: the mint site alone cannot tell the four
+            // viewer-chunk polls apart (they share one scheduling helper).
             const key = stack
               .split("\n")
-              .slice(2, 5)
+              .slice(2, 8)
               .join(" | ")
               .replace(/http:\/\/localhost:\d+/g, "HOST")
               .replace(/:\d+:\d+/g, "");
