@@ -77,7 +77,7 @@ interface RedactionActions {
  */
 interface RedactionContextValue extends RedactionState, RedactionActions {
   // Ref that the bridge component will populate
-  redactionApiRef: React.MutableRefObject<RedactionAPI | null>;
+  redactionApiRef: React.RefObject<RedactionAPI | null>;
 }
 
 // Create context

@@ -1,4 +1,4 @@
-import { MutableRefObject } from "react";
+import { RefObject } from "react";
 import { SpreadMode } from "@embedpdf/plugin-spread/react";
 import {
   ViewerBridgeRegistry,
@@ -101,7 +101,7 @@ export interface ViewerActionsBundle {
 }
 
 interface ViewerActionDependencies {
-  registry: MutableRefObject<ViewerBridgeRegistry>;
+  registry: RefObject<ViewerBridgeRegistry>;
   getScrollState: () => ScrollState;
   getZoomState: () => ZoomState;
   triggerImmediateZoomUpdate: (percent: number) => void;

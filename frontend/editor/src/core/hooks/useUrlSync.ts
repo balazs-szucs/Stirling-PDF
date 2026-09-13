@@ -2,7 +2,7 @@
  * URL synchronization hooks for tool routing with registry support
  */
 
-import { useEffect, useCallback, useRef, type MutableRefObject } from "react";
+import { useEffect, useCallback, useRef, type RefObject } from "react";
 import { ToolId } from "@app/types/toolId";
 import {
   parseToolRoute,
@@ -28,7 +28,7 @@ export function useNavigationUrlSync(
    * Tool the default-startup-view preference selected, if any. That selection
    * sets the view, not the address, so it must not be written to the URL.
    */
-  startupSelectedToolRef?: MutableRefObject<ToolId | null>,
+  startupSelectedToolRef?: RefObject<ToolId | null>,
 ) {
   const { config } = useAppConfig();
   const premiumEnabled = config?.premiumEnabled;

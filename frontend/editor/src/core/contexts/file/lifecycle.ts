@@ -10,6 +10,7 @@ import {
   ProcessedFilePage,
 } from "@app/types/fileContext";
 import { evictFileUrl } from "@app/hooks/useFileWithUrl";
+import { releaseSharedDocument } from "@app/services/pdfiumService";
 
 const DEBUG = process.env.NODE_ENV === "development";
 
@@ -22,7 +23,7 @@ export class FileLifecycleManager {
   private fileGenerations = new Map<string, number>(); // Generation tokens to prevent stale cleanup
 
   constructor(
-    private filesRef: React.MutableRefObject<Map<FileId, File>>,
+    private filesRef: React.RefObject<Map<FileId, File>>,
     private dispatch: React.Dispatch<FileContextAction>,
   ) {}
 
@@ -41,7 +42,7 @@ export class FileLifecycleManager {
    */
   cleanupFile = (
     fileId: FileId,
-    stateRef?: React.MutableRefObject<FileContextState>,
+    stateRef?: React.RefObject<FileContextState>,
   ): void => {
     // Use comprehensive cleanup (same as removeFiles)
     this.cleanupAllResourcesForFile(fileId, stateRef);
@@ -69,6 +70,9 @@ export class FileLifecycleManager {
     this.cleanupTimers.clear();
     this.fileGenerations.clear();
 
+    // No file survives teardown, so neither should its shared document.
+    releaseSharedDocument();
+
     // Clear files ref
     this.filesRef.current.clear();
   };
@@ -79,7 +83,7 @@ export class FileLifecycleManager {
   scheduleCleanup = (
     fileId: FileId,
     delay: number = 30000,
-    stateRef?: React.MutableRefObject<FileContextState>,
+    stateRef?: React.RefObject<FileContextState>,
   ): void => {
     // Cancel existing timer
     const existingTimer = this.cleanupTimers.get(fileId);
@@ -118,7 +122,7 @@ export class FileLifecycleManager {
    */
   removeFiles = (
     fileIds: FileId[],
-    stateRef?: React.MutableRefObject<FileContextState>,
+    stateRef?: React.RefObject<FileContextState>,
   ): void => {
     fileIds.forEach((fileId) => {
       // Clean up all resources for this file
@@ -134,7 +138,7 @@ export class FileLifecycleManager {
    */
   private cleanupAllResourcesForFile = (
     fileId: FileId,
-    stateRef?: React.MutableRefObject<FileContextState>,
+    stateRef?: React.RefObject<FileContextState>,
   ): void => {
     // Remove from files ref
     this.filesRef.current.delete(fileId);
@@ -150,6 +154,11 @@ export class FileLifecycleManager {
     // The viewer caches one object URL per file id (useFileWithUrl); a removed
     // file must not stay pinned by that cache.
     evictFileUrl(fileId);
+
+    // The removed Blob can never be scanned again (sharing is by buffer
+    // identity), so a lingering shared main-thread document of its bytes is
+    // pure waste. The release waits for in-flight readers before closing.
+    releaseSharedDocument();
 
     // Clean up blob URLs from file record if we have access to state
     if (stateRef) {
@@ -194,7 +203,7 @@ export class FileLifecycleManager {
   updateStirlingFileStub = (
     fileId: FileId,
     updates: Partial<StirlingFileStub>,
-    stateRef?: React.MutableRefObject<FileContextState>,
+    stateRef?: React.RefObject<FileContextState>,
   ): void => {
     // Guard against updating removed files (race condition protection)
     if (!this.filesRef.current.has(fileId)) {

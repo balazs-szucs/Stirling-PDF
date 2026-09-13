@@ -38,7 +38,7 @@ interface PageThumbnailProps {
   clearBoxSelection?: () => void;
   activeDragIds: string[];
   justMoved?: boolean;
-  pageRefs: React.MutableRefObject<Map<string, HTMLDivElement>>;
+  pageRefs: React.RefObject<Map<string, HTMLDivElement>>;
   dragHandleProps?: DragHandleProps;
   onReorderPages: (
     sourcePageNumber: number,

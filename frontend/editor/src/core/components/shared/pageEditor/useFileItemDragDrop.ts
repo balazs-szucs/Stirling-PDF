@@ -17,8 +17,8 @@ interface UseFileItemDragDropReturn {
   isDragging: boolean;
   isDragOver: boolean;
   dropPosition: "above" | "below";
-  movedRef: React.MutableRefObject<boolean>;
-  startRef: React.MutableRefObject<{ x: number; y: number } | null>;
+  movedRef: React.RefObject<boolean>;
+  startRef: React.RefObject<{ x: number; y: number } | null>;
   onPointerDown: (e: React.PointerEvent) => void;
   onPointerMove: (e: React.PointerEvent) => void;
   onPointerUp: () => void;

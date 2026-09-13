@@ -286,8 +286,8 @@ interface AddFileOptions {
  */
 export async function addFiles(
   options: AddFileOptions,
-  stateRef: React.MutableRefObject<FileContextState>,
-  filesRef: React.MutableRefObject<Map<FileId, File>>,
+  stateRef: React.RefObject<FileContextState>,
+  filesRef: React.RefObject<Map<FileId, File>>,
   dispatch: React.Dispatch<FileContextAction>,
   lifecycleManager: FileLifecycleManager,
   enablePersistence: boolean = false,
@@ -630,7 +630,7 @@ export async function consumeFiles(
   inputFileIds: FileId[],
   outputStirlingFiles: StirlingFile[],
   outputStirlingFileStubs: StirlingFileStub[],
-  filesRef: React.MutableRefObject<Map<FileId, File>>,
+  filesRef: React.RefObject<Map<FileId, File>>,
   dispatch: React.Dispatch<FileContextAction>,
   // Silent: replace the input in place (same grid slot) without auto-selecting
   // or reordering the output. Used by background enforcement (policy auto-run)
@@ -702,7 +702,7 @@ export async function undoConsumeFiles(
   inputFiles: File[],
   inputStirlingFileStubs: StirlingFileStub[],
   outputFileIds: FileId[],
-  filesRef: React.MutableRefObject<Map<FileId, File>>,
+  filesRef: React.RefObject<Map<FileId, File>>,
   dispatch: React.Dispatch<FileContextAction>,
   indexedDB?: {
     saveFile: (
@@ -811,8 +811,8 @@ export async function undoConsumeFiles(
 export async function addStirlingFileStubs(
   stirlingFileStubs: StirlingFileStub[],
   options: { insertAfterPageId?: string; selectFiles?: boolean } = {},
-  stateRef: React.MutableRefObject<FileContextState>,
-  filesRef: React.MutableRefObject<Map<FileId, File>>,
+  stateRef: React.RefObject<FileContextState>,
+  filesRef: React.RefObject<Map<FileId, File>>,
   dispatch: React.Dispatch<FileContextAction>,
   lifecycleManager: FileLifecycleManager,
 ): Promise<StirlingFile[]> {

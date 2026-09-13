@@ -383,8 +383,7 @@ export const Tooltip: React.FC<TooltipProps> = ({
         ).ref;
         if (typeof originalRef === "function") originalRef(node);
         else if (originalRef && typeof originalRef === "object")
-          (originalRef as React.MutableRefObject<HTMLElement | null>).current =
-            node;
+          (originalRef as React.RefObject<HTMLElement | null>).current = node;
       },
       "aria-describedby": open ? tooltipIdRef.current : undefined,
       onPointerEnter: handlePointerEnter,

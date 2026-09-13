@@ -19,7 +19,7 @@ const buildItems = (count: number): MockGridItem[] =>
 const renderItem = (
   item: MockGridItem,
   index: number,
-  refs: React.MutableRefObject<Map<string, HTMLDivElement>>,
+  refs: React.RefObject<Map<string, HTMLDivElement>>,
   boxSelectedIds: string[],
   clearBoxSelection: () => void,
   activeDragIds: string[],

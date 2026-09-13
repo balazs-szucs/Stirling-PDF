@@ -117,7 +117,7 @@ const PageEditor = ({ onFunctionsReady }: PageEditorProps) => {
   const filesSignature = selectors.getFilesSignature();
 
   const fileObjectsRef = useRef(new Map<FileId, PageEditorFileEntry>());
-  const gridItemRefsRef = useRef<React.MutableRefObject<
+  const gridItemRefsRef = useRef<React.RefObject<
     Map<string, HTMLDivElement>
   > | null>(null);
 
@@ -614,7 +614,7 @@ const PageEditor = ({ onFunctionsReady }: PageEditorProps) => {
     (
       page: PDFPage,
       index: number,
-      refs: React.MutableRefObject<Map<string, HTMLDivElement>>,
+      refs: React.RefObject<Map<string, HTMLDivElement>>,
       boxSelectedIds: string[],
       clearBoxSelection: () => void,
       activeDragIds: string[],

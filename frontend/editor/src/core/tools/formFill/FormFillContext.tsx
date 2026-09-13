@@ -303,7 +303,7 @@ export interface FormFillContextValue {
   clearSkippedEdits: () => void;
 
   /** True while a field is being dragged, so Escape handlers elsewhere stand down. */
-  dragActiveRef: React.MutableRefObject<boolean>;
+  dragActiveRef: React.RefObject<boolean>;
 }
 
 const FormFillContext = createContext<FormFillContextValue | null>(null);

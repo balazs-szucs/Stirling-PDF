@@ -42,7 +42,7 @@ interface AutomationCreationProps {
   /** Called when an external save trigger fires but the form isn't in a saveable state. */
   onSaveFailed?: () => void;
   /** When provided, the host can trigger save imperatively (the internal Save button is hidden). */
-  saveTriggerRef?: React.MutableRefObject<(() => void) | null>;
+  saveTriggerRef?: React.RefObject<(() => void) | null>;
 }
 
 export default function AutomationCreation({

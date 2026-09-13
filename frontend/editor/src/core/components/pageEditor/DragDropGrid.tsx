@@ -51,7 +51,7 @@ interface DragDropGridProps<T extends DragDropItem> {
   renderItem: (
     item: T,
     index: number,
-    refs: React.MutableRefObject<Map<string, HTMLDivElement>>,
+    refs: React.RefObject<Map<string, HTMLDivElement>>,
     boxSelectedIds: string[],
     clearBoxSelection: () => void,
     activeDragIds: string[],
@@ -79,7 +79,7 @@ interface DropHint {
 
 function resolveDropHint(
   activeId: string | null,
-  itemRefs: React.MutableRefObject<Map<string, HTMLDivElement>>,
+  itemRefs: React.RefObject<Map<string, HTMLDivElement>>,
   cursorX: number,
   cursorY: number,
 ): DropHint {
@@ -220,7 +220,7 @@ function resolveTargetIndex<T extends DragDropItem>(
 interface DraggableItemProps<T extends DragDropItem> {
   item: T;
   index: number;
-  itemRefs: React.MutableRefObject<Map<string, HTMLDivElement>>;
+  itemRefs: React.RefObject<Map<string, HTMLDivElement>>;
   boxSelectedPageIds: string[];
   clearBoxSelection: () => void;
   activeDragIds: string[];
@@ -232,7 +232,7 @@ interface DraggableItemProps<T extends DragDropItem> {
   renderItem: (
     item: T,
     index: number,
-    refs: React.MutableRefObject<Map<string, HTMLDivElement>>,
+    refs: React.RefObject<Map<string, HTMLDivElement>>,
     boxSelectedIds: string[],
     clearBoxSelection: () => void,
     activeDragIds: string[],
