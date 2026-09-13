@@ -24,7 +24,7 @@ export interface IFormDataProvider {
    */
   fetchFields(
     file: File | Blob,
-    options?: { exhaustive?: boolean },
+    options?: { exhaustive?: boolean; pageIndices?: number[] },
   ): Promise<FormField[]>;
 
   /**
