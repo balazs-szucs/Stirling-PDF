@@ -8,10 +8,9 @@ Status: **local only, never pushed**. The working tree is clean and the branch i
 kept for a 2nd/3rd agent pass. Do not push or open PRs without the owner's
 explicit approval.
 
-## Current State — convergence pass (2026-09-13, HEAD `5f98b13c6`)
+## Current State — convergence pass snapshot (2026-09-13 mid-day, HEAD `5f98b13c6`; SUPERSEDED — the R1–R7 "Aggressive Refactor Pass" and later sections below landed after this snapshot, and the latest archive section wins)
 
-Single authoritative section; dated sections below are the archive. Where
-they disagree with this section, this section wins.
+Single mid-day snapshot; the dated sections below are the archive **and supersede this block where they disagree** (this block predates the R1–R7 stack and the review fix-ups).
 
 ### P0 record
 
@@ -1824,4 +1823,75 @@ default+form+huge green; batch 60+1-ambiguous; corpus branch-arm 60/60;
 excluded probes/snapshots/logs (`r2-residency.*`, `r2-residency-open/
 -removed.heapsnapshot`); nothing committed from it. No pushes, no
 upstream branches touched, no binary rebuilds.
+
+---
+
+## New-Angles Pass v5 — render loop + platform watchlist (2026-09-13, CLI; loaded machine, timings UNVERIFIED except interleaved A/B separation)
+
+No production code changed; no commit from this pass. Deliverables under
+`frontend/editor/.perf-local/`: `watchlist-report.md` (37 rows + 19 sweep rows + coverage
+statement), `angles/n1..n5,n67`, `memos/` (memory64, memory64-simd-rebuild,
+canvas-ownership-inversion, multitab-sharedworker, coop-coep-refresh),
+`findings-pass-v5.md`, `greenlight-pass-v5.md`, scratch specs `n1/n2/n5/n67-*.local.spec.ts`
+(all git-excluded), raw logs `n1-run1.log`, `n2-run{3,4}.log`, `n5-run{1,2,3}.log`,
+`n67-run1.log`, `p0-repro.log`.
+
+- **N1 (flagship) — measured, not landed: abandoned jumps are not cancellable.** n=5 interleaved,
+  ranges disjoint: completed jump 1→450 = 1055 ms main task / 202 BMP rasters; abandon
+  (1→450→1) = 1983 ms / 411. The `TaskQueue` can abort queue-resident tasks but
+  render/tiling/viewport never call `.abort()`; a running wasm raster is not interruptible.
+  Binary-export gate passed (`FPDF_RenderPageBitmap_Start`/`FPDF_RenderPage_Continue`/
+  `FPDF_RenderPage_Close`/`FPDF_LoadCustomDocument` present in the pinned 2.15.0 wasm).
+  Greenlight NG-01 (cancel-on-invisible) is the minimal slice; NG-02 is the progressive decision.
+- **N2 — negative, permanent:** the engine's BMP rasters are fully opaque (alpha=255 on
+  722,349/722,349 px); `premultiplyAlpha:'none'`/`colorSpaceConversion:'none'` are pixel-identical
+  no-ops on the present path (all arms equal to raw BMP). `createImageBitmap` decodes ~1.9×
+  faster than `<img>.decode()` (4.4 vs 8.4 ms on 2.9 MB) but adoption is the recorded L R1/T1
+  refactor, below the bar per flow.
+- **N3/N4 — static:** memory64 is standardized (Chrome 133/FF 134, Safari STP 252 shipped
+  2026-09-11, web cap 16 GB); the pinned wasm uses only `SignExt` + `ReferenceTypes` beyond MVP —
+  no SIMD/RelaxedSIMD/BulkMemory/Atomics/Memory64. Rebuild notes in the memos; no action.
+- **N5 — proof-of-life:** headless WebGPU has no adapter (CANNOT-VERIFY); headed shows
+  `copyExternalImageToTexture` 0.5–1.3 ms and `writeTexture` 0.3–0.8 ms per 2.89 MB page.
+  Ownership inversion is the blocker.
+- **N6/N7 — no target found:** pages-500 revisits attach-bound (10–13 ms) with no idle gap or TTL
+  effect up to 6.5 s; gating options (Compute Pressure, Idle Detection) recorded, not adopted.
+
+New SETTLED LAW rows (do not re-open without new decay evidence):
+
+1. **Platform status cells are perishable.** The seeded watchlist decayed inside a week (Safari
+   STP 252 shipped memory64 + multiple memories and fixed `Uint8Array.setFromBase64`; Safari 26.2
+   shipped `wasm:js-string`; `notRestoredReasons` is Chrome 125). Vendor release notes outrank
+   proposal-repo tables and caniuse; re-fetch at decision time (NG-06).
+2. **The pinned pdfium wasm is a scalar build** (`SignExt` + `ReferenceTypes` only; no SIMD/
+   relaxed-SIMD/threads/memory64). Any cross-engine parity claim is encode-path parity (N2), not
+   SIMD nondeterminism; a SIMD rebuild is a bundled-rebuild decision only (NG-08).
+3. **Engine BMP page rasters are fully opaque** — premultiply/color-space decode options cannot
+   change parity on the present path (N2); the known BMP-vs-PNG deltas come from the PNG encode
+   path and are already avoided by keeping BMP.
+4. **Render cancellation exists in the queue but is never called** by the render path; abandoned
+   navigation keeps its raster work (N1). Do not claim “cancellable rendering” until NG-01/NG-02.
+
+## Implementation of pass-v5 recommendations (2026-09-13, CLI; loaded machine)
+
+- **NG-01 minimal:** local `@embedpdf/plugin-tiling` React patch (TileImg) — never mint an object
+  URL after unmount, always abort the stale tile task, SSR-safe DPR; the plugin patch script now
+  supports a second target file and is covered by `check:embedpdf-patch`. N1 probe n=5/arm:
+  blob created == revoked (0 orphans, A 220/220, B 450/450); task/wall unchanged in noise. The
+  running-raster waste stays (worker cannot interrupt a wasm raster) — NG-02 decision unchanged.
+- **Tauri/WebKit:** DevTools watchdog found WebKit downloading the pdfium wasm twice — it does not
+  reuse `<link rel=preload as=fetch>` for `compileStreaming(fetch(url))` (two resource entries,
+  9,268,176 B on the wire); Chromium gained ~10 ms from the preload. The link is gone and the
+  eager compile starts at module evaluation (skipped under vitest): WebKit 2→1 entries /
+  4,634,088 B, Chromium stays 1. Two unused theme-logo preloads removed as well.
+- **DevTools watchdog:** CDP Runtime/Log/Console/Inspector + pageerror/requestfailed/crash over a
+  heavy scenario (open large-40mb → jump 70 → wheel → jump back → zoom → search → resize):
+  Chromium 0 errors/0 warnings; WebKit 0 errors, warnings 4→1 (only the documented IDB blob
+  fallback, fires once per session).
+- **Safety/tests:** `wasmPrecompiler` guards were already feature-detected (no `WebAssembly`,
+  `document`, `compileStreaming` assumptions); new tests pin no-preload, run-once, ArrayBuffer
+  fallback and null-on-failure. NG-03/04/07/08 remain measured no-code decisions.
+- Verification: `task frontend:check` green (394 files / 3494 tests), engine smoke 3/3,
+  `viewer-engine-patch` 6/6, functional viewer e2e 23/23, comment-lint clean.
+
 
