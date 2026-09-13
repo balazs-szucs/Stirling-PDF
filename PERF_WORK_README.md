@@ -744,3 +744,93 @@ completes, the main `documentBytesCache` entry could be dropped and re-read
 from the Blob on demand — but the viewer's `pdfBuffer` state shares the same
 buffer reference, so the release needs viewer-lifecycle coordination. Measured
 on the 155 MB fixture: that copy is 155 MB resident for the session.
+
+## Corpus gauntlet pass 3 (2026-09-13; loaded machine — timings UNVERIFIED, counters deterministic)
+
+First real-file corpus run. 60 stratified files (72.9 MB, sha256 verified 60/60)
+built by `.perf-local/corpus/fetch-corpus.py` (pdf.js `test/pdfs` 43,
+openpreserve govdocs1-error-pdfs 12, veraPDF 5); manifest + runner are
+git-excluded. Tags: corrupted 18, annotated 12, real-world 12, large-real 8,
+forms-acroform 7, text 7, fonts-weird 6, images-heavy 6, conformance 5,
+rotated 4, signed 2, encrypted 2, forms-xfa 2, tagged 2, attachment 2, rtl 1,
+multi-page 1. GovDocs1 itself (S3/archive.org) was not reachable from this
+network; the openpreserve error sets are real GovDocs1 files, and the pdf.js
+suite supplies the real-world variety. Largest openly available real files are
+~8 MB; the 40 MB / 155 MB synthetic fixtures cover the large-file dimension.
+
+Functional matrix (both arms, 60/60 opens):
+- branch: 60 rendered, 0 error surfaces, 0 fatal console/page errors; the
+  AcroForm rows expose widget inputs and the text fill/readback probe works;
+- baseline: 60 rendered; diff vs branch = **zero functional deltas**;
+- pixel parity: 76 paired page captures; the 11 files with >5% deltas were
+  re-captured with a raster-attached wait — worst 7.7%, most <4.4%, inside
+  the known BMP(branch)-vs-PNG(upstream) encoder band (same-arm capture noise
+  was 0.000% in the prior pass). Artifacts: `.perf-local/corpus/out/*`,
+  `arm-diff.json`, `arm-diff-px.json`.
+
+Perf per file (8 diverse files x3 runs/arm, production preview; the loaded
+machine makes timings UNVERIFIED, the counters are deterministic):
+
+| metric (median) | baseline | branch | note |
+| --- | --- | --- | --- |
+| main wasm peak pages | 284 | 284 | p90 2080 -> 1968 |
+| heap after GC (MB) | 18.7 | 15.7 | -16% |
+| long-task total (ms) | 51.5 | 0 | p90 1122 -> 563 |
+| Blob->ArrayBuffer calls | 11.5 | 6.5 | one full read per open |
+| Blob bytes/run (MB) | 0.45 | 0.2 | p90 54.4 -> 15.6 |
+| run duration (ms) | 2889 | 2733 | UNVERIFIED |
+
+No file regressed >15% on wasm peak or heap. `encrypted-attachment.pdf` is the
+only row where the branch instantiates the main module (284 pp) while upstream
+does not (0); both bounded, no action.
+
+New findings (full list + TODOs in the pass report):
+- **G11 (fixed, `a542633f1`)**: the document-manager plugin config kept
+  `initialDocuments` in `window.__embedPdfRegistry` after close, and the
+  registry stayed on window after unmount. The mh15 probe (huge fixture,
+  forced GC) measured the 162,539,566-byte buffer WeakRef alive after removal;
+  clearing the config at `onInitialized` and dropping the window handle on
+  unmount removes that holder (initialDocuments 1 -> 0).
+- **G12 (open, P1)**: the main-thread document ArrayBuffer is still retained
+  after close by a plugin event-listener closure. Heap-snapshot shortest path
+  (mh15, huge fixture): Window -> workspace-frame fiber -> onToggleCollapse
+  closure -> plugin registry -> plugin emitters -> Set -> listener closure ->
+  ArrayBuffer (162,539,566 B). Full release needs the registry/plugin teardown
+  unblocked from React closures.
+- **G13 (open, P2)**: resetting the main PDFium singleton does not release its
+  linear memory. After `resetPdfiumModule()` + forced GC the old
+  `WebAssembly.Memory` (1,598 pp) is still live, held through a resolved
+  promise/async context. An attempted reclaim-on-empty therefore created a
+  second instance on reopen (1,598 -> 1,980 pp, two live memories) and was
+  reverted (helper + tests dropped). Reclaim needs the promise/context
+  retainer removed first. Doc anchors: Emscripten issue #15591 (no way to
+  shrink wasm memory without discarding the instance) and web.dev
+  wasm-memory-debugging (grow detaches views; no GC integration).
+- **G14 (open, P3)**: `documentBytesCache` keeps the bytes as the resolved
+  value of a promise in `WeakMap<Blob, Promise<ArrayBuffer>>`, so a File
+  record pinned by unrelated state keeps the whole buffer alive. The retainer
+  map shows this is not the dominant post-close holder, so the WeakRef-cache
+  variant was measured, not shipped (TODO G14).
+
+Harness state for the next pass:
+- `corpus-gauntlet.local.spec.ts` (git-excluded): manifest runner with
+  functional + form readback probes, optional CDP perf counters, strict
+  raster-attached screenshots; `PERF_LOCAL_DIR`, `PERF_CORPUS`,
+  `PERF_CORPUS_IDS|TAGS|LIMIT|OUT|PERF|RENDER_PAGES|SCREENSHOTS|SETTLE_MS`,
+  `PERF_LABEL`.
+- `fetch-corpus.py`, `diff-arms.mjs`, `aggregate-perf.mjs`,
+  `synthetic-manifest.csv` (all git-excluded).
+- `viewer-memory-soak.spec.ts` counts live wasm instances (WeakRefs instead
+  of strongly held memories) and reports blob finalization under
+  `PERF_FINALIZERS`.
+- New committed contract tests: `documentBytesCache.test.ts`,
+  `pdfiumScanQueue.test.ts`.
+- Raw logs: `run-corpus-{branch,baseline}.log`,
+  `run-px-{branch,baseline}.log`, `run-perf-{branch,baseline}-r{1,2,3}.log`,
+  `result-mh15-{prefix,postfix,weakcache,huge}*.log`,
+  `result-soak-pass3-*.log`, `mh14-after-remove.heapsnapshot`.
+
+Verification for the pass: typecheck/lint clean, 3448/3448 vitest (one
+pre-existing Mantine teardown unhandled timer under full-suite load; the
+file passes 3/3 in isolation), 48 e2e + 1 pre-existing skip, engine smoke
+3/3 browsers, soak 3x (default x2 + form x1), corpus 60/60 on both arms.
