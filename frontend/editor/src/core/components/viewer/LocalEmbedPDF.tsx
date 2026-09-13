@@ -693,7 +693,15 @@ const PageContent = React.memo(function PageContent({
               documentId={documentId}
               pageIndex={pageIndex}
               selectionOutline={{ color: "#007ACC" }}
-              selectionMenu={(props) => <AnnotationSelectionMenu {...props} />}
+              selectionMenu={(props) =>
+                props.context?.type === "annotation" &&
+                props.context.annotation.object.type ===
+                  PdfAnnotationSubtype.REDACT ? (
+                  <RedactionSelectionMenu {...props} />
+                ) : (
+                  <AnnotationSelectionMenu {...props} />
+                )
+              }
               style={
                 !showBakedAnnotations
                   ? { opacity: 0, pointerEvents: "none" }
@@ -1349,70 +1357,70 @@ export function LocalEmbedPDF({
               annotationUnsubscribeRef.current?.();
               annotationUnsubscribeRef.current =
                 annotationApi.onAnnotationEvent((event: AnnotationEvent) => {
-                if (event.type === "create" && event.committed) {
-                  setAnnotations((prev) => [
-                    ...prev,
-                    {
-                      id: event.annotation.id,
-                      pageIndex: event.pageIndex,
-                      rect: event.annotation.rect,
-                    },
-                  ]);
+                  if (event.type === "create" && event.committed) {
+                    setAnnotations((prev) => [
+                      ...prev,
+                      {
+                        id: event.annotation.id,
+                        pageIndex: event.pageIndex,
+                        rect: event.annotation.rect,
+                      },
+                    ]);
 
-                  // If the annotation doesn't have customData.toolId, patch it from the active tool.
-                  // EmbedPDF doesn't always persist customData from setToolDefaults into created annotations.
-                  const annotationId = event.annotation.id;
-                  const existingCustomData = (
-                    event.annotation as unknown as {
-                      customData?: Record<string, unknown>;
-                    }
-                  ).customData;
-                  if (annotationId && !existingCustomData?.toolId) {
-                    const activeTool = (
-                      annotationApi as unknown as {
-                        getActiveTool?: () => { id: string } | null;
+                    // If the annotation doesn't have customData.toolId, patch it from the active tool.
+                    // EmbedPDF doesn't always persist customData from setToolDefaults into created annotations.
+                    const annotationId = event.annotation.id;
+                    const existingCustomData = (
+                      event.annotation as unknown as {
+                        customData?: Record<string, unknown>;
                       }
-                    ).getActiveTool?.();
-                    if (activeTool?.id && activeTool.id !== "select") {
+                    ).customData;
+                    if (annotationId && !existingCustomData?.toolId) {
+                      const activeTool = (
+                        annotationApi as unknown as {
+                          getActiveTool?: () => { id: string } | null;
+                        }
+                      ).getActiveTool?.();
+                      if (activeTool?.id && activeTool.id !== "select") {
+                        (
+                          annotationApi as unknown as {
+                            updateAnnotation?: (
+                              page: number,
+                              id: string,
+                              patch: Record<string, unknown>,
+                            ) => void;
+                          }
+                        ).updateAnnotation?.(event.pageIndex, annotationId, {
+                          customData: {
+                            ...(existingCustomData ?? {}),
+                            toolId: activeTool.id,
+                          },
+                        });
+                      }
+                    }
+
+                    // Auto-select the annotation after creation so the selection menu appears immediately,
+                    // letting users discover the editing options before they click away.
+                    if (annotationId) {
                       (
                         annotationApi as unknown as {
-                          updateAnnotation?: (
-                            page: number,
+                          selectAnnotation?: (
+                            pageIndex: number,
                             id: string,
-                            patch: Record<string, unknown>,
                           ) => void;
                         }
-                      ).updateAnnotation?.(event.pageIndex, annotationId, {
-                        customData: {
-                          ...(existingCustomData ?? {}),
-                          toolId: activeTool.id,
-                        },
-                      });
+                      ).selectAnnotation?.(event.pageIndex, annotationId);
                     }
-                  }
 
-                  // Auto-select the annotation after creation so the selection menu appears immediately,
-                  // letting users discover the editing options before they click away.
-                  if (annotationId) {
-                    (
-                      annotationApi as unknown as {
-                        selectAnnotation?: (
-                          pageIndex: number,
-                          id: string,
-                        ) => void;
-                      }
-                    ).selectAnnotation?.(event.pageIndex, annotationId);
+                    if (onSignatureAdded) {
+                      onSignatureAdded(event.annotation);
+                    }
+                  } else if (event.type === "delete" && event.committed) {
+                    setAnnotations((prev) =>
+                      prev.filter((ann) => ann.id !== event.annotation.id),
+                    );
                   }
-
-                  if (onSignatureAdded) {
-                    onSignatureAdded(event.annotation);
-                  }
-                } else if (event.type === "delete" && event.committed) {
-                  setAnnotations((prev) =>
-                    prev.filter((ann) => ann.id !== event.annotation.id),
-                  );
-                }
-              });
+                });
             }
           }}
         >
@@ -1447,10 +1455,7 @@ export function LocalEmbedPDF({
           <DocumentReadyWrapper
             fallback={
               <ToolLoadingFallback
-                label={t(
-                  "viewer.preparingDocument",
-                  "Preparing document...",
-                )}
+                label={t("viewer.preparingDocument", "Preparing document...")}
               />
             }
           >

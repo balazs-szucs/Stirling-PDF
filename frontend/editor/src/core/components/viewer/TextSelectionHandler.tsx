@@ -19,6 +19,33 @@ const TRIPLE_CLICK_POSITION_THRESHOLD = 20;
 
 const WORD_CHAR_REGEX = /[\p{L}\p{N}_]/u;
 
+/**
+ * begin/update/end are runtime-public but typed private (same cast as
+ * SelectionAPIBridge). `setSelection()` is not a substitute: it emits
+ * `selChange$` only, while the annotation/redaction plugins build marks on
+ * `endSelection$`, so a word selected that way never becomes a redaction.
+ */
+type SelectionPluginInternals = {
+  clearSelection: (id: string) => void;
+  beginSelection: (id: string, page: number, glyph: number) => void;
+  updateSelection: (id: string, page: number, glyph: number) => void;
+  endSelection: (id: string) => void;
+};
+
+export function setSelectionRange(
+  selPlugin: unknown,
+  documentId: string,
+  pageIndex: number,
+  startIndex: number,
+  endIndex: number,
+): void {
+  const plugin = selPlugin as SelectionPluginInternals;
+  plugin.clearSelection(documentId);
+  plugin.beginSelection(documentId, pageIndex, startIndex);
+  plugin.updateSelection(documentId, pageIndex, endIndex);
+  plugin.endSelection(documentId);
+}
+
 function findRunForGlyph(
   geo: PdfPageGeometry,
   glyphIndex: number,
@@ -211,18 +238,12 @@ export function TextSelectionHandler({
                 y: pos.y,
               };
 
-              selCapability.setSelection(
-                {
-                  start: {
-                    page: pageIndex,
-                    index: run.charStart + boundaries.start,
-                  },
-                  end: {
-                    page: pageIndex,
-                    index: run.charStart + boundaries.end,
-                  },
-                },
+              setSelectionRange(
+                selPlugin,
                 documentId,
+                pageIndex,
+                run.charStart + boundaries.start,
+                run.charStart + boundaries.end,
               );
             },
             () => {
@@ -264,12 +285,12 @@ export function TextSelectionHandler({
           tripleClickTimeRef.current = now;
           lastDblClickRef.current = null;
 
-          selCapability.setSelection(
-            {
-              start: { page: pageIndex, index: line.start },
-              end: { page: pageIndex, index: line.end },
-            },
+          setSelectionRange(
+            selPlugin,
             documentId,
+            pageIndex,
+            line.start,
+            line.end,
           );
         }
       },

@@ -1,7 +1,7 @@
-import {
-  useRedaction as useEmbedPdfRedaction,
-  RedactionSelectionMenuProps,
-} from "@embedpdf/plugin-redaction/react";
+import { useRedaction as useEmbedPdfRedaction } from "@embedpdf/plugin-redaction/react";
+import type { RedactionSelectionMenuProps as EmbedRedactionSelectionMenuProps } from "@embedpdf/plugin-redaction/react";
+import type { AnnotationSelectionMenuProps } from "@embedpdf/plugin-annotation/react";
+import { PdfAnnotationSubtype } from "@embedpdf/models";
 import { Tooltip, Group } from "@mantine/core";
 import { Button } from "@app/ui/Button";
 import { ActionIcon } from "@app/ui/ActionIcon";
@@ -13,7 +13,15 @@ import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import { useRedaction } from "@app/contexts/RedactionContext";
 import { useActiveDocumentId } from "@app/components/viewer/useActiveDocumentId";
 
-export type { RedactionSelectionMenuProps };
+/**
+ * With `useAnnotationMode: true` pending redactions are REDACT annotations, so
+ * the menu is fed an annotation context rather than a legacy redaction item.
+ * Handling only the redaction context leaves selected marks with the generic
+ * annotation menu (no Apply/Remove).
+ */
+export type RedactionSelectionMenuProps =
+  | EmbedRedactionSelectionMenuProps
+  | AnnotationSelectionMenuProps;
 
 export function RedactionSelectionMenu(props: RedactionSelectionMenuProps) {
   const activeDocumentId = useActiveDocumentId();
@@ -34,9 +42,14 @@ function RedactionSelectionMenuInner({
   selected,
   menuWrapperProps,
 }: RedactionSelectionMenuProps & { documentId: string }) {
-  const item = context?.type === "redaction" ? context.item : null;
+  const annotationObject =
+    context?.type === "annotation" ? context.annotation.object : null;
+  const item = context?.type === "redaction" ? context.item : annotationObject;
 
-  const isRedaction = context?.type === "redaction";
+  const isRedaction =
+    context?.type === "redaction" ||
+    (context?.type === "annotation" &&
+      annotationObject?.type === PdfAnnotationSubtype.REDACT);
 
   const pageIndex = context?.pageIndex;
   const { t } = useTranslation();
