@@ -558,6 +558,7 @@ export interface PdfiumFormField {
   flags: number;
   options: Array<{ label: string; isSelected: boolean }>;
   widgets: PdfiumWidgetRect[];
+  _tooltip?: string | null;
 }
 
 export interface PdfiumWidgetRect {
@@ -573,7 +574,7 @@ export interface PdfiumWidgetRect {
 }
 
 /**
- * Extract all form fields (Widget annotations) from every page of a document.
+ * Extract form fields (Widget annotations) from specified or all pages of a document.
  *
  * Returns an array of parsed form fields with their widget rectangles already
  * converted to CSS coordinate space (upper-left origin).
@@ -581,6 +582,7 @@ export interface PdfiumWidgetRect {
 export async function extractFormFields(
   data: ArrayBuffer | Uint8Array,
   password?: string,
+  pageIndices?: number[],
 ): Promise<PdfiumFormField[]> {
   const m = await getPdfiumModule();
   let docPtr: number;
@@ -608,7 +610,16 @@ export async function extractFormFields(
     // Map: fieldName → PdfiumFormField (to merge widgets across pages)
     const fieldMap = new Map<string, PdfiumFormField>();
 
-    for (let pageIdx = 0; pageIdx < pageCount; pageIdx++) {
+    const targetPages: number[] = [];
+    if (Array.isArray(pageIndices) && pageIndices.length > 0) {
+      for (const idx of pageIndices) {
+        if (idx >= 0 && idx < pageCount) targetPages.push(idx);
+      }
+    } else {
+      for (let i = 0; i < pageCount; i++) targetPages.push(i);
+    }
+
+    for (const pageIdx of targetPages) {
       let pagePtr: number;
       try {
         pagePtr = m.FPDF_LoadPage(docPtr, pageIdx);
@@ -956,11 +967,38 @@ function this_extractAnnotation(
       }
     }
 
+    // Read alternate name (tooltip / TU entry)
+    let tooltip: string | null = null;
+    if (formEnvPtr) {
+      try {
+        const altLen = m.FPDFAnnot_GetFormFieldAlternateName(
+          formEnvPtr,
+          annotPtr,
+          0,
+          0,
+        );
+        if (altLen > 0) {
+          const altBuf = m.pdfium.wasmExports.malloc(altLen);
+          m.FPDFAnnot_GetFormFieldAlternateName(
+            formEnvPtr,
+            annotPtr,
+            altBuf,
+            altLen,
+          );
+          tooltip = readUtf16(m, altBuf, altLen) || null;
+          m.pdfium.wasmExports.free(altBuf);
+        }
+      } catch {
+        // Alternate name extraction non-critical
+      }
+    }
+
     // Merge into field map (multiple widgets can share a field name)
     if (fieldName) {
       const existing = fieldMap.get(fieldName);
       if (existing) {
         if (widgetRect) existing.widgets.push(widgetRect);
+        if (tooltip && !existing._tooltip) existing._tooltip = tooltip;
       } else {
         fieldMap.set(fieldName, {
           name: fieldName,
@@ -972,6 +1010,7 @@ function this_extractAnnotation(
           flags: fieldFlags,
           options,
           widgets: widgetRect ? [widgetRect] : [],
+          _tooltip: tooltip,
         });
       }
     }
