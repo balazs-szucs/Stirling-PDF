@@ -18,20 +18,35 @@ const MAX_CACHE_SIZE = 25;
 const blobIdentityKeys = new WeakMap<Blob, string>();
 let blobIdentityCounter = 0;
 
+const blobFinalizers =
+  typeof FinalizationRegistry !== "undefined"
+    ? new FinalizationRegistry<string>((key) => {
+        evictFileUrl(key);
+      })
+    : null;
+
 function blobIdentityKey(blob: Blob): string {
   let key = blobIdentityKeys.get(blob);
   if (!key) {
     key = `blob-identity-${++blobIdentityCounter}`;
     blobIdentityKeys.set(blob, key);
+    blobFinalizers?.register(blob, key, blob);
   }
   return key;
 }
 
 /**
- * Drop and revoke a cached URL by its stable key. Call when the file leaves
+ * Drop and revoke a cached URL by its stable key, File, or Blob. Call when the file leaves
  * the workbench so a deleted document cannot stay pinned by the LRU.
  */
-export function evictFileUrl(key: string): void {
+export function evictFileUrl(target: string | File | Blob): void {
+  const key =
+    typeof target === "string"
+      ? target
+      : target instanceof File
+        ? `${target.name}-${target.size}-${target.lastModified}`
+        : blobIdentityKeys.get(target);
+  if (!key) return;
   const url = globalUseFileWithUrlCache.get(key);
   if (!url) return;
   globalUseFileWithUrlCache.delete(key);
