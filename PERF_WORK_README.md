@@ -613,3 +613,100 @@ New open findings (all with reproduction logs under `.perf-local/`,
 - Bare-Blob keys are now identity-stable but still only LRU-evictable;
   `destroyThumbnails` still settles nothing for in-flight requesters
   (backlog items 3-4 above stand).
+
+## Memory-hunt pass 2 (2026-09-13; semi-idle machine: counts/drifts verified, timings UNVERIFIED)
+
+Protocol: the owner greenlit semi-idle runs. Load 5-9/18 cores with desktop
+processes >5% sustained, so every timing number is UNVERIFIED; drift ratios,
+CDP counters, page counts and heap-snapshot diffs are treated as the
+deterministic evidence. Base for this pass: `9875f37f2` (tree carried two
+uncommitted fixes from the previous session, adopted and committed).
+
+Shipped (one commit each):
+
+| Commit | Change | Evidence |
+| --- | --- | --- |
+| `d786c1822` | Adopted the leftover `sharedReleasePending` fix: release-on-last-reader instead of force-close-under-reader; stale zero-ref close can no longer double-close; `resetPdfiumModule` drops the handle instead of closing through a dead module | New `pdfiumService.sharedDocument.test.ts` — release-defer / stale-close / reset-with-reader assertions 4/6 red pre-fix, 6/6 green post-fix. The deferred path is unreachable from today's macrotask callers (all reader windows are microtask-scoped), so no behavior change on current paths |
+| `789a573e6` | Adopted the `SignaturePreviewLayer` pointercancel fix: cancelled drags/resizes now run the same teardown | New `SignaturePreviewLayer.gestures.test.tsx` — 3/3 red pre-fix, 3/3 green post-fix |
+| `4fa05005d` | Soak: new `workers` series + budget (drift 0) | Measured 3 -> 3 over 12 cycles, both phases |
+
+F10 (form-fixture retained-heap drift) — CONFIRMED, root named:
+
+- Reproduced twice: 12-cycle form soaks drift 1.38x/1.41x (documented 1.39x;
+  one earlier run today read 1.64x under heavier load).
+- Snapshot pair (form fixture, iter5/12): **+11 PNG data-URL strings
+  (+9.4 MB)**; 18 data-URL strings alive at cycle 12 = 14.5 MB. The strings
+  are `processedFile.thumbnailUrl` on file records (~854 KB per upload).
+- Retainers (dev-server snapshot with readable names,
+  `form-dev-snapshot-iter5.heapsnapshot` + prod pair
+  `soak-snapshot-iter{5,12}.heapsnapshot`): stale React state versions —
+  FileSidebar `allFileStubs` arrays pinned via `onUploaded` props and
+  `refreshStubs`↔`handleSaveToCloud` closure chains on mounted fibers in the
+  file-sidebar subtree, plus FileContext `files.byId[uuid]` records pinned via
+  context closure chains (28 uuid-keyed record objects over multiple context
+  states in the prod snapshot). Deletion removes the live record; older state
+  versions keep the strings reachable.
+- Class: cross-component lifecycle (React state/closure retention), so this is
+  a proposal, not a quick fix. Options and tradeoffs in the greenlight table.
+
+F11 (form reopen ratchet) — NOT REPRODUCED; do not cite it further:
+
+- Two production 12-cycle form soaks: main WASM flat (1215 pp / 1799 pp
+  runs; no per-cycle growth). Absolute main-WASM readings on the form fixture
+  are not stable run-to-run (~36 MB offset between runs), but no ratchet.
+- Cross-document probe (`mh11-worker-ratchet.local.spec.ts`): one session,
+  huge→form→large ×2. Main module converges 284 → 1070 → 1651 pp after the
+  first pass and stays flat through the second; worker flat at 3010 pp
+  (188.1 MB) from the first huge open through six subsequent opens. **No
+  allocator churn-ratchet exists on current code.** The worker 188 MB floor is
+  the first huge document's high-water; only respawn reclaims it.
+
+New finding (small, class B): `HistoryAPIBridge` never prunes
+`imageDataStore` entries — every STAMP undo/redo/crop-recreation mints a new
+annotation id and stores the image under it (`HistoryAPIBridge.tsx:78`,
+`:149`); the old id's entry (full image data URL/blob) is unreachable but
+retained for the page lifetime. Bounded by undo/redo actions per session.
+
+Verified clean (do not re-hunt without new evidence):
+
+- One full read per open on current code (PERF_STACKS stacks: one
+  42,401,895-byte read + four 64 KB/1-byte probes). The known pdfbox-mode
+  `file.arrayBuffer()` at `PdfiumFormProvider.ts:594` is latent (providerMode
+  default is pdflib).
+- Patched worker→main transfers detach on the sender: corrected probe reads
+  `byteLength === 0` after postMessage on both transferred buffers
+  (`mh12-transfer-detach.local.spec.ts`, MDN Transferable objects cited). Probe
+  visibility caveat: only ~2 of ~99 worker postMessage calls route through the
+  wrapped `self.postMessage`; the main-side transfer counters are the complete
+  signal.
+- Our own workers (`pixelCompareWorker`, `compareWorker`) never use transfer
+  lists — no detach hazard.
+- HEAPU8/HEAPF32 staleness: every site reads `.HEAPU8`/`.HEAPF32` fresh;
+  views over the heap buffer are consumed before any wasm call that could
+  grow (`renderWidgetAppearance` passes the wasm pointer, not the view).
+- malloc/free pairing across the service layer: no unpaired malloc site.
+- Overlay caches clear on document-leave AND unmount; `FormFillContext`
+  resets on every fetch; form field/edit state deliberately persists
+  (product semantics), values store cleared per fetch.
+
+Harness state for the next pass:
+
+- `perf-baseline.local.spec.ts`: `wasmLive`/`wasmPeak` retired (report null);
+  50 ms wasm sampling in place; **new `PERF_SCROLL_WHEEL=1` +
+  `PERF_SCROLL_STEPS`** scrolls the container past the virtualizer's mounted
+  window (records `pagesRenderedPeaks`); default scroll unchanged.
+- `viewer-memory-soak.spec.ts` budgets: object URLs ≤2, DOM nodes ≤50,
+  listeners ≤10, worker wasm pages ≤64, heap <1.25x, **workers drift 0**
+  (all with measured justifications in the spec).
+- `PERF_SNAPSHOTS=1` (heap snapshot pair at cycle 5/N), `PERF_FINALIZERS=1`
+  (page-element finalizer) unchanged.
+- `trace-retainers.py` fixed: element edges carry ordinals, not string
+  indices (crashed on large snapshots before).
+- New local probes (git-excluded): `mh11-worker-ratchet.local.spec.ts`
+  (SOAK_FIXTURES=a,b,c rotation), `mh12-transfer-detach.local.spec.ts`.
+- Raw logs: `result-soak-recon-*`, `result-recon-*`, `result-mh11-*`,
+  `result-mh12-*`. Snapshot pairs: form fixture prod
+  (`soak-snapshot-iter{5,12}.heapsnapshot`) + dev readable
+  (`form-dev-snapshot-iter5.heapsnapshot`).
+- Re-baselined S5 section in `.perf-local/BASELINE.md` (all fixtures, current
+  build; timings UNVERIFIED, loaded machine).
