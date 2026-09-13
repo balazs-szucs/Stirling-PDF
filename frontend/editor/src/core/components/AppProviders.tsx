@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useMemo, useState } from "react";
+import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
 if (import.meta.env.DEV) {
   void import("@app/debug/memoryTelemetry");
 }
@@ -54,6 +54,14 @@ import { PdfEngineProvider } from "@embedpdf/engines/react";
 import { pdfiumWasmUrl } from "@app/services/wasmPrecompiler";
 import { getLocalFontFallbackConfig } from "@app/services/pdfiumFontFallback";
 import { useLocalPdfiumEngine } from "@app/hooks/useLocalPdfiumEngine";
+import { useFileSelector } from "@app/contexts/file/fileHooks";
+import {
+  consumeRemovedDocumentBytes,
+} from "@app/services/engineRespawnSignal";
+
+// Aligned with LARGE_PDF_PARSE_LIMIT: documents this size never open on the
+// main thread, so the engine worker took the full clone and owns the floor.
+const ENGINE_RESPAWN_THRESHOLD_BYTES = 100 * 1024 * 1024;
 
 function PosthogTrackingInitializer() {
   usePosthogTracking();
@@ -121,6 +129,32 @@ function ServerDefaultsSync() {
 }
 
 /**
+ * Respawns the app-level PDFium worker when the workbench empties right after
+ * a very large document. Wasm linear memory only grows, so the worker keeps
+ * its post-open high-water (188 MB for a 155 MB file) for the whole session;
+ * terminating and rebuilding the engine worker from the precompiled module is
+ * the only reclaim. Runs with no document loaded, so no engine task can be
+ * mid-flight; the hook's cooldown blocks close/open churn.
+ */
+function EngineRespawnWatcher({ respawn }: { respawn: () => void }) {
+  const fileCount = useFileSelector((s) => s.files.ids.length);
+  const respawnedEmptyRef = useRef(false);
+  useEffect(() => {
+    if (fileCount > 0) {
+      respawnedEmptyRef.current = false;
+      return;
+    }
+    if (respawnedEmptyRef.current) return;
+    respawnedEmptyRef.current = true;
+    const bytes = consumeRemovedDocumentBytes();
+    if (bytes >= ENGINE_RESPAWN_THRESHOLD_BYTES) {
+      respawn();
+    }
+  }, [fileCount, respawn]);
+  return null;
+}
+
+/**
  * Core application providers
  * Contains all providers needed for the core
  */
@@ -132,7 +166,7 @@ export function AppProviders({
   const [queryClient] = useState(createAppQueryClient);
   // Stable identity: useLocalPdfiumEngine recreates the engine whenever this prop changes.
   const fontFallback = useMemo(() => getLocalFontFallbackConfig(), []);
-  const { engine, isLoading, error } = useLocalPdfiumEngine({
+  const { engine, isLoading, error, respawnEngine } = useLocalPdfiumEngine({
     wasmUrl: pdfiumWasmUrl,
     encoderPoolSize:
       typeof navigator !== "undefined" && navigator.hardwareConcurrency
@@ -167,6 +201,7 @@ export function AppProviders({
                     enableUrlSync={true}
                     enablePersistence={true}
                   >
+                    <EngineRespawnWatcher respawn={respawnEngine} />
                     <FolderProvider>
                       <AppInitializer />
                       <BrandingAssetManager />
