@@ -9,7 +9,8 @@ export class ResourceManager {
   private static blobUrls = new Set<string>();
 
   /**
-   * Create a blob URL and track it for cleanup
+   * Currently unused (no callers repo-wide): keep routing through here so a
+   * revived caller cannot leak the underlying Blob.
    */
   static createBlobUrl(blob: Blob): string {
     const url = URL.createObjectURL(blob);

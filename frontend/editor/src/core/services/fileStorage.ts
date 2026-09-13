@@ -1120,7 +1120,8 @@ class FileStorageService {
   }
 
   /**
-   * Create blob URL for stored file data
+   * Currently unused (no callers repo-wide). A future caller must revoke the
+   * returned URL; nothing tracks it.
    */
   async createBlobUrl(id: FileId): Promise<string | null> {
     try {
