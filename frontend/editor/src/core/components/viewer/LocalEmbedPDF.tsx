@@ -395,7 +395,11 @@ import { BookmarkAPIBridge } from "@app/components/viewer/BookmarkAPIBridge";
 import { AttachmentAPIBridge } from "@app/components/viewer/AttachmentAPIBridge";
 import { PrintAPIBridge } from "@app/components/viewer/PrintAPIBridge";
 import { isPdfFile } from "@app/utils/fileUtils";
-import { getDocumentBytes } from "@app/services/documentBytesCache";
+import {
+  getDocumentBytes,
+  releaseDocumentBytes,
+  LARGE_DOC_CACHE_DROP_THRESHOLD,
+} from "@app/services/documentBytesCache";
 import { useTranslation } from "react-i18next";
 import { LinkLayer } from "@app/components/viewer/LinkLayer";
 import { TextSelectionHandler } from "@app/components/viewer/TextSelectionHandler";
@@ -924,11 +928,12 @@ export function LocalEmbedPDF({
     // re-renders. When only url is provided, depend on url directly so changes are picked up.
   }, [url, file ? fileStableKey : null]);
 
-  const [pdfBuffer, setPdfBuffer] = useState<ArrayBuffer | null>(null);
+  const [isBufferReady, setIsBufferReady] = useState(false);
+  const initialBufferRef = useRef<ArrayBuffer | null>(null);
 
   // The annotation plugin keeps `onGlobal` listeners for the registry's whole
   // life (no plugin destroy override clears them), and this component's
-  // listener shares the component scope that also holds `pdfBuffer`. Without
+  // listener shares the component scope that also holds `initialBufferRef`. Without
   // the unsubscribe the listener pins the document bytes after unmount.
   const annotationUnsubscribeRef = useRef<(() => void) | null>(null);
 
@@ -936,11 +941,15 @@ export function LocalEmbedPDF({
   // receives the document data via buffer rather than failing to fetch partitioned blob URLs.
   useEffect(() => {
     let cancelled = false;
-    setPdfBuffer(null);
+    setIsBufferReady(false);
+    initialBufferRef.current = null;
     if (file && typeof (file as Blob).arrayBuffer === "function") {
       getDocumentBytes(file as Blob)
         .then((buf) => {
-          if (!cancelled) setPdfBuffer(buf);
+          if (!cancelled) {
+            initialBufferRef.current = buf;
+            setIsBufferReady(true);
+          }
         })
         .catch((err) => {
           console.error(
@@ -950,13 +959,17 @@ export function LocalEmbedPDF({
         });
       return () => {
         cancelled = true;
+        initialBufferRef.current = null;
       };
     }
     if (url) {
       fetch(url)
         .then((r) => r.arrayBuffer())
         .then((buf) => {
-          if (!cancelled) setPdfBuffer(buf);
+          if (!cancelled) {
+            initialBufferRef.current = buf;
+            setIsBufferReady(true);
+          }
         })
         .catch((err) => {
           console.error(
@@ -966,9 +979,10 @@ export function LocalEmbedPDF({
         });
       return () => {
         cancelled = true;
+        initialBufferRef.current = null;
       };
     }
-    setPdfBuffer(null);
+    setIsBufferReady(false);
   }, [file ? fileStableKey : null, url]);
 
   // Field-appearance overlays cache per-page bitmaps keyed by document. Drop
@@ -1015,8 +1029,8 @@ export function LocalEmbedPDF({
     // When a File object is the source, we MUST wait for the buffer, the
     // worker cannot fetch partitioned blob: URLs.  pdfUrl is still created
     // (for thumbnails etc.) but plugins must not start until the buffer lands.
-    if (file && !pdfBuffer) return [];
-    if (!pdfBuffer && !pdfUrl) return [];
+    if (file && !isBufferReady) return [];
+    if (!isBufferReady && !pdfUrl) return [];
 
     const deviceMemory =
       typeof navigator !== "undefined"
@@ -1027,10 +1041,10 @@ export function LocalEmbedPDF({
 
     return [
       createPluginRegistration(DocumentManagerPluginPackage, {
-        initialDocuments: pdfBuffer
+        initialDocuments: initialBufferRef.current
           ? [
               {
-                buffer: pdfBuffer,
+                buffer: initialBufferRef.current,
                 name: exportFileName,
               },
             ]
@@ -1129,7 +1143,7 @@ export function LocalEmbedPDF({
 
       createPluginRegistration(PrintPluginPackage),
     ];
-  }, [!!file, pdfBuffer, pdfUrl, enableAnnotations, exportFileName]);
+  }, [!!file, isBufferReady, pdfUrl, enableAnnotations, exportFileName]);
 
   // Retrieve the global engine instance from context
   const { engine, isLoading, error } = useEngineContext();
@@ -1249,7 +1263,7 @@ export function LocalEmbedPDF({
   }
 
   const hasInput = Boolean(file || url);
-  const isInputReady = Boolean(pdfBuffer || (!file && pdfUrl));
+  const isInputReady = Boolean(isBufferReady || (!file && pdfUrl));
 
   if (isLoading || !engine || (hasInput && !isInputReady)) {
     return (
@@ -1335,6 +1349,48 @@ export function LocalEmbedPDF({
               }
             } catch {
               // Registry layout changed or plugin absent: nothing to clear.
+            }
+
+            // Release the main-thread buffer and cache entry for large documents (>= 100MB)
+            // after the worker clone lands, so ~150MB is not pinned on the main thread.
+            const releaseLargeBuffer = () => {
+              if (
+                file &&
+                (file as Blob).size >= LARGE_DOC_CACHE_DROP_THRESHOLD
+              ) {
+                initialBufferRef.current = null;
+                releaseDocumentBytes(file as Blob);
+                console.debug(
+                  "[LocalEmbedPDF] Released main-thread document buffer for large file:",
+                  (file as File).name || "blob",
+                );
+              } else {
+                initialBufferRef.current = null;
+              }
+            };
+
+            try {
+              const docManager = registry.getPlugin("document-manager");
+              if (docManager && docManager.provides) {
+                const docManagerApi = docManager.provides() as {
+                  getActiveDocument?: () => unknown;
+                  onDocumentOpened?: (cb: () => void) => () => void;
+                };
+                if (docManagerApi.getActiveDocument?.()) {
+                  releaseLargeBuffer();
+                } else if (docManagerApi.onDocumentOpened) {
+                  const unsub = docManagerApi.onDocumentOpened(() => {
+                    unsub?.();
+                    releaseLargeBuffer();
+                  });
+                } else {
+                  releaseLargeBuffer();
+                }
+              } else {
+                releaseLargeBuffer();
+              }
+            } catch {
+              releaseLargeBuffer();
             }
             // v2.0: Use registry.getPlugin() to access plugin APIs
             const annotationPlugin = registry.getPlugin("annotation");

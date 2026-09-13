@@ -48,7 +48,42 @@ function rememberFileKey(key: string, buffer: ArrayBuffer): void {
   }
 }
 
+/** Files at or above this threshold have their main-thread cache dropped after worker load. */
+export const LARGE_DOC_CACHE_DROP_THRESHOLD = 100 * 1024 * 1024; // 100 MB
+
+let _totalReads = 0;
+let _reReads = 0;
+const _seenFileKeys = new Set<string>();
+
+/**
+ * Statistics on documentBytesCache reads for profiling and test assertions.
+ */
+export function getDocumentBytesStats(): { totalReads: number; reReads: number } {
+  return { totalReads: _totalReads, reReads: _reReads };
+}
+
+export function resetDocumentBytesStats(): void {
+  _totalReads = 0;
+  _reReads = 0;
+  _seenFileKeys.clear();
+}
+
+/**
+ * Explicitly release cached ArrayBuffer references for a Blob/File.
+ * Called for large files (>= 100MB) once the worker clone lands.
+ */
+export function releaseDocumentBytes(blob: Blob): void {
+  resolved.delete(blob);
+  pending.delete(blob);
+  const key = fileKey(blob);
+  if (key) {
+    resolvedByFileKey.delete(key);
+    pendingByFileKey.delete(key);
+  }
+}
+
 export function getDocumentBytes(blob: Blob): Promise<ArrayBuffer> {
+  _totalReads++;
   const alive = resolved.get(blob)?.deref();
   if (alive) return Promise.resolve(alive);
 
@@ -69,6 +104,21 @@ export function getDocumentBytes(blob: Blob): Promise<ArrayBuffer> {
 
   const reading = blob.arrayBuffer().then(
     (buffer) => {
+      if (key && _seenFileKeys.has(key)) {
+        _reReads++;
+        console.debug(
+          "[documentBytesCache] Re-reading buffer on demand for:",
+          (blob as File).name || "blob",
+        );
+        if (typeof window !== "undefined") {
+          const w = window as unknown as {
+            __perf?: { documentBytesReReads?: number };
+          };
+          if (w.__perf) w.__perf.documentBytesReReads = _reReads;
+        }
+      } else if (key) {
+        _seenFileKeys.add(key);
+      }
       resolved.set(blob, new WeakRef(buffer));
       if (key) {
         rememberFileKey(key, buffer);
