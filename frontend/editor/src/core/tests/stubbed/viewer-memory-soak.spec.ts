@@ -38,6 +38,7 @@ type Sample = {
   timers: number;
   mainWasmPages: number;
   workerWasmPages: number;
+  workers: number;
 };
 
 /** Same probe inside the engine workers, installed before the module loads. */
@@ -318,6 +319,7 @@ test.describe("viewer memory soak", { tag: "@memory-soak" }, () => {
         timers: main.timers,
         mainWasmPages: main.mainWasmPages,
         workerWasmPages,
+        workers: page.workers().length,
       };
     };
 
@@ -451,6 +453,8 @@ test.describe("viewer memory soak", { tag: "@memory-soak" }, () => {
       const listenersLate = median(late.map((s) => s.listeners));
       const workerPagesEarly = median(early.map((s) => s.workerWasmPages));
       const workerPagesLate = median(late.map((s) => s.workerWasmPages));
+      const workersEarly = median(early.map((s) => s.workers));
+      const workersLate = median(late.map((s) => s.workers));
 
       // Object URLs are deterministic: the eviction on file removal must keep
       // the count flat (a small delta covers cache warm-up).
@@ -479,6 +483,14 @@ test.describe("viewer memory soak", { tag: "@memory-soak" }, () => {
         workerPagesLate - workerPagesEarly,
         `${phase}: worker wasm pages grew over ${ITERATIONS} cycles`,
       ).toBeLessThanOrEqual(64);
+      // Worker count is set by the engine/encoder pool at boot; every worker
+      // that outlives its document is a permanent floor. Measured drift is 0
+      // on both phases over 12 cycles (default and form fixtures), so 0 is
+      // the honest bound.
+      expect(
+        workersLate - workersEarly,
+        `${phase}: worker count grew over ${ITERATIONS} cycles`,
+      ).toBeLessThanOrEqual(0);
       // Heap is noisier than node counts, so it is a wider sentinel than the
       // 10% manual gate; it still catches a monotonic per-cycle leak.
       expect(
