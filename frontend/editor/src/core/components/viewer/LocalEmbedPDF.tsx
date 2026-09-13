@@ -3,6 +3,7 @@ import React, {
   useEffect,
   useImperativeHandle,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { createPluginRegistration } from "@embedpdf/core";
@@ -85,7 +86,11 @@ import { BookmarkAPIBridge } from "@app/components/viewer/BookmarkAPIBridge";
 import { AttachmentAPIBridge } from "@app/components/viewer/AttachmentAPIBridge";
 import { PrintAPIBridge } from "@app/components/viewer/PrintAPIBridge";
 import { isPdfFile } from "@app/utils/fileUtils";
-import { getDocumentBytes } from "@app/services/documentBytesCache";
+import {
+  getDocumentBytes,
+  releaseDocumentBytes,
+  LARGE_DOC_CACHE_DROP_THRESHOLD,
+} from "@app/services/documentBytesCache";
 import { useTranslation } from "react-i18next";
 import { LinkLayer } from "@app/components/viewer/LinkLayer";
 import { TextSelectionHandler } from "@app/components/viewer/TextSelectionHandler";
@@ -325,17 +330,28 @@ export function LocalEmbedPDF({
     // re-renders. When only url is provided, depend on url directly so changes are picked up.
   }, [url, file ? fileStableKey : null]);
 
-  const [pdfBuffer, setPdfBuffer] = useState<ArrayBuffer | null>(null);
+  const [isBufferReady, setIsBufferReady] = useState(false);
+  const initialBufferRef = useRef<ArrayBuffer | null>(null);
+
+  // The annotation plugin keeps `onGlobal` listeners for the registry's whole
+  // life (no plugin destroy override clears them), and this component's
+  // listener shares the component scope that also holds `initialBufferRef`. Without
+  // the unsubscribe the listener pins the document bytes after unmount.
+  const annotationUnsubscribeRef = useRef<(() => void) | null>(null);
 
   // Read file/url directly into an ArrayBuffer on the main thread so EmbedPDF's worker
   // receives the document data via buffer rather than failing to fetch partitioned blob URLs.
   useEffect(() => {
     let cancelled = false;
-    setPdfBuffer(null);
+    setIsBufferReady(false);
+    initialBufferRef.current = null;
     if (file && typeof (file as Blob).arrayBuffer === "function") {
       getDocumentBytes(file as Blob)
         .then((buf) => {
-          if (!cancelled) setPdfBuffer(buf);
+          if (!cancelled) {
+            initialBufferRef.current = buf;
+            setIsBufferReady(true);
+          }
         })
         .catch((err) => {
           console.error(
@@ -345,13 +361,17 @@ export function LocalEmbedPDF({
         });
       return () => {
         cancelled = true;
+        initialBufferRef.current = null;
       };
     }
     if (url) {
       fetch(url)
         .then((r) => r.arrayBuffer())
         .then((buf) => {
-          if (!cancelled) setPdfBuffer(buf);
+          if (!cancelled) {
+            initialBufferRef.current = buf;
+            setIsBufferReady(true);
+          }
         })
         .catch((err) => {
           console.error(
@@ -361,9 +381,10 @@ export function LocalEmbedPDF({
         });
       return () => {
         cancelled = true;
+        initialBufferRef.current = null;
       };
     }
-    setPdfBuffer(null);
+    setIsBufferReady(false);
   }, [file ? fileStableKey : null, url]);
 
   // Keyed by fileStableKey to avoid recomputing on every FileContext re-render.
@@ -379,8 +400,8 @@ export function LocalEmbedPDF({
     // When a File object is the source, we MUST wait for the buffer, the
     // worker cannot fetch partitioned blob: URLs.  pdfUrl is still created
     // (for thumbnails etc.) but plugins must not start until the buffer lands.
-    if (file && !pdfBuffer) return [];
-    if (!pdfBuffer && !pdfUrl) return [];
+    if (file && !isBufferReady) return [];
+    if (!isBufferReady && !pdfUrl) return [];
 
     // Calculate 3.5rem in pixels dynamically based on root font size
     const rootFontSize = parseFloat(
@@ -390,10 +411,10 @@ export function LocalEmbedPDF({
 
     return [
       createPluginRegistration(DocumentManagerPluginPackage, {
-        initialDocuments: pdfBuffer
+        initialDocuments: initialBufferRef.current
           ? [
               {
-                buffer: pdfBuffer,
+                buffer: initialBufferRef.current,
                 name: exportFileName,
               },
             ]
@@ -486,7 +507,7 @@ export function LocalEmbedPDF({
 
       createPluginRegistration(PrintPluginPackage),
     ];
-  }, [!!file, pdfBuffer, pdfUrl, enableAnnotations, exportFileName]);
+  }, [!!file, isBufferReady, pdfUrl, enableAnnotations, exportFileName]);
 
   const fontFallbackConfig = useMemo(() => getLocalFontFallbackConfig(), []);
 
@@ -550,7 +571,7 @@ export function LocalEmbedPDF({
   }
 
   const hasInput = Boolean(file || url);
-  const isInputReady = Boolean(pdfBuffer || (!file && pdfUrl));
+  const isInputReady = Boolean(isBufferReady || (!file && pdfUrl));
 
   if (isLoading || !engine || (hasInput && !isInputReady)) {
     return (
@@ -613,6 +634,72 @@ export function LocalEmbedPDF({
           engine={engine}
           plugins={plugins}
           onInitialized={async (registry: PluginRegistry) => {
+            if (typeof window !== "undefined") {
+              (
+                window as unknown as { __embedPdfRegistry?: PluginRegistry }
+              ).__embedPdfRegistry = registry;
+            }
+            // The plugin registration config keeps `initialDocuments` for the
+            // lifetime of the registry. The document-manager plugin has already
+            // opened that buffer by the time onInitialized runs (it keeps its
+            // own loadOptions copy until the document loads, then deletes it),
+            // so clear the config's reference: otherwise the whole document
+            // ArrayBuffer stays pinned behind the registry after the viewer
+            // closes, on top of the worker's own copy. Replacing the property
+            // (not mutating the array) avoids touching the plugins memo that
+            // the next registry initialization will reuse.
+            try {
+              const documentManagerConfig = registry.getPluginConfig<{
+                initialDocuments?: unknown[];
+              }>("document-manager");
+              if (Array.isArray(documentManagerConfig?.initialDocuments)) {
+                documentManagerConfig.initialDocuments = [];
+              }
+            } catch {
+              // Registry layout changed or plugin absent: nothing to clear.
+            }
+
+            // Release the main-thread buffer and cache entry for large documents (>= 100MB)
+            // after the worker clone lands, so ~150MB is not pinned on the main thread.
+            const releaseLargeBuffer = () => {
+              if (
+                file &&
+                (file as Blob).size >= LARGE_DOC_CACHE_DROP_THRESHOLD
+              ) {
+                initialBufferRef.current = null;
+                releaseDocumentBytes(file as Blob);
+                console.debug(
+                  "[LocalEmbedPDF] Released main-thread document buffer for large file:",
+                  (file as File).name || "blob",
+                );
+              } else {
+                initialBufferRef.current = null;
+              }
+            };
+
+            try {
+              const docManager = registry.getPlugin("document-manager");
+              if (docManager && docManager.provides) {
+                const docManagerApi = docManager.provides() as {
+                  getActiveDocument?: () => unknown;
+                  onDocumentOpened?: (cb: () => void) => () => void;
+                };
+                if (docManagerApi.getActiveDocument?.()) {
+                  releaseLargeBuffer();
+                } else if (docManagerApi.onDocumentOpened) {
+                  const unsub = docManagerApi.onDocumentOpened(() => {
+                    unsub?.();
+                    releaseLargeBuffer();
+                  });
+                } else {
+                  releaseLargeBuffer();
+                }
+              } else {
+                releaseLargeBuffer();
+              }
+            } catch {
+              releaseLargeBuffer();
+            }
             // v2.0: Use registry.getPlugin() to access plugin APIs
             const annotationPlugin = registry.getPlugin("annotation");
             if (!annotationPlugin || !annotationPlugin.provides) return;
