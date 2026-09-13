@@ -381,6 +381,13 @@ export default defineConfig(async ({ mode, command }) => {
     },
     build: {
       target: "esnext",
+      // vendor-zip is imported dynamically only (see loadJSZip) and used on
+      // rare user-initiated paths (zip upload/download); preloading it on
+      // every entry would spend ~45 KB transfer + parse for nothing.
+      modulePreload: {
+        resolveDependencies: (_filename, deps) =>
+          deps.filter((dep) => !dep.includes("vendor-zip")),
+      },
       rollupOptions: {
         output: {
           manualChunks(id) {
@@ -409,8 +416,9 @@ export default defineConfig(async ({ mode, command }) => {
                 id.includes("decimal.js")
               )
                 return "vendor-charts";
-              if (id.includes("jszip") || id.includes("pako"))
+              if (id.includes("jszip") && !id.includes("pako"))
                 return "vendor-zip";
+              if (id.includes("pako")) return "vendor-pako";
               if (id.includes("i18next")) return "vendor-i18n";
             }
           },

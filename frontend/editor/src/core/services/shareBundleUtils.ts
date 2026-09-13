@@ -1,4 +1,4 @@
-import JSZip from "jszip";
+import { loadJSZip } from "@app/services/zipFileService";
 
 import type { ShareBundleManifest } from "@app/services/serverStorageBundle";
 
@@ -100,7 +100,7 @@ export async function loadShareBundleEntries(blob: Blob): Promise<{
   sortedEntries: ShareBundleManifest["entries"];
   files: File[];
 } | null> {
-  const zip = await JSZip.loadAsync(blob);
+  const zip = await (await loadJSZip()).loadAsync(blob);
   const manifestEntry = zip.file(MANIFEST_FILENAME);
   if (!manifestEntry) {
     return null;

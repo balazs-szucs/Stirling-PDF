@@ -39,7 +39,7 @@ import PauseIcon from "@mui/icons-material/Pause";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutlined";
 import CloseIcon from "@mui/icons-material/Close";
-import JSZip from "jszip";
+import { loadJSZip } from "@app/services/zipFileService";
 import { useWatchedFolders } from "@app/hooks/useWatchedFolders";
 import { useFolderData } from "@app/hooks/useFolderData";
 import type { TFunction } from "i18next";
@@ -692,7 +692,7 @@ export function WatchedFolderWorkbenchView({
 
   const handleBatchDownload = useCallback(
     async (ids: Iterable<string> = selectedActivityIds) => {
-      const zip = new JSZip();
+      const zip = new (await loadJSZip())();
       let count = 0;
       for (const f of collectExportFiles(ids)) {
         zip.file(f.name, await f.arrayBuffer());
