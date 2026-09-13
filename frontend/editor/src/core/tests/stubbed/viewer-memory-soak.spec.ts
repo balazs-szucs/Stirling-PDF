@@ -94,14 +94,16 @@ test.describe("viewer memory soak", { tag: "@memory-soak" }, () => {
   }) => {
     test.setTimeout(600_000);
 
-    await page.addInitScript(() => {
+    await page.addInitScript((collectFinalizers: boolean) => {
       const w = window as unknown as {
         __soak: {
           created: number;
           revoked: number;
-          memories: WebAssembly.Memory[];
+          memories: WeakRef<WebAssembly.Memory>[];
           pendingAsync: Set<object>;
           pendingStacks: Map<object, string>;
+          registry: FinalizationRegistry<{ kind: string; size: number }> | null;
+          finalizedBlobs: Array<{ kind: string; size: number }>;
         };
       };
       w.__soak = {
@@ -110,7 +112,18 @@ test.describe("viewer memory soak", { tag: "@memory-soak" }, () => {
         memories: [],
         pendingAsync: new Set(),
         pendingStacks: new Map(),
+        registry: null,
+        finalizedBlobs: [],
       };
+      if (collectFinalizers) {
+        // Lifetime probe for document bytes: a Blob that survives removal and
+        // GC shows up as never finalizing (or finalizing much later than its
+        // cycle). Finalizer timing is engine-heuristic, so this is a lead,
+        // never an assertion.
+        w.__soak.registry = new FinalizationRegistry((held) => {
+          w.__soak.finalizedBlobs.push(held);
+        });
+      }
       // Pending-timer census: every schedule mints a token, fire/cancel
       // retires it. Extra callback arguments and RAF timestamps pass
       // through untouched, so app timing semantics do not change.
@@ -192,6 +205,15 @@ test.describe("viewer memory soak", { tag: "@memory-soak" }, () => {
       const create = URL.createObjectURL.bind(URL);
       URL.createObjectURL = (obj: Blob | MediaSource) => {
         w.__soak.created++;
+        // Lifetime probe: every Blob handed to createObjectURL should become
+        // collectible once its URL is revoked and the record is removed. Kept
+        // behind PERF_FINALIZERS (registration has a runtime cost).
+        if (w.__soak.registry && obj instanceof Blob) {
+          w.__soak.registry.register(obj, {
+            kind: "blob",
+            size: obj.size,
+          });
+        }
         return create(obj);
       };
       const revoke = URL.revokeObjectURL.bind(URL);
@@ -200,13 +222,17 @@ test.describe("viewer memory soak", { tag: "@memory-soak" }, () => {
         return revoke(url);
       };
       // Page-count telemetry: bytes mix in unrelated allocations, pages are the
-      // unit wasm memory is actually committed in (64 KiB each).
+      // unit wasm memory is actually committed in (64 KiB each). Weak refs, so
+      // the probe measures the live instance instead of pinning every module the
+      // session ever created (the reclaim path creates one per workbench-empty).
       const record = (instance: unknown) => {
         try {
           const memory = (instance as WebAssembly.Instance).exports?.memory as
             | WebAssembly.Memory
             | undefined;
-          if (memory && !w.__soak.memories.includes(memory)) w.__soak.memories.push(memory);
+          if (memory && !w.__soak.memories.some((ref) => ref.deref() === memory)) {
+            w.__soak.memories.push(new WeakRef(memory));
+          }
         } catch {
           /* ignore */
         }
@@ -234,7 +260,7 @@ test.describe("viewer memory soak", { tag: "@memory-soak" }, () => {
       } as unknown as typeof WebAssembly.Instance;
       ProbeInstance.prototype = OrigInstance.prototype;
       WebAssembly.Instance = ProbeInstance;
-    });
+    }, process.env.PERF_FINALIZERS === "1");
     page.on("worker", (worker) => {
       void worker.evaluate(installWorkerMemoryProbe).catch(() => undefined);
     });
@@ -269,13 +295,15 @@ test.describe("viewer memory soak", { tag: "@memory-soak" }, () => {
             __soak: {
               created: number;
               revoked: number;
-              memories: WebAssembly.Memory[];
+              memories: WeakRef<WebAssembly.Memory>[];
               pendingAsync: Set<object>;
             };
           }
         ).__soak;
         let pages = 0;
-        for (const memory of soak.memories) {
+        for (const ref of soak.memories) {
+          const memory = ref.deref();
+          if (!memory) continue;
           try {
             pages += memory.buffer.byteLength / 65536;
           } catch {
@@ -379,13 +407,22 @@ test.describe("viewer memory soak", { tag: "@memory-soak" }, () => {
         // Warn-only: finalizer timing is engine-heuristic, so a lagging
         // count is a lead for snapshot diffing, never a failure.
         await page.waitForTimeout(2000);
-        const finalized = await page.evaluate(
-          () =>
-            (window as unknown as { __fr?: { finalized: string[] } }).__fr
-              ?.finalized.length ?? 0,
-        );
+        const probe = await page.evaluate(() => {
+          const fr = (window as unknown as { __fr?: { finalized: string[] } }).__fr;
+          const soak = (
+            window as unknown as {
+              __soak: { finalizedBlobs: Array<{ kind: string; size: number }> };
+            }
+          ).__soak;
+          const blobs = soak.finalizedBlobs;
+          return {
+            elements: fr?.finalized.length ?? 0,
+            blobs: blobs.length,
+            blobBytes: blobs.reduce((sum, b) => sum + b.size, 0),
+          };
+        });
         console.log(
-          `[MEMORY-SOAK-FINALIZERS] ${JSON.stringify({ iter, finalized })}`,
+          `[MEMORY-SOAK-FINALIZERS] ${JSON.stringify({ iter, ...probe })}`,
         );
       }
       if (process.env.PERF_TIMER_STACKS) {
