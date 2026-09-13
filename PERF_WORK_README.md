@@ -1647,3 +1647,181 @@ G20 stays refuted.
 Safest minimal approval set: `GL-01`, `GL-02`.  
 No item above has been implemented beyond the approved scope.
 
+## Independent review of the R1–R7 stack (2026-09-13, HEAD `428310d2f`)
+
+Reviewer ran every claim fresh on the current tree (loaded machine: timings
+UNVERIFIED, counts/behavior deterministic). Method: commit-by-commit diff
+read, vendor-source verification (`createPluginRegistration` by-ref config,
+`initialize`-only `initialDocuments`, `PdfCache` `DEFAULT_CONFIG` keys,
+`documentOpened$` post-load emit), heap-snapshot residency probes with
+retainer traces, harness counts, full gate. Their report text above is left
+intact; where this section disagrees, this section wins.
+
+### Verdicts
+
+- **R1 (`5e58ba6cc`, `9c702257c`) — SOUND, two required fixes landed.**
+  Mechanism verified: alternate-name second walk deleted, `pageIndices`
+  filter in `extractFormFields`, page-0 initial + `ensurePageFields` merge.
+  Harness confirms the headline: form fixture **618 pp / 38.6 MB** (was
+  1070 / 66.9). Save path safe (`submitForm` reads `valuesStore`, fresh
+  bytes). Fixes in `487e38e70`: (1) `ensurePageFields` had no fetch-version
+  guard — a load resolving after a file switch merged stale fields
+  (now guarded + failure clears the loaded mark for retry; 4 new context
+  tests); (2) `validateForm` saw only loaded pages so `handleSave` could
+  pass with unfilled required fields on unvisited pages (now
+  `ensureAllFields()` before validation; reachable — the viewer fetches
+  non-exhaustively and the tool saves through the same context).
+- **R2 (`cc80fd9a7`, `c77dab6ea`) — CLAIM FALSIFIED, then FIXED.**
+  As shipped, the drop could not work: a heap snapshot after open showed
+  the **162,539,566 B backing store still live**, and the retainer trace
+  names the holder — the plugin-memo registration config
+  (`initialDocuments` array via the mounted EmbedPDF fiber). Nulling the
+  ref left the memo's array pinning the buffer (the registry copy G11
+  clears is a different object; `createPluginRegistration` stores config
+  by ref per registration, and EmbedPDF clones on mount). The "~170MB to
+  16.5MB" row above is struck: 16.5 MB is `usedJSHeapSize`, which never
+  included the external backing store. Fixes in `2ee8b96ee` (recompute
+  trigger + form gate + accounting cap) and `2e61bf75c`: the recompute
+  variant freed the bytes but re-initialized the manager (measured two
+  155 MB clones, extra full read, firstPage ~1487 ms), so the release now
+  empties the exact registration array in place — no state change, no
+  recompute, single clone. Verified: snapshot max 18.6 MB while open, 10
+  pages scroll from the worker clone, close path clean, m2w 155 MB.
+  Honest accounting: huge-formless open now does **2 transient full reads**
+  (viewer + one late overlay byte-gate: `ButtonAppearanceOverlay`
+  `resolveButtonAppearances` re-reads post-drop, dev-stack attributed) for
+  **0 session residency** (was 1 read + 155 MB resident). Follow-up (S):
+  share the provider's form verdict with overlays so the second read goes
+  away; tracked in the TODO below.
+- **R3 (`2efd3b194`, `20b5dc8c5`) — PLUMBING VERIFIED, tuning REVERTED.**
+  `PdfCache` honors `{pageTtl, maxPagesPerDocument}` (vendor
+  `DEFAULT_CONFIG` keys exact); patch anchors converted to idempotent
+  regexes, `check:embedpdf-patch` green, smoke 3/3 on the patched build,
+  no engine-recreation loop (`cache` not in hook effect deps). But
+  `b4ea35625` (10 s / 15 pages) shipped with an empty message and zero
+  measurement on a measure-first branch, trading unknown worker memory
+  for smoothness — reverted in `428310d2f` (plumbing stays). Re-tune only
+  with an interleaved scroll A/B on idle (Phase B runbook).
+- **R4 (`58ab2bc6e`, `012a4246b`) — ACCEPTED with notes.** Rotations via
+  index API are value-identical; dims deferral is safe for every found
+  consumer (`FileEditorThumbnail` reads page 0 with letter fallback;
+  PageEditor hooks never read `pages[].width/height`;
+  `createProcessedFile` already tolerates missing dims). Notes: (1) the
+  no-index-API fallback now yields 0 instead of the `FPDF_LoadPage` path —
+  unreachable on the lock-pinned 2.15.0 binary, revisit only on pin
+  change; (2) `getOrFetchPageDimensions` has no production caller yet —
+  wire one or drop it; (3) the `Parameters<...extends...>` conditional
+  type on `collectDocumentPageRotations` should be the plain module type.
+- **R5 (`63a5f63c2`, `71430d197`) — ACCEPTED as gated spike.** Default-off
+  verified (flag surfaces: `window.__PERF_PREFETCH`, `?prefetch=1`,
+  `?perf_prefetch=1`; controller returns null and the effect no-ops;
+  scroll run on this tree: 35 pages, 0 long tasks). Nit: `visiblePages`
+  0/1-based assumption at the target math is unverified — spike-grade,
+  pin before any promotion.
+- **R6 (`70a3b55f5`) — ACCEPTED with one correction.** Memo is
+  primary-source grounded and its NO-GO stands (OPFS ingest 220–380 ms vs
+  10–45 ms clone; WebKit/Tauri gap). Corrected: the JSPI availability
+  matrix (Chromium flag-only / Firefox Nightly-only) contradicted the
+  ledger's fetched rows (shipped Chrome 137 / Firefox 139, ESM-flat
+  no-longer-experimental) — matrix fixed to shipped + JSPI-build-needed.
+  Placement in `devGuide/` fits (established contributor docs).
+- **R7 (`2719c1b22`) — ACCEPTED, marginal.** Blob/File/string eviction
+  targets + finalizer-guarded bare-Blob keys, tested. The win is hygiene
+  (25-entry LRU already bounded the map); harmless.
+- **Report row corrections:** "Revert SHA" column actually lists parent
+  commits — revert with the Refactor-commit SHAs in the revert map
+  (Current State §Phase D), not those. R7's "G8 closed by `d786c1822`"
+  conflates two fixes (G8 = `2ced8f0e9` thumbnail ref release;
+  `d786c1822` = shared-document release-pending). Vitest at review time:
+  **3486/3486** (393 files), not 3479. Functional batch: **60 passed + 1
+  ambiguous** (`page-editor-rotation`, still failing identically with and
+  without every fix in this stack; load 9–11 at all runs — regression vs
+  load still open, idle runbook). Corpus branch-arm re-run here: **60/60
+  rendered, 0 errors** (both-arms parity + pixel deltas stay in the idle
+  runbook). Soaks re-run here: default + form + huge-12-cycle **green**.
+  R1 message's "18 e2e" + "8 goldens" were not re-enumerated here; the
+  form batch in the 60 above is green.
+
+### GL-02 opposition
+
+Do NOT promote R5 prefetch to a production default on current evidence.
+The "0% regression / 43 smooth pages" rows are single-arm loaded-machine
+numbers with no baseline arm and no low-end-device coverage; prefetch
+adds worker contention against visible renders by construction. Keep
+flagged until the idle interleaved scroll A/B (with kill criteria) in
+the Phase B runbook passes. GL-01 (document the drop) and GL-03 (JSPI
+watch — now partly moot post-correction) stand.
+
+### Coordination incident (same-branch concurrency)
+
+At ~20:43 a `stash push -m r2-draft-localembedpdf` removed this
+reviewer's uncommitted R2 implementation; at ~21:36 overlapping commits
+landed (format of the same 9 files this review then formatted). No work
+was lost (stash popped; format deduplicated), but two writers on one
+branch with no locking is how GHOST rows and silent reverts happen.
+Proposed rule for the owner: single writer per branch at a time; the
+second agent works a scratch branch and hands over diffs, or announces
+windows in the README. This review's fix-up commits (`2ee8b96ee`,
+`487e38e70`, `428310d2f`, `2e61bf75c`) are narrowly scoped for clean
+revert per the map.
+
+### Engine-idea triage (titles only, no code dive per instruction)
+
+Source: pasted commit list from the engine fork (alam00000, Aug 16–24 —
+pdfium EditCore/text-editing + wasm publish pipeline). Nothing below has
+an app-side implementation in this repo, so per the brief's rule there is
+nothing to A/B here and nothing to commit to a separate branch (no code
+to commit — the work lives in another repo and must not be fabricated
+from titles).
+
+| Idea | Verdict | Why |
+| --- | --- | --- |
+| Text-editing correctness cluster (paragraph rhythm, charcodes, glyph
+  atomization, font matching/resolution, join guards, line pitch,
+  private-use text, callouts, undo history scoping, live preview,
+  comments caret/author, page labels, getPageLabels typing, whitespace
+  object, markup orientation, fragile-page subset reuse, search-input
+  focus) | OUT OF SCOPE | Correctness/features of another repo's
+  text engine; no mechanism on our measured viewer paths. |
+| `subset provider-supplied fonts instead of embedding them whole` |
+  NOT ACTIONABLE HERE | Save-output bytes shrink on adoption day, but
+  the change is engine-internal; no app lever, nothing to A/B from here. |
+| `allocate wasm memory through the glue's _malloc/_free so minified
+  exports work`, `export/extend HEAPU16`, Harfbuzz shaping support |
+  FUTURE-BUMP CONTEXT | Export-shape churn is exactly what our patch
+  anchors + `EXPECTED_VERSION` gate guard. Note for the next pin bump;
+  no action on 2.15.0. |
+| `publish pdfium.wasm built from …`, `publish engine on main`,
+  `skipLibCheck`, ninja cache, publish-pipeline CI commits |
+  OUT OF SCOPE | Release/CI mechanics of the engine repo. |
+| `OpenJPEG CVE + CPDF_TextPage null-deref + 12 upstream security
+  fixes` | FLAG TO OWNER (security, not perf) | If the pinned 2.15.0
+  binary predates these fixes, the next bump has a security motive
+  beyond perf. Owner decision; not this pass's scope. |
+| `build viewer against workspace pdfium instead of registry package` |
+  CONFLICT — do not adopt here | Directly contradicts this branch's
+  pin + anchor + smoke story. If the owner ever moves the viewer to a
+  workspace binary, the patch scripts, `EPDF_*` verification, and the
+  whole gate must be redone. Added to risk register. |
+| `callout annotation tool`, `system font picker`, `EditCore` features |
+  OUT OF SCOPE | New features by definition; convergence adds none. |
+
+### TODO delta from this review (appended to the remaining greenlight list)
+
+| ID | Kind | Sev | Title | Target | Action | Acceptance | Dep |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| RV-01 | FIX (done `487e38e70`) | P1 | Per-page stale-guard + save-time validate-all | form save correctness | shipped + 4 context tests | 17/17 file green; form batch green | — |
+| RV-02 | FIX (done `2ee8b96ee` + `2e61bf75c`) | P0 | R2 actually releases; no reopen | 155 MB residency | shipped; snapshot + clone-count proof | residency probe green; m2w 155 MB | — |
+| RV-03 | REVERT (done `428310d2f`) | P2 | PdfCache values to defaults | unmeasured tuning | shipped; plumbing kept | check green; scroll normal | idle re-tune |
+| RV-04 | FOLLOW-UP | P3 | Share provider form verdict with overlays | 2nd huge read | design + unit + harness counts | huge open back to 1 full read | owner nod |
+| RV-05 | FOLLOW-UP | P3 | `getOrFetchPageDimensions` caller or deletion | dead-ish export | wire PageEditor lazy dims or drop | no unused export | owner nod |
+| RV-06 | PROCESS | P2 | Evidence bodies on every perf commit going forward | branch discipline | owner rule | `git log` shows mechanism + numbers | owner |
+| RV-07 | DECISION | P2 | GL-02 (R5 prod default) | prefetch promotion | idle scroll A/B first | kill criteria pass | owner (recommend: hold) |
+
+Self-check delta: gate green on HEAD `2e61bf75c` (typecheck/lint/format clean; vitest 3486/3486; smoke 3/3; soaks
+default+form+huge green; batch 60+1-ambiguous; corpus branch-arm 60/60;
+`check:embedpdf-patch` green). Tree clean. `.perf-local/` gained only
+excluded probes/snapshots/logs (`r2-residency.*`, `r2-residency-open/
+-removed.heapsnapshot`); nothing committed from it. No pushes, no
+upstream branches touched, no binary rebuilds.
+

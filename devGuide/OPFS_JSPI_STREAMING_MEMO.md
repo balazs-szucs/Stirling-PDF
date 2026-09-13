@@ -78,14 +78,17 @@ When PDFium needs document bytes:
   - **Verdict**: Incurring a 300 ms write penalty on open to save memory during open is a net regression for user-perceived first-page latency.
 
 ### 3.2 Option B: JSPI (JavaScript Promise Integration)
-- **Specification**: W3C WebAssembly JavaScript Promise Integration (Phase 3).
+- **Specification**: W3C WebAssembly JavaScript Promise Integration (see the
+  fetched-source rows T3 in `frontend/editor/.perf-local/research-ledger.md`:
+  V8 blog "available in Chrome 137, and in Firefox 139"; Emscripten 6.0.8
+  "no longer considered experimental").
 - **Mechanism**:
   - Allows synchronous WASM calls (`m_GetBlock`) to await asynchronous JavaScript Promises (`blob.slice(pos, pos + size).arrayBuffer()`) without blocking the main event loop by suspending and resuming WASM call stacks (`WebAssembly.Suspending` / `promising`).
 - **Browser & Platform Matrix**:
   | Platform / Engine | JSPI Support | Status |
   |---|---|---|
-  | **V8 / Chromium** (Chrome, Edge) | Experimental (flag `--experimental-wasm-jspi` or Origin Trial) | Not default in stable |
-  | **SpiderMonkey** (Firefox) | In Development (`javascript.options.wasm_js_promise_integration`) | Nightly only |
+  | **V8 / Chromium** (Chrome, Edge) | Shipped since Chrome 137 | Stable, needs a JSPI build of the binary |
+  | **SpiderMonkey** (Firefox) | Shipped since Firefox 139 | Stable, needs a JSPI build of the binary |
   | **JavaScriptCore / WebKit** (Safari) | **Unsupported** | No public implementation |
   | **Tauri macOS** (WKWebView) | **Unsupported** | WebKit lacks JSPI |
   | **Tauri Linux** (WebKitGTK) | **Unsupported** | WebKitGTK lacks JSPI |
