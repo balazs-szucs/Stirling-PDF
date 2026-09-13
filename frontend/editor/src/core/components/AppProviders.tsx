@@ -59,9 +59,14 @@ import {
   consumeRemovedDocumentBytes,
 } from "@app/services/engineRespawnSignal";
 
-// Aligned with LARGE_PDF_PARSE_LIMIT: documents this size never open on the
-// main thread, so the engine worker took the full clone and owns the floor.
-const ENGINE_RESPAWN_THRESHOLD_BYTES = 100 * 1024 * 1024;
+// The engine worker's wasm floor is the document's full clone plus PDFium
+// caches: 50.6 MB for the 40 MB fixture, 46.4 MB for the form fixture, 188 MB
+// for the 155 MB fixture. Below ~10 MB the clone is small and the base module
+// dominates, so respawning there buys little; at and above it the worker is
+// rebuilt from the precompiled module (~1 ms) the next time the workbench
+// empties. The 5 s cooldown in useLocalPdfiumEngine keeps close/open churn
+// from cycling workers.
+const ENGINE_RESPAWN_THRESHOLD_BYTES = 10 * 1024 * 1024;
 
 function PosthogTrackingInitializer() {
   usePosthogTracking();

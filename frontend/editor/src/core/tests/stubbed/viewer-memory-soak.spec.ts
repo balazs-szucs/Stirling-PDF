@@ -488,8 +488,13 @@ test.describe("viewer memory soak", { tag: "@memory-soak" }, () => {
       const nodesLate = median(late.map((s) => s.nodes));
       const listenersEarly = median(early.map((s) => s.listeners));
       const listenersLate = median(late.map((s) => s.listeners));
-      const workerPagesEarly = median(early.map((s) => s.workerWasmPages));
-      const workerPagesLate = median(late.map((s) => s.workerWasmPages));
+      // Worker pages sawtooth by design: the respawn watcher terminates the
+      // engine worker after a departing document and the next open re-grows it,
+      // so early medians sit at the fresh floor while late medians sit at the
+      // document's high-water. Compare peaks: only a peak that grows across
+      // cycles is a ratchet.
+      const workerPagesPeakEarly = Math.max(...early.map((s) => s.workerWasmPages));
+      const workerPagesPeakLate = Math.max(...late.map((s) => s.workerWasmPages));
       const workersEarly = median(early.map((s) => s.workers));
       const workersLate = median(late.map((s) => s.workers));
 
@@ -513,12 +518,14 @@ test.describe("viewer memory soak", { tag: "@memory-soak" }, () => {
         listenersLate - listenersEarly,
         `${phase}: event listeners grew over ${ITERATIONS} cycles`,
       ).toBeLessThanOrEqual(10);
-      // Wasm memory only grows, so a growing worker page count means PDFium
-      // caches are not being recycled with the document. The bound tolerates
-      // allocator slack while catching per-cycle accumulation.
+      // Wasm memory only grows within one instance, so a peak that grows
+      // across cycles means PDFium caches are not being recycled with the
+      // document. The bound tolerates allocator slack between the first and
+      // last cycle while catching per-cycle accumulation (measured peak delta
+      // is 0 on the form fixture with respawn active).
       expect(
-        workerPagesLate - workerPagesEarly,
-        `${phase}: worker wasm pages grew over ${ITERATIONS} cycles`,
+        workerPagesPeakLate - workerPagesPeakEarly,
+        `${phase}: worker wasm peak grew over ${ITERATIONS} cycles`,
       ).toBeLessThanOrEqual(64);
       // Worker count is set by the engine/encoder pool at boot; every worker
       // that outlives its document is a permanent floor. Measured drift is 0
