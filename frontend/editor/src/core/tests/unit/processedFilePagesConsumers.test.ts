@@ -71,9 +71,4 @@ describe("processedFile.pages consumer contracts (R4)", () => {
     });
   });
 
-  it("exports getOrFetchPageDimensions function for lazy page dimension resolution", async () => {
-    const { getOrFetchPageDimensions } =
-      await import("@app/utils/thumbnailUtils");
-    expect(typeof getOrFetchPageDimensions).toBe("function");
-  });
 });

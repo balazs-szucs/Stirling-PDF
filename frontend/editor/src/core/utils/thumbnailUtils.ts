@@ -433,20 +433,3 @@ export async function generateThumbnailPairWithMetadata(file: File): Promise<{
     };
   }
 }
-
-/**
- * Read dimensions for a specific page on demand (lazy fill).
- */
-export async function getOrFetchPageDimensions(
-  file: File,
-  pageIndex: number,
-): Promise<{ width: number; height: number } | null> {
-  const bytes = await getDocumentBytes(file);
-  const docPtr = await openRawDocumentSafe(bytes);
-  try {
-    const meta = await readPdfiumPageMetadata(docPtr, pageIndex);
-    return meta ? { width: meta.width, height: meta.height } : null;
-  } finally {
-    await closeRawDocument(docPtr);
-  }
-}
