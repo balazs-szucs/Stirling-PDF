@@ -710,3 +710,37 @@ Harness state for the next pass:
   (`form-dev-snapshot-iter5.heapsnapshot`).
 - Re-baselined S5 section in `.perf-local/BASELINE.md` (all fixtures, current
   build; timings UNVERIFIED, loaded machine).
+
+## Implementation pass 2 — greenlit follow-through (2026-09-13)
+
+The owner approved the full greenlight table, including the risky items.
+Six commits landed on top of the hunt pass:
+
+| Commit | Fix | Evidence |
+| --- | --- | --- |
+| `87205808e` | **F10 fixed**: record thumbnails render JPEG q0.8 clamped to 400 px instead of full-resolution PNG data URLs (display-only content; visually identical at thumbnail sizes) | Form soak retained-heap drift **1.38–1.41x (failing) -> 1.120x/1.133x (passing)**; all other soak budgets unchanged; form-field-editing/session-restore/sidebar/page-editor e2e green |
+| `0af4de496` | G2: `deleteImageData` prunes the SignatureContext image store when a STAMP annotation is deleted (undo/redo recreations carry their own imageSrc and re-store on create) | New SignatureContext unit tests (revoke-on-blob, no-revoke-on-data-url) |
+| `eea2e63a5` | G5: pdfbox-mode signature-appearance read goes through `getDocumentBytes` instead of a second full `file.arrayBuffer()` | formFill tests 18/18; one full read per open preserved |
+| `2ced8f0e9` | G8: `releaseSharedRef(docPtr)` — thumbnail cache teardown releases exactly one open-reader reference, synchronously, and never closes a pointer `releaseSharedDocument` already closed (wasm double-free) | New service test; 4/4 thumbnailGenerationService tests |
+| `f868993d1` | G10: deleted the stale legacy perf specs (pre-refactor sidebar + `/read` route); soak + perf harness supersede them | — |
+| `8c2e740c1` | **G3 shipped: engine-worker respawn.** `respawnEngine()` rebuilds the engine from the same precompiled `WebAssembly.Module` (swap-then-destroy, 5 s cooldown, in-flight guard); file removal records the departing size; `EngineRespawnWatcher` respawns when the workbench empties after a ≥100 MB doc | mh13 probe: worker floor **3010 pp (188 MB) -> 284 pp** after close; post-respawn open renders end-to-end; huge-fixture soak saw-tooths 3010<->284 by design and passes every budget |
+
+### Buffer ownership at steady state (updated)
+
+The worker 188 MB floor is now reclaimed on huge-document close, so the
+session-steady-state worker reservation is the small-document floor
+(284-618 pp). Doc bytes still exist in 2-3 places during an open (main cache +
+worker clone + wasm-internal copy) — see the table in `.perf-local/BASELINE.md`.
+
+### G4 (worker owns canonical buffer) — decision record, not implemented
+
+The full ownership inversion needs every main-thread scan to become a worker
+task; the scan layer (`pdfiumService`, overlays, form provider) is synchronous
+wasm code against the shared main-thread module, so this is a multi-pass
+refactor, not a patch. First safe slice when it is greenlit: for ≥100 MB files
+the main thread never opens the document (AcroForm probe skipped, thumbnail
+uses the 2 MB prefix), so after the worker clone lands and the layers byte-scan
+completes, the main `documentBytesCache` entry could be dropped and re-read
+from the Blob on demand — but the viewer's `pdfBuffer` state shares the same
+buffer reference, so the release needs viewer-lifecycle coordination. Measured
+on the 155 MB fixture: that copy is 155 MB resident for the session.
