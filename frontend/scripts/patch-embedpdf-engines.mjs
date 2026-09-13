@@ -178,25 +178,10 @@ const replacements = [
   },
   {
     label: "engine: revoke worker blob URLs after construction",
-    find: `  const __stirlingEngine = new PdfEngine(remoteExecutor, {
+    find: `  return new PdfEngine(remoteExecutor, {
     imageConverter: createHybridImageConverter(encoderPool),
     logger
   });
-  URL.createObjectURL = __stirlingCreateObjectURL;
-  // The worker scripts are Blob URLs and this build never revokes them, so
-  // every engine (re)creation leaked one object URL per worker. All workers
-  // have been constructed synchronously by now; release the URLs on a
-  // macrotask so the platform has resolved them.
-  setTimeout(() => {
-    for (const __stirlingUrl of __stirlingCreatedUrls) {
-      try {
-        URL.revokeObjectURL(__stirlingUrl);
-      } catch {
-        /* already revoked */
-      }
-    }
-  }, 0);
-  return __stirlingEngine;
 }
 export {
   createPdfiumEngine
