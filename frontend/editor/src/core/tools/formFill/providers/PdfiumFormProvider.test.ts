@@ -3,6 +3,8 @@ import type { Mock } from "vitest";
 
 vi.mock("@app/services/documentBytesCache", () => ({
   getDocumentBytes: vi.fn(),
+  noteFormVerdict: vi.fn(),
+  getFormVerdict: vi.fn(),
 }));
 
 vi.mock("@app/services/pdfiumScanQueue", () => ({

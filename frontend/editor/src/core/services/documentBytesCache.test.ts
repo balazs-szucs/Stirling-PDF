@@ -4,6 +4,8 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   getDocumentBytes,
+  getFormVerdict,
+  noteFormVerdict,
   releaseDocumentBytes,
 } from "@app/services/documentBytesCache";
 
@@ -105,5 +107,33 @@ describe("documentBytesCache", () => {
     expect(spy).toHaveBeenCalledTimes(2);
     expect(second).not.toBe(first);
     expect(Array.from(new Uint8Array(second))).toEqual([10, 20, 30]);
+  });
+});
+
+describe("form verdict sharing", () => {
+  it("returns undefined for files nobody judged", () => {
+    expect(
+      getFormVerdict(makeFile("unknown.pdf", [1, 2, 3], 2000)),
+    ).toBeUndefined();
+  });
+
+  it("shares the recorded verdict across re-wrapped Files", () => {
+    const first = makeFile("wrapped.pdf", [1], 3000);
+    noteFormVerdict(first, false);
+    const second = makeFile("wrapped.pdf", [1], 3000);
+    expect(getFormVerdict(second)).toBe(false);
+  });
+
+  it("latest verdict wins per file key", () => {
+    const file = makeFile("flip.pdf", [1], 4000);
+    noteFormVerdict(file, false);
+    noteFormVerdict(file, true);
+    expect(getFormVerdict(file)).toBe(true);
+  });
+
+  it("ignores bare Blobs without crashing", () => {
+    const blob = new Blob([new Uint8Array([1])]);
+    expect(() => noteFormVerdict(blob, false)).not.toThrow();
+    expect(getFormVerdict(blob)).toBeUndefined();
   });
 });

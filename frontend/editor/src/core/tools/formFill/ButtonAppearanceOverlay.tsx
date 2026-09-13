@@ -14,7 +14,10 @@ import {
   renderButtonFieldAppearances,
   type SignatureFieldAppearance,
 } from "@app/services/pdfiumService";
-import { getDocumentBytes } from "@app/services/documentBytesCache";
+import {
+  getDocumentBytes,
+  getFormVerdict,
+} from "@app/services/documentBytesCache";
 import { runPdfiumScan } from "@app/services/pdfiumScanQueue";
 import { hasAcroForm } from "@app/utils/asciiBytes";
 
@@ -47,6 +50,15 @@ function resolveButtonAppearances(
   }
   const cached = _pageCache.get(pageIndex);
   if (cached) return cached;
+
+  // A recorded literal-miss is exactly what the byte check below would
+  // compute; skipping here avoids a redundant full read (notably a
+  // post-R2-drop cache miss that would re-pull a huge file).
+  if (getFormVerdict(source) === false) {
+    const skipped: Promise<SignatureFieldAppearance[]> = Promise.resolve([]);
+    _pageCache.set(pageIndex, skipped);
+    return skipped;
+  }
 
   const pending = getDocumentBytes(source).then((buf) => {
     if (!hasAcroForm(new Uint8Array(buf))) return [];

@@ -19,7 +19,10 @@ import {
   type SignatureFieldAppearance,
   type PdfiumSignature,
 } from "@app/services/pdfiumService";
-import { getDocumentBytes } from "@app/services/documentBytesCache";
+import {
+  getDocumentBytes,
+  getFormVerdict,
+} from "@app/services/documentBytesCache";
 import { runPdfiumScan } from "@app/services/pdfiumScanQueue";
 import { hasAcroForm } from "@app/utils/asciiBytes";
 
@@ -70,6 +73,14 @@ async function resolvePageFields(
   }
   const cached = _pageCache.get(pageIndex);
   if (cached) return cached;
+
+  // Recorded literal-miss short-circuit (see ButtonAppearanceOverlay):
+  // identical skip to the byte check below, without the redundant read.
+  if (getFormVerdict(source) === false) {
+    const skipped: Promise<ResolvedSignatureField[]> = Promise.resolve([]);
+    _pageCache.set(pageIndex, skipped);
+    return skipped;
+  }
 
   const pending = (async () => {
     const buf = await getDocumentBytes(source);

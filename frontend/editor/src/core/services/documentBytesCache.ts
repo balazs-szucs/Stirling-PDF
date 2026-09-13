@@ -97,6 +97,34 @@ export function releaseDocumentBytes(blob: Blob): void {
   }
 }
 
+/**
+ * Shared /AcroForm literal verdicts, keyed like File reads so re-wrapped
+ * Files share them. The form provider records the verdict it already
+ * computed; appearance overlays consult it before pulling the full bytes
+ * for their own identical check. A recorded false is exactly what the
+ * overlay would compute itself — same skip, minus a redundant (and,
+ * post-R2-drop, cache-missing) full read. Unknown means "check yourself".
+ */
+const _formVerdicts = new Map<string, boolean>();
+const FORM_VERDICTS_LIMIT = 64;
+
+export function noteFormVerdict(blob: Blob, hasForm: boolean): void {
+  const key = fileKey(blob);
+  if (!key) return;
+  _formVerdicts.delete(key);
+  _formVerdicts.set(key, hasForm);
+  while (_formVerdicts.size > FORM_VERDICTS_LIMIT) {
+    const oldest = _formVerdicts.keys().next().value;
+    if (oldest === undefined) break;
+    _formVerdicts.delete(oldest);
+  }
+}
+
+export function getFormVerdict(blob: Blob): boolean | undefined {
+  const key = fileKey(blob);
+  return key ? _formVerdicts.get(key) : undefined;
+}
+
 export function getDocumentBytes(blob: Blob): Promise<ArrayBuffer> {
   _totalReads++;
   const alive = resolved.get(blob)?.deref();

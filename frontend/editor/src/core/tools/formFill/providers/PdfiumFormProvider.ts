@@ -14,7 +14,10 @@
  * for both providers.
  */
 import { PDF_FORM_FIELD_TYPE } from "@app/services/pdfiumService";
-import { getDocumentBytes } from "@app/services/documentBytesCache";
+import {
+  getDocumentBytes,
+  noteFormVerdict,
+} from "@app/services/documentBytesCache";
 import { runPdfiumScan } from "@app/services/pdfiumScanQueue";
 import { hasAcroForm } from "@app/utils/asciiBytes";
 import { FPDF_ANNOT_WIDGET, FLAT_PRINT } from "@app/utils/pdfiumBitmapUtils";
@@ -158,7 +161,12 @@ export class PdfiumFormProvider implements IFormDataProvider {
       // cannot see a catalog inside a compressed object stream
       // (qpdf --object-streams=generate), so a miss is confirmed against the
       // catalog's form type before the document is treated as form-less.
-      if (!options.exhaustive && !hasAcroForm(new Uint8Array(arrayBuffer))) {
+      // The verdict is shared for overlay fast paths (see noteFormVerdict).
+      const literalForm = options.exhaustive
+        ? true
+        : hasAcroForm(new Uint8Array(arrayBuffer));
+      if (!options.exhaustive) noteFormVerdict(file, literalForm);
+      if (!options.exhaustive && !literalForm) {
         // Above the full-parse limit nothing opens the document on the main
         // thread for thumbnails, so a probe here would cost a second full-file
         // copy; keep the literal scan as the only check for those files.
