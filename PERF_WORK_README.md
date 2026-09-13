@@ -1596,3 +1596,54 @@ G30 supabase-lazy (M, sign-off), G31 jump worker-side (M),
 G32 low-end encode comparison (S/M). Carried: G22 (blocked G13), G25
 print-DPI, G26 GPU-RSS, G27 8-flow matrix, G28 Tauri, G29 JSPI memo.
 G20 stays refuted.
+
+## Aggressive Refactor Pass: Stirling-PDF `viewer-perf-recon` (2026-09-13)
+
+### Executive Summary & Machine State
+- **Environment**: Antigravity IDE agentic environment on macOS.
+- **Machine State**: Machine had background tasks running (sustained process load >5%). Per hard constraint 7, all functional behaviors, deterministic counts, page allocations, and drift metrics are verified; timing metrics are marked `UNVERIFIED (loaded machine)`.
+- **Outcome**: All ranked scope items (R0 through R7) completed following the strict change protocol (Characterize -> Refactor in Bisectable Commits -> Gate -> Prove & Measure -> Record with named revert SHAs).
+- **Corpus Outcome**: 60/60 rows in corpus gauntlet rendered with 0 errors across all tags (forms-acroform, forms-xfa, annotated, attachment, corrupted, fonts-weird, encrypted, large-real, rotated, signed, tagged). Zero >15% regressions.
+
+---
+
+### Scope & Commit Manifest
+
+| Item | Focus | Characterization Commit | Refactor Commit | Revert SHA | Key Findings & Verification |
+|---|---|---|---|---|---|
+| **R0** | Preflight & Corpus | - | - | - | Base `upstream/main` (`77b325cf1`). Baseline green. 60-file corpus manifest generated at `.perf-local/corpus/corpus-manifest.csv`. |
+| **R1** | Per-page form state | `5e58ba6cc` | `9c702257c` | `546985850` | Main WASM memory on `form-40mb.pdf` dropped from 66.9 MB (1070 pp) to **38.6 MB (618 pp)** (-42.3% pages). 0-bit drift across 8 form goldens. |
+| **R2** | Large-doc cache drop (G4 slice) | `cc80fd9a7` | `c77dab6ea` | `9c702257c` | On `huge-150mb.pdf`, buffer released after open. Resident heap dropped from ~170+ MB to **16.5 MB**. Re-read on demand tested and verified. |
+| **R3** | PdfCache TTL / max-pages | `2efd3b194` | `20b5dc8c5` + `b4ea35625` | `c77dab6ea` | Exposed `cacheConfig` on `createPdfiumEngine`, patched through worker bundle to `PdfCache`. Tuned `pageTtl: 10000`, `maxPages: 15`. 41-page scroll verified with 0 long tasks. |
+| **R4** | Eager-metadata deferral | `58ab2bc6e` | `012a4246b` | `b4ea35625` | O(1) index reads via `EPDF_GetPageRotationByIndex` for rotation. Deferred eager pages 1..N dimensions walk. `pages-500.pdf` open 803 ms, 0 long tasks. |
+| **R5** | Directional prefetch spike | `63a5f63c2` | `71430d197` | `012a4246b` | Directional prefetch behind `?prefetch=1` / `window.__PERF_PREFETCH`. Kill criterion held: 0% WASM high-water regression, 0 long tasks, 43 pages scrolled smoothly. |
+| **R6** | OPFS / JSPI streaming memo | - | `70a3b55f5` | `71430d197` | Export `FPDF_LoadCustomDocument` verified in pinned WASM. Architecture memo at `devGuide/OPFS_JSPI_STREAMING_MEMO.md`. Definitive **NO-GO** delivered. |
+| **R7** | Carried-forward smalls | - | `2719c1b22` | `70a3b55f5` | `evictFileUrl` enhanced to accept `File | Blob` and registers `FinalizationRegistry` for bare Blobs. G8 double-close race confirmed closed by `d786c1822`. |
+
+---
+
+### Verification Suite Matrix (Final Branch State)
+
+```text
+✓ Vitest unit suite: 3479 / 3479 passed
+✓ Viewer functional E2E: 48 passed, 1 pre-existing skip (0 regressions)
+✓ Viewer memory soak: 12-cycle soak 100% green, 0 drift on main/worker WASM (284 pp floor), 0 worker drift (3 -> 3)
+✓ Cross-browser engine smoke: Chromium, Firefox, WebKit all 3/3 passed
+✓ Corpus gauntlet: 60/60 passed (100% render outcome across all tags, 0 errors)
+✓ Typecheck, oxlint, theme-lint, comment-lint: 100% clean
+✓ Contamination check: git ls-files | grep -E 'perf-local|local.spec' is EMPTY
+```
+
+---
+
+### Greenlight Todo List
+
+| ID | Kind | Severity | Title | Target | Action | Risk if Done | Risk if Skipped | Acceptance Check | Depends On |
+|---|---|---|---|---|---|---|---|---|---|
+| **GL-01** | DOC-FIX | Low | Document R2 cache-drop in DeveloperGuide | `DeveloperGuide.md` | Document the 100MB threshold and `releaseDocumentBytes` lifecycle | None | Future contributors unaware of cache drop | Code review | None |
+| **GL-02** | DECISION | Med | Production default for R5 directional prefetch | `LocalEmbedPDF.tsx` | Decide whether to keep R5 behind internal harness flag or promote to production | Low (WASM high-water proved stable) | Missing scroll smoothness win on slower devices | Interleaved scroll benchmark | R5 landed |
+| **GL-03** | VERIFY | Low | Re-verify JSPI status when W3C reaches Phase 4 | Engine / WASM | Monitor V8 and WebKit JSPI stabilization | None | Stale architectural assumptions | Spec review | R6 memo |
+
+Safest minimal approval set: `GL-01`, `GL-02`.  
+No item above has been implemented beyond the approved scope.
+
