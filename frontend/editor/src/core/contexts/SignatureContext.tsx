@@ -39,6 +39,7 @@ interface SignatureActions {
   redo: () => void;
   storeImageData: (id: string, data: string) => void;
   getImageData: (id: string) => string | undefined;
+  deleteImageData: (id: string) => void;
   clearImageDataStore: () => void;
   setSignaturesApplied: (applied: boolean) => void;
   setPlacementPreviewSize: (
@@ -161,6 +162,14 @@ export const SignatureProvider: React.FC<{ children: ReactNode }> = ({
     return imageDataStore.current.get(id);
   }, []);
 
+  const deleteImageData = useCallback((id: string) => {
+    const existing = imageDataStore.current.get(id);
+    if (existing && existing.startsWith("blob:")) {
+      URL.revokeObjectURL(existing);
+    }
+    imageDataStore.current.delete(id);
+  }, []);
+
   const clearImageDataStore = useCallback(() => {
     imageDataStore.current.forEach((data) => {
       if (data.startsWith("blob:")) {
@@ -219,6 +228,7 @@ export const SignatureProvider: React.FC<{ children: ReactNode }> = ({
     redo,
     storeImageData,
     getImageData,
+    deleteImageData,
     clearImageDataStore,
     setSignaturesApplied,
     setPlacementPreviewSize,

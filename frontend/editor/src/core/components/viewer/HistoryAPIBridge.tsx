@@ -30,7 +30,7 @@ export const HistoryAPIBridge = forwardRef<HistoryAPI>(
   function HistoryAPIBridge(_, ref) {
     const { provides: historyApi } = useHistoryCapability();
     const { provides: annotationApi } = useAnnotationCapability();
-    const { getImageData, storeImageData } = useSignature();
+    const { getImageData, storeImageData, deleteImageData } = useSignature();
     const documentReady = useDocumentReady();
     const restoringIds = useRef<Set<string>>(new Set());
 
@@ -41,6 +41,15 @@ export const HistoryAPIBridge = forwardRef<HistoryAPI>(
       const handleAnnotationEvent = (event: AnnotationEvent) => {
         if (event.type === "loaded") return;
         const annotation: SignatureAnnotation = event.annotation;
+
+        // A deleted stamp's image data has no reader left: the undo paths
+        // recreate annotations with their own imageSrc, which re-stores it.
+        // Without the prune, each recreation id keeps its full image until
+        // the provider unmounts.
+        if (event.type === "delete" && annotation?.id) {
+          deleteImageData(annotation.id);
+          return;
+        }
 
         // Store image data for all STAMP annotations immediately when created or modified
         if (
@@ -181,7 +190,7 @@ export const HistoryAPIBridge = forwardRef<HistoryAPI>(
         // Note: EmbedPDF doesn't provide a way to remove event listeners
         // This is a limitation of the current API
       };
-    }, [annotationApi, getImageData, storeImageData]);
+    }, [annotationApi, getImageData, storeImageData, deleteImageData]);
 
     useImperativeHandle(
       ref,
