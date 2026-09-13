@@ -34,10 +34,10 @@ const nodeModulesDir = path.resolve(
   "../node_modules",
 );
 
-function loadPackage(name) {
+function loadPackage(name, relTarget = "dist/index.js") {
   const dir = path.join(nodeModulesDir, name);
   const packageJsonPath = path.join(dir, "package.json");
-  const target = path.join(dir, "dist/index.js");
+  const target = path.join(dir, relTarget);
   if (!existsSync(target) || !existsSync(packageJsonPath)) {
     console.error(
       `[patch-embedpdf-plugins] ${name} is not installed; skipping`,
@@ -110,6 +110,72 @@ function applyInteractionManager(pkg) {
   return source;
 }
 
+// --- tiling: abort stale tile renders and never mint an orphan blob URL ------
+// TileImg's cleanup aborted only when no URL had been produced yet, so a tile
+// that resolved after unmount still created an object URL that nothing revoked
+// (fast scroll = orphan blobs). Guard the success callback, always mark the
+// task aborted, and keep TilingLayer SSR-safe (window may be undefined in
+// unsupported/embedded deployments).
+const tileBlockFind = `    const task = scope.renderTile({ pageIndex, tile, dpr });
+    task.wait((blob) => {
+      const objectUrl = URL.createObjectURL(blob);
+      urlRef.current = objectUrl;
+      setUrl(objectUrl);
+    }, ignore);
+    return () => {
+      if (urlRef.current) {
+        URL.revokeObjectURL(urlRef.current);
+        urlRef.current = null;
+      } else {
+        task.abort({
+          code: PdfErrorCode.Cancelled,
+          message: "canceled render task"
+        });
+      }
+    };`;
+const tileBlockReplace = `    let stirlingCancelled = false; /* ${MARKER} */
+    const task = scope.renderTile({ pageIndex, tile, dpr });
+    task.wait((blob) => {
+      if (stirlingCancelled) return;
+      const objectUrl = URL.createObjectURL(blob);
+      urlRef.current = objectUrl;
+      setUrl(objectUrl);
+    }, ignore);
+    return () => {
+      stirlingCancelled = true;
+      if (urlRef.current) {
+        URL.revokeObjectURL(urlRef.current);
+        urlRef.current = null;
+      } else {
+        task.abort({
+          code: PdfErrorCode.Cancelled,
+          message: "canceled render task"
+        });
+      }
+    };`;
+const tileDprFind = "dpr: window.devicePixelRatio,";
+const tileDprReplace =
+  'dpr: typeof window !== "undefined" ? window.devicePixelRatio : 1,';
+
+function checkTiling(pkg) {
+  return (
+    pkg.source.includes(MARKER) &&
+    pkg.source.includes("if (stirlingCancelled) return;") &&
+    pkg.source.includes(tileDprReplace) &&
+    !pkg.source.includes(tileDprFind)
+  );
+}
+
+function applyTiling(pkg) {
+  if (pkg.source.includes(MARKER)) return pkg.source;
+  if (!pkg.source.includes(tileBlockFind))
+    fail(pkg.name, "TileImg render/cleanup");
+  if (!pkg.source.includes(tileDprFind)) fail(pkg.name, "devicePixelRatio");
+  let source = pkg.source.replace(tileBlockFind, () => tileBlockReplace);
+  source = source.replace(tileDprFind, () => tileDprReplace);
+  return source;
+}
+
 // --- search: batch searchAllPages progress dispatches ------------------------
 const searchProgressFind = `    task.onProgress((p) => {
       var _a2;
@@ -161,7 +227,9 @@ const searchHelperSnippet = `  __stirlingQueueSearchProgress(documentId, task, r
 function checkSearch(pkg) {
   return (
     pkg.source.includes(searchHelperSnippet) &&
-    pkg.source.includes("this.__stirlingQueueSearchProgress(documentId, task, p.results);")
+    pkg.source.includes(
+      "this.__stirlingQueueSearchProgress(documentId, task, p.results);",
+    )
   );
 }
 
@@ -188,12 +256,18 @@ const jobs = [
     apply: applyInteractionManager,
   },
   { name: "@embedpdf/plugin-search", check: checkSearch, apply: applySearch },
+  {
+    name: "@embedpdf/plugin-tiling",
+    file: "dist/react/index.js",
+    check: checkTiling,
+    apply: applyTiling,
+  },
 ];
 
 if (checkOnly) {
   let failed = false;
   for (const job of jobs) {
-    const pkg = loadPackage(job.name);
+    const pkg = loadPackage(job.name, job.file);
     if (!job.check(pkg)) {
       console.error(
         `[patch-embedpdf-plugins] check failed for ${job.name}@${EXPECTED_VERSION}. ` +
@@ -210,7 +284,7 @@ if (checkOnly) {
 }
 
 for (const job of jobs) {
-  const pkg = loadPackage(job.name);
+  const pkg = loadPackage(job.name, job.file);
   const patched = job.apply(pkg);
   if (patched !== pkg.source) {
     writeFileSync(pkg.target, patched);
