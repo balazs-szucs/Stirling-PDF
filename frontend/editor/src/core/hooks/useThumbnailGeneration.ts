@@ -183,8 +183,13 @@ export function useThumbnailGeneration() {
       batchTimer = null;
     }
 
-    // Clear the queue and active requests
-    requestQueue.length = 0;
+    // Settle still-queued requests with null (the "no thumbnail" value every
+    // caller already handles) instead of dropping them: an unsettled promise
+    // leaves each awaiter dangling past unmount. Batches already picked up by
+    // the processor finish normally and are harmless post-unmount.
+    for (const pending of requestQueue.splice(0)) {
+      pending.resolve(null);
+    }
     activeRequests.clear();
     isProcessingQueue = false;
 
