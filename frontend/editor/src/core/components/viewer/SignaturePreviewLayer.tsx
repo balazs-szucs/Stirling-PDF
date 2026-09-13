@@ -230,21 +230,32 @@ export const SignaturePreviewLayer = memo(function SignaturePreviewLayer({
                         };
 
                         const handlePointerUp = (upEvent: PointerEvent) => {
+                          endDrag(upEvent);
+                        };
+
+                        // A cancelled pointer never fires pointerup: without
+                        // this the move/up listeners (and the paused
+                        // interaction) would outlive the gesture.
+                        function endDrag(endEvent: PointerEvent) {
                           el.removeEventListener(
                             "pointermove",
                             handlePointerMove,
                           );
                           el.removeEventListener("pointerup", handlePointerUp);
-                          el.releasePointerCapture(upEvent.pointerId);
+                          el.removeEventListener("pointercancel", endDrag);
+                          if (el.hasPointerCapture(endEvent.pointerId)) {
+                            el.releasePointerCapture(endEvent.pointerId);
+                          }
                           resumeInteraction();
                           window.getSelection()?.removeAllRanges();
                           setTimeout(() => {
                             isDraggingRef.current = false;
                           }, 10);
-                        };
+                        }
 
                         el.addEventListener("pointermove", handlePointerMove);
                         el.addEventListener("pointerup", handlePointerUp);
+                        el.addEventListener("pointercancel", endDrag);
                       }
                 }
               >
@@ -354,21 +365,31 @@ export const SignaturePreviewLayer = memo(function SignaturePreviewLayer({
                         };
 
                         const handlePointerUp = (upEvent: PointerEvent) => {
+                          endResize(upEvent);
+                        };
+
+                        // Symmetric with the drag path: pointercancel must
+                        // release the gesture too, or the listeners linger.
+                        function endResize(endEvent: PointerEvent) {
                           el.removeEventListener(
                             "pointermove",
                             handlePointerMove,
                           );
                           el.removeEventListener("pointerup", handlePointerUp);
-                          el.releasePointerCapture(upEvent.pointerId);
+                          el.removeEventListener("pointercancel", endResize);
+                          if (el.hasPointerCapture(endEvent.pointerId)) {
+                            el.releasePointerCapture(endEvent.pointerId);
+                          }
                           resumeInteraction();
                           window.getSelection()?.removeAllRanges();
                           setTimeout(() => {
                             isDraggingRef.current = false;
                           }, 10);
-                        };
+                        }
 
                         el.addEventListener("pointermove", handlePointerMove);
                         el.addEventListener("pointerup", handlePointerUp);
+                        el.addEventListener("pointercancel", endResize);
                       }}
                     />
                   ))}
