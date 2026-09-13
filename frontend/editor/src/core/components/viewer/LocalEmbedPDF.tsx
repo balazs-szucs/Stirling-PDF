@@ -348,13 +348,6 @@ export function LocalEmbedPDF({
   // the unsubscribe the listener pins the document bytes after unmount.
   const annotationUnsubscribeRef = useRef<(() => void) | null>(null);
 
-  useEffect(() => {
-    return () => {
-      annotationUnsubscribeRef.current?.();
-      annotationUnsubscribeRef.current = null;
-    };
-  }, []);
-
   // Read file/url directly into an ArrayBuffer on the main thread so EmbedPDF's worker
   // receives the document data via buffer rather than failing to fetch partitioned blob URLs.
   useEffect(() => {
@@ -408,6 +401,8 @@ export function LocalEmbedPDF({
   // the viewer instead of leaving it on window.
   useEffect(
     () => () => {
+      annotationUnsubscribeRef.current?.();
+      annotationUnsubscribeRef.current = null;
       if (typeof window !== "undefined") {
         delete (window as unknown as { __embedPdfRegistry?: PluginRegistry })
           .__embedPdfRegistry;

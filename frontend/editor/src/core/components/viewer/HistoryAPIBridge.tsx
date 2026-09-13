@@ -173,13 +173,17 @@ export const HistoryAPIBridge = forwardRef<HistoryAPI>(
         }
       };
 
-      // Add the event listener
-      annotationApi.onAnnotationEvent(handleAnnotationEvent);
+      // Add the event listener. `onAnnotationEvent` maps to the annotation
+      // plugin's global emitter, which lives as long as the registry; without
+      // the unsubscribe the listener (and this component's scope) outlives
+      // the viewer.
+      const unsubscribe = annotationApi.onAnnotationEvent(
+        handleAnnotationEvent,
+      );
 
       // Cleanup function
       return () => {
-        // Note: EmbedPDF doesn't provide a way to remove event listeners
-        // This is a limitation of the current API
+        unsubscribe?.();
       };
     }, [annotationApi, getImageData, storeImageData]);
 
