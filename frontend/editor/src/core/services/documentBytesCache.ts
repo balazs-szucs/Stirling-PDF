@@ -67,9 +67,6 @@ function markFileKeySeen(key: string): boolean {
   return seen;
 }
 
-/** Files at or above this threshold have their main-thread cache dropped after worker load. */
-export const LARGE_DOC_CACHE_DROP_THRESHOLD = 100 * 1024 * 1024; // 100 MB
-
 /**
  * Statistics on documentBytesCache reads for profiling and test assertions.
  */

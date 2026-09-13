@@ -89,8 +89,9 @@ import { isPdfFile } from "@app/utils/fileUtils";
 import {
   getDocumentBytes,
   releaseDocumentBytes,
-  LARGE_DOC_CACHE_DROP_THRESHOLD,
 } from "@app/services/documentBytesCache";
+import { hasAcroForm } from "@app/utils/asciiBytes";
+import { isMainBufferDropEligible } from "@app/components/viewer/documentBufferRelease";
 import { useTranslation } from "react-i18next";
 import { LinkLayer } from "@app/components/viewer/LinkLayer";
 import { TextSelectionHandler } from "@app/components/viewer/TextSelectionHandler";
@@ -332,6 +333,12 @@ export function LocalEmbedPDF({
 
   const [isBufferReady, setIsBufferReady] = useState(false);
   const initialBufferRef = useRef<ArrayBuffer | null>(null);
+  // Flipped when the R2 release drops the buffer: recomputes the plugin memo
+  // below so the registration config stops referencing the ArrayBuffer. The
+  // document manager reads initialDocuments only at initialize (verified in
+  // the pinned build), and isBufferReady keeps the loader gate stable, so the
+  // recompute changes no behavior.
+  const [largeBufferReleased, setLargeBufferReleased] = useState(false);
 
   // The annotation plugin keeps `onGlobal` listeners for the registry's whole
   // life (no plugin destroy override clears them), and this component's
@@ -344,6 +351,7 @@ export function LocalEmbedPDF({
   useEffect(() => {
     let cancelled = false;
     setIsBufferReady(false);
+    setLargeBufferReleased(false);
     initialBufferRef.current = null;
     if (file && typeof (file as Blob).arrayBuffer === "function") {
       getDocumentBytes(file as Blob)
@@ -507,7 +515,14 @@ export function LocalEmbedPDF({
 
       createPluginRegistration(PrintPluginPackage),
     ];
-  }, [!!file, isBufferReady, pdfUrl, enableAnnotations, exportFileName]);
+  }, [
+    !!file,
+    isBufferReady,
+    largeBufferReleased,
+    pdfUrl,
+    enableAnnotations,
+    exportFileName,
+  ]);
 
   const fontFallbackConfig = useMemo(() => getLocalFontFallbackConfig(), []);
 
@@ -659,21 +674,28 @@ export function LocalEmbedPDF({
               // Registry layout changed or plugin absent: nothing to clear.
             }
 
-            // Release the main-thread buffer and cache entry for large documents (>= 100MB)
-            // after the worker clone lands, so ~150MB is not pinned on the main thread.
+            // Release the main-thread buffer and cache entry for large
+            // form-less documents after the worker clone lands, so ~150MB is
+            // not pinned on the main thread. The memo below recomputes on the
+            // release flag: without that the registration config would keep
+            // referencing the ArrayBuffer (proven by retainer trace).
             const releaseLargeBuffer = () => {
+              const buf = initialBufferRef.current;
               if (
                 file &&
-                (file as Blob).size >= LARGE_DOC_CACHE_DROP_THRESHOLD
+                buf &&
+                isMainBufferDropEligible(
+                  (file as Blob).size,
+                  hasAcroForm(new Uint8Array(buf)),
+                )
               ) {
                 initialBufferRef.current = null;
                 releaseDocumentBytes(file as Blob);
+                setLargeBufferReleased(true);
                 console.debug(
                   "[LocalEmbedPDF] Released main-thread document buffer for large file:",
                   (file as File).name || "blob",
                 );
-              } else {
-                initialBufferRef.current = null;
               }
             };
 
