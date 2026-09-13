@@ -1218,3 +1218,96 @@ that fail identically on **pristine HEAD** (stash + original vendor plugin +
 rebuild bisect), i.e. pre-existing; focused viewer batch **52 passed + 1
 skip**; redaction spec **4/4**; soak default + form green; engine smoke
 Chromium/Firefox/WebKit **3/3**.
+
+### Text-selection action menu (annotation/redact) — ported from `dropdown-lot-of-dropdowns`
+
+Bug: selecting text in the viewer only offered Copy, so there was no way to
+mark a selection as a highlight/underline/strikeout/squiggly/link or queue it
+for redaction — "the redact/annotation menu does not pop up". The full menu
+existed only on the unmerged `dropdown-lot-of-dropdowns` branch
+(`ebd2d5752`/`a8713aafd`); this ports it to the current viewer.
+
+`TextSelectionMenu.tsx` now renders Copy, Highlight, Strikeout, Underline,
+Squiggly, Link and Redact for the current selection:
+
+- Markup + link actions create annotations through the annotation plugin
+  (`useAnnotation(documentId).createAnnotation`) with the selection's
+  `rect`/`segmentRects`, then clear the selection, flag unsaved changes and
+  open the Annotate panel. Link opens a URL popover first.
+- Redact delegates to the redaction plugin's
+  `forDocument(documentId).queueCurrentSelectionAsPending()` — the plugin
+  owns annotation-mode conversion, text capture and selection clearing
+  (hand-building REDACT annotations raced it and intermittently blanked the
+  page), then opens the manual redaction panel and activates redaction once
+  the bridge is ready.
+- The menu is suppressed while redaction mode is active: the redact plugin
+  converts selections itself, and the portal could swallow the second click
+  of a double-click gesture.
+
+Evidence: new `viewer-text-selection-menu.spec.ts` (5 tests: all seven
+actions render; Highlight produces a type-9 annotation; Redact produces a
+pending redaction and the Apply Redactions panel; Link produces a type-2
+annotation; menu hidden in redact mode) — 5/5 three consecutive runs. Broad
+viewer batch **59 passed + 1 skip**; `viewer-redaction-text-selection` +
+`viewer-redaction-exit-restores-selection` + `viewer-text-selection`
+**17/17**; engine smoke 3/3; soak default + form green; typecheck/lint/format
+clean.
+
+## Implementation pass 7 — frontier + tricks (2026-09-13, CLI; loaded machine, timings UNVERIFIED)
+
+Exploration + two shipped wins. Full report + source-by-source ledger delta
+in `frontend/editor/.perf-local/` (`frontier-report-pass6.md`,
+`research-ledger.md` §E–F). No pushes. Note: a second agent works the same
+tree concurrently (TextSelectionMenu section above); my probes ran on :5174
+and every dist measurement was coherence-checked (no dangling chunk refs).
+
+### Commits (this pass; prior pass-6 lock-in: `ceb52f779`/`cac5fdb64`/`b99a0c8b1`/`911188913`)
+
+| Commit | Change | Evidence |
+| --- | --- | --- |
+| `c511e6da6` | **G21** `plugin-search` progress coalescing (extends the local plugin patch: per-page `appendSearchResults` dispatches batch into one microtask; merged flush preserves final state; pdf.js `updateMatchesCountOnProgress=false` template) | pages-500 "lorem", preview, interleaved A/B n=3/4: first results **667→530 ms (−21%)**, TaskDuration **495→355 ms (−28%)**, long tasks **216→94 ms (−56%)**, ranges separated; settle probe 4000/4000 with 0 long-task ms |
+| `28fb8583e` | **G23b** jszip off the viewer waterfall (cached `loadJSZip()` in zip utilities + WatchedFolder; pako split to `vendor-pako`; `modulepreload.resolveDependencies` drops vendor-zip) | large-40mb open: vendor-zip **45226 B → not fetched** (−3.4% JS transfer); zip upload pulls it on demand (30396 B), extracted PDF renders, 0 page errors; unit 11/11 |
+
+G23b ships below the 10% bar on bytes alone, stated plainly: it is the
+deterministic, zero-behavior-change completion of the G23 startup diet
+(posthog 77 KB conditional + zip 45 KB unconditional ≈ 122 KB). Revert
+with `git revert 28fb8583e` if the bar is held strictly.
+
+### Measured, not shipped
+
+- **Jump main-thread CLOSED.** Post-G19 profile re-analysis (`jumpFinal`,
+  offline): `getState` ~14% of busy (was 22.8%), bitmap-receive ~10%,
+  wall ~1.3 s at ~20% main busy. No remaining >10% main-thread target;
+  remainder is worker raster + settle → G31.
+- **Supabase static edge PARKED (G30).** proprietary AppProviders →
+  LicenseProvider → licenseService → supabaseClient → SDK: 190 KB raw /
+  ~51 KB gz in every viewer waterfall, named import unused there. Fix is
+  the G23 async-getter pattern but auth/licensing-adjacent (M, owner
+  sign-off + flavour matrix).
+
+### Traps documented (do not re-learn)
+
+- Lazy import alone saved nothing: vite `modulepreload` re-fetched the
+  chunk (fix: `resolveDependencies` filter) and pako shared the chunk
+  (fix: split). All three legs required; verified at each step.
+- vite 7 `resolveDependencies` deps are **strings** (`dep.filename` keeps
+  everything — silent no-op).
+- `export =` CJS interop: `typeof import(x).default` degrades inference
+  (TS18046); annotate `Promise<typeof X>` via `import type`.
+- Rollup `manualChunks(id, { getModuleInfo })` + `importers` names the
+  true static importer when dist-grep misleads (here: WatchedFolder, the
+  last static jszip edge).
+
+### Verification matrix (this pass, current tree)
+
+typecheck/lint/format clean; vitest **3452/3452**; viewer batch **52
+passed + 1 pre-existing skip**; soak default + form green; engine smoke
+Chromium/Firefox/WebKit **3/3**; corpus spot (text + forms-acroform +
+large-real tags) **18/18 rendered, 0 errors**.
+
+### Open items (delta)
+
+G30 supabase-lazy (M, sign-off), G31 jump worker-side (M),
+G32 low-end encode comparison (S/M). Carried: G22 (blocked G13), G25
+print-DPI, G26 GPU-RSS, G27 8-flow matrix, G28 Tauri, G29 JSPI memo.
+G20 stays refuted.

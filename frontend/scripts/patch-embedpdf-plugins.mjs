@@ -161,7 +161,9 @@ const searchHelperSnippet = `  __stirlingQueueSearchProgress(documentId, task, r
 function checkSearch(pkg) {
   return (
     pkg.source.includes(searchHelperSnippet) &&
-    pkg.source.includes("this.__stirlingQueueSearchProgress(documentId, task, p.results);")
+    pkg.source.includes(
+      "this.__stirlingQueueSearchProgress(documentId, task, p.results);",
+    )
   );
 }
 
