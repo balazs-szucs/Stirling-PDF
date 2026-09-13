@@ -1,8 +1,20 @@
 import { useEffect } from "react";
-import posthog from "posthog-js";
+import type { PostHog } from "posthog-js";
 import { useAppConfig } from "@app/contexts/AppConfigContext";
+import { setAnalyticsEnabled } from "@app/services/analytics";
 
-function applyPosthogConsent(): void {
+// posthog-js is only needed when analytics are enabled and a key is compiled
+// in; the dynamic import keeps its vendor chunk off the startup graph for
+// self-hosted installs with analytics off. The module promise is shared so
+// repeated mounts do not re-request the chunk.
+let posthogModule: Promise<typeof import("posthog-js")> | null = null;
+
+function loadPosthog(): Promise<PostHog | null> {
+  posthogModule ??= import("posthog-js");
+  return posthogModule.then((module) => module.default).catch(() => null);
+}
+
+function applyPosthogConsent(posthog: PostHog): void {
   if (typeof window === "undefined" || !posthog.__loaded) {
     return;
   }
@@ -20,7 +32,7 @@ function applyPosthogConsent(): void {
   posthog.set_config({ persistence: "memory" });
 }
 
-function ensurePosthogInitialized(): boolean {
+function ensurePosthogInitialized(posthog: PostHog): boolean {
   if (typeof window === "undefined") {
     return false;
   }
@@ -53,31 +65,42 @@ export function usePosthogTracking(): void {
   useEffect(() => {
     const analyticsEnabled = config?.enableAnalytics === true;
     const posthogEnabled = analyticsEnabled && config?.enablePosthog !== false;
+    setAnalyticsEnabled(posthogEnabled);
+    let cancelled = false;
+    let removeConsentListeners: (() => void) | undefined;
 
-    if (!posthogEnabled) {
-      if (posthog.__loaded) {
-        posthog.opt_out_capturing();
-        posthog.set_config({ persistence: "memory" });
+    void loadPosthog().then((posthog) => {
+      if (!posthog || cancelled) return;
+
+      if (!posthogEnabled) {
+        if (posthog.__loaded) {
+          posthog.opt_out_capturing();
+          posthog.set_config({ persistence: "memory" });
+        }
+        return;
       }
-      return;
-    }
 
-    if (!ensurePosthogInitialized()) {
-      return;
-    }
+      if (!ensurePosthogInitialized(posthog)) {
+        return;
+      }
 
-    applyPosthogConsent();
+      applyPosthogConsent(posthog);
 
-    const handleConsentChange = () => {
-      applyPosthogConsent();
-    };
+      const handleConsentChange = () => {
+        applyPosthogConsent(posthog);
+      };
 
-    window.addEventListener("cc:onConsent", handleConsentChange);
-    window.addEventListener("cc:onChange", handleConsentChange);
+      window.addEventListener("cc:onConsent", handleConsentChange);
+      window.addEventListener("cc:onChange", handleConsentChange);
+      removeConsentListeners = () => {
+        window.removeEventListener("cc:onConsent", handleConsentChange);
+        window.removeEventListener("cc:onChange", handleConsentChange);
+      };
+    });
 
     return () => {
-      window.removeEventListener("cc:onConsent", handleConsentChange);
-      window.removeEventListener("cc:onChange", handleConsentChange);
+      cancelled = true;
+      removeConsentListeners?.();
     };
   }, [config?.enableAnalytics, config?.enablePosthog]);
 }
