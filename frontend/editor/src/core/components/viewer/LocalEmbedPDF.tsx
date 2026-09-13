@@ -41,6 +41,10 @@ import {
   ViewerPagePointerProvider,
 } from "@app/components/viewer/ViewerPointerProviders";
 import { SpreadPluginPackage, SpreadMode } from "@embedpdf/plugin-spread/react";
+import {
+  DirectionalPrefetchController,
+  isPrefetchSpikeEnabled,
+} from "@app/components/viewer/prefetchSpike";
 import { SearchPluginPackage } from "@embedpdf/plugin-search/react";
 import { ThumbnailPluginPackage } from "@embedpdf/plugin-thumbnail/react";
 import { RotatePluginPackage, Rotate } from "@embedpdf/plugin-rotate/react";
@@ -1032,12 +1036,14 @@ export function LocalEmbedPDF({
     if (file && !isBufferReady) return [];
     if (!isBufferReady && !pdfUrl) return [];
 
+    const prefetchActive = isPrefetchSpikeEnabled();
     const deviceMemory =
       typeof navigator !== "undefined"
         ? ((navigator as Navigator & { deviceMemory?: number }).deviceMemory ??
           4)
         : 4;
-    const bufferSize = deviceMemory >= 4 ? 4 : 2;
+    const baseBufferSize = deviceMemory >= 4 ? 4 : 2;
+    const bufferSize = prefetchActive ? baseBufferSize + 2 : baseBufferSize;
 
     return [
       createPluginRegistration(DocumentManagerPluginPackage, {
@@ -1117,7 +1123,7 @@ export function LocalEmbedPDF({
       createPluginRegistration(TilingPluginPackage, {
         tileSize: 1024,
         overlapPx: 2.5,
-        extraRings: 0,
+        extraRings: prefetchActive ? 1 : 0,
         defaultImageType: "image/bmp", // BMP is faster for local processing than WebP
       }),
 
@@ -1517,6 +1523,7 @@ export function LocalEmbedPDF({
           >
             {(documentId) => (
               <>
+                <DirectionalPrefetchController documentId={documentId} />
                 <ViewerGlobalPointerProvider documentId={documentId}>
                   <Viewport
                     documentId={documentId}

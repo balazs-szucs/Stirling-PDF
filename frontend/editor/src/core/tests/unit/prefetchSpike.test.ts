@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
   isPrefetchSpikeEnabled,
   computeDirectionalPrefetchTarget,
-} from "../../components/viewer/prefetchSpike";
+} from "@app/components/viewer/prefetchSpike";
 
 describe("prefetchSpike contract characterization (R5)", () => {
   const originalWindowLocation = window.location;
@@ -26,7 +26,6 @@ describe("prefetchSpike contract characterization (R5)", () => {
     });
 
     it("activates when search params contains prefetch=1", () => {
-      const originalSearch = window.location.search;
       try {
         Object.defineProperty(window, "location", {
           writable: true,
