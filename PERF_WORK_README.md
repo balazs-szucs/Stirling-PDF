@@ -974,3 +974,123 @@ a document store — all rejected on the stated grounds (synchronous string API
 with ~5 MB quota and UTF-16 binary; measured unnecessary with ~50-80 ms eager
 compile and immutable `/assets/**`; every `get()` reconstructs a
 structured-cloned buffer).
+
+# FINAL PROD STATE — pass 4 (2026-09-13), frozen build
+
+Branch `viewer-perf-recon`, base `upstream/main` `77b325cf1`, local-only. All
+numbers below were re-measured on the frozen source (commit `e2885425d`, build
+`build-final-prod`); machine was heavily loaded (load 15-20/18) so **timings
+stay UNVERIFIED**, counts/drifts/heap-snapshots are deterministic. Tree clean,
+`.perf-local/` git-excluded.
+
+## Session commit inventory (on top of the merged PR branches)
+
+| Commit | What |
+| --- | --- |
+| `a542633f1` | registry no longer pins the document buffer; window debug handle dropped |
+| `30f30cee5` | soak: live-wasm WeakRefs + blob finalization probe |
+| `34ce4a546` | bytes-cache / scan-queue contract tests |
+| `c92191bb9` | corpus gauntlet docs (G11-G15) |
+| `c1860a3da` | **release document bytes on close** (annotation unsubscribe + weak cache values) |
+| `e9b820d5a` | engine patch revokes worker blob URLs |
+| `852192fac` | respawn threshold 100 MB -> 10 MB |
+| `af916fd63` | approved follow-through docs |
+| `2dad72c57` | **File-signature read dedupe** |
+| `faeadac74` | drop dead signature-detection service |
+| `e2885425d` | streaming/low-allocation evaluation docs |
+
+Net tracked diff this session: 10 files, +585/-138.
+
+## Verification matrix (frozen build)
+
+| Gate | Result |
+| --- | --- |
+| `task frontend:typecheck` | clean |
+| `task frontend:lint` | clean |
+| `task frontend:test` | **3451/3451** (3444 at session start, +7) |
+| Viewer e2e batch (9 specs) | **48 passed + 1 pre-existing skip** |
+| Engine smoke (Chromium/Firefox/WebKit) | **3/3** |
+| Soak (default + form fixture) | pass, all budgets |
+| Corpus functional (60 files, both arms) | **60/60, zero deltas** |
+| `check:embedpdf-patch` | pass |
+
+## Corpus (frozen build)
+
+60 files / 72.9 MB / sha256 verified 60/60: pdf.js `test/pdfs` 43,
+openpreserve govdocs1-error-pdfs 12, veraPDF 5. Tags: corrupted 18,
+annotated 12, real-world 12, large-real 8, forms-acroform 7, text 7,
+fonts-weird 6, images-heavy 6, conformance 5, rotated 4, signed 2, encrypted 2,
+xfa 2, tagged 2, attachment 2, rtl 1, multi-page 1. Functional: 60/60 rendered
+on both arms, 0 error surfaces, 0 fatal errors, form readback probes work.
+Pixel: 75 paired captures, 51 differ (BMP branch vs PNG upstream plus the
+merged viewer layout); strict-raster rerun of the 11 outliers tops out at 7.7%
+(most <4.4%), same-arm capture noise 0.000% (prior pass).
+
+### Final perf counters, 8 files x3 runs/arm (medians, timings UNVERIFIED)
+
+| metric | baseline (upstream) | frozen branch | delta |
+| --- | --- | --- | --- |
+| main wasm peak pages | 284 (p90 2080) | 284 (p90 1968) | -5.4% p90 |
+| heap after GC | 18.7 MB | **15.7 MB** | **-16%** |
+| long-task total | 51.5 ms (p90 1122) | **0 ms (p90 296)** | -100% p50 |
+| `Blob.arrayBuffer` calls | 11.5 | **5.5** | -52% |
+| blob bytes/run | 0.45 MB (p90 54.4) | **0.15 MB (p90 7.9)** | -67% |
+| run duration | 2889 ms | 2729 ms | noise |
+
+Per-file full reads now equal exactly one file copy: plan 41.9→6.1 MB,
+issue12841 44.8→5.7 MB, issue3188 54.4→7.9 MB. **No file regressed >15% on
+wasm peak or heap.** `encrypted-attachment.pdf` remains the only row where the
+branch instantiates main PDFium (284 pp) and upstream does not (0).
+
+### Synthetic fixtures (frozen build, counts deterministic)
+
+| fixture | first page | long tasks | heap | main wasm | worker wasm | copies | m2w |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| large-40mb (40.4 MB) | 824 ms | 0 ms | 16.9 MB | 810 pp / 50.6 MB | 810 pp | 1 full 40.6 MB | 40.4 MB cloned |
+| pages-500 | 173 ms | 0 ms | 17.0 MB | 285 pp / 17.8 MB | 285 pp | 0.5 MB | 0.3 MB |
+| huge-150mb (155 MB) | 733 ms | 60 ms (pre-existing) | 16.5 MB | 285 pp / 17.8 MB | (respawned after close) | 1 full 155 MB + probes | 155 MB cloned, postMessage 16 ms |
+| form-40mb (30.4 MB) | 686 ms | 51 ms | 17.4 MB | 1070 pp / 66.9 MB | 742 pp / 46.4 MB | 1 full 30.6 MB | 30.9 MB |
+| large scroll (50 wheel steps) | 726 ms | 0 ms | 16.5 MB | 810 pp | - | - | 44.7 posted / 44.3 transferred |
+
+## Memory before/after (the pass's headline)
+
+| signal | before | after | evidence |
+| --- | --- | --- | --- |
+| document ArrayBuffer after close (155 MB fixture) | **162,539,566 B live** | **none** (no backing store >1 MB) | mh14/mh15 snapshots + retainer traces |
+| registry `initialDocuments` after init | 1 (full buffer) | 0 | mh15 registry read |
+| annotation listener capturing buffer | present, unremoved | unsubscribed on unmount | heap retainer map (only closure holding it) |
+| `documentBytesCache` retention | promise value in `WeakMap<Blob, …>` | WeakRef values + File-signature tier | unit tests + retainer map |
+| worker object URLs | **+2 per engine respawn** | 0 (revoked after construction) | form soak blob count flat at 1 |
+| worker wasm floor, 10-100 MB docs | retained (50.6/46.4 MB) | reclaimed on empty (742→284 pp) | form soak cycles 1/5/9 |
+| real-file full reads | 2-3 per open (wrapped Files) | 1 | plan PDF 12.1→6.1 MB |
+| main PDFium linear memory | 17.8-123 MB retained for the session | **unchanged (G13 blocked)** | mh18/mh20 |
+
+## G13 negative results (do not re-try blind)
+
+Two attempts measured on the frozen base:
+1. reset-on-empty alone: creates a second instance on reopen (`liveMems` 1→2,
+   `liveWasm` 284→568 pp) while the old one stays live.
+2. reset + breaking the `instantiateWasm`/`instantiateFailed` promise hook
+   after init (`e2885425d`^ chain): identical result — the wrapper is still
+   retained through a `PromiseReaction`-rooted pending promise chain
+   (snapshots `mh14-after-remove.heapsnapshot`, logs `result-mh18/20`).
+   Next step if pursued: capture a snapshot during the first open and name
+   the pending chain (microtask instrumentation), then re-test with
+   `MH14_EXPECT_RECLAIM=1`.
+
+## Open items (ranked, mapped with evidence)
+
+1. **G15** — real image-heavy plans: 6.1 MB plan -> 1968 pp/123 MB main wasm,
+   558 ms long tasks (baseline 1142 ms). Fix: worker-side record thumbnails
+   (R1/G4). Repro: `PERF_CORPUS_IDS=12 PERF_CORPUS_PERF=1`.
+2. **G13** — main PDFium wasm floor 17.8-123 MB/session (see above).
+3. **G17** — per-page form extraction (form fixture main wasm 66.9 MB); needs
+   product sign-off on save/validation semantics.
+4. **G18** — worker-owned canonical document buffer (removes the 155 MB clone
+   and main-cache residency); multi-pass.
+5. **G12b** — full plugin-teardown decoupling; superseded by G12a for the
+   measured retention, keep only if the registry/plugin graph grows.
+6. **R1** — worker `createImageBitmap` + transfer; docs leg verified (MDN),
+   app path is an L cross-plugin refactor, no measured main-thread win yet.
+7. **R2** — COOP/COEP memo (SAB needs a pthread pdfium rebuild; SaaS needs a
+   Supabase/PostHog CORP audit); owner decision.
