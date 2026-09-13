@@ -45,6 +45,8 @@ const patchedSnippets = [
   "imageData.byteOffset === 0",
   "wasmModule: precompiledWasmModule",
   "delete wasmInitMessage.wasmModule",
+  "__stirlingCreatedUrls",
+  "URL.revokeObjectURL(__stirlingUrl)",
 ];
 if (checkOnly) {
   const missing = patchedSnippets.filter((snippet) => !source.includes(snippet));
@@ -58,9 +60,6 @@ if (checkOnly) {
   console.log(
     `[patch-embedpdf-engines] check passed for @embedpdf/engines@${installedVersion}`,
   );
-  process.exit(0);
-}
-if (source.includes(MARKER)) {
   process.exit(0);
 }
 
@@ -133,9 +132,60 @@ const replacements = [
       this.worker.postMessage(wasmInitMessage);
     }`,
   },
+  {
+    label: "engine: capture worker blob URLs",
+    find: `  const { logger, encoderPoolSize, fontFallback, wasmModule: precompiledWasmModule } = config;
+  const worker = new Worker(`,
+    replace: `  const { logger, encoderPoolSize, fontFallback, wasmModule: precompiledWasmModule } = config;
+  const __stirlingCreatedUrls = [];
+  const __stirlingCreateObjectURL = URL.createObjectURL.bind(URL);
+  URL.createObjectURL = (obj) => {
+    const url = __stirlingCreateObjectURL(obj);
+    __stirlingCreatedUrls.push(url);
+    return url;
+  };
+  const worker = new Worker(`,
+  },
+  {
+    label: "engine: revoke worker blob URLs after construction",
+    find: `  return new PdfEngine(remoteExecutor, {
+    imageConverter: createHybridImageConverter(encoderPool),
+    logger
+  });
+}
+export {
+  createPdfiumEngine
+};`,
+    replace: `  const __stirlingEngine = new PdfEngine(remoteExecutor, {
+    imageConverter: createHybridImageConverter(encoderPool),
+    logger
+  });
+  URL.createObjectURL = __stirlingCreateObjectURL;
+  // The worker scripts are Blob URLs and this build never revokes them, so
+  // every engine (re)creation leaked one object URL per worker. All workers
+  // have been constructed synchronously by now; release the URLs on a
+  // macrotask so the platform has resolved them.
+  setTimeout(() => {
+    for (const __stirlingUrl of __stirlingCreatedUrls) {
+      try {
+        URL.revokeObjectURL(__stirlingUrl);
+      } catch {
+        /* already revoked */
+      }
+    }
+  }, 0);
+  return __stirlingEngine;
+}
+export {
+  createPdfiumEngine
+};`,
+  },
 ];
 
 for (const { label, find, replace } of replacements) {
+  if (source.includes(replace)) {
+    continue;
+  }
   if (!source.includes(find)) {
     console.error(
       `[patch-embedpdf-engines] anchor not found for "${label}" in @embedpdf/engines@${installedVersion}. ` +
