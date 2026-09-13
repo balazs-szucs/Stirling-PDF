@@ -890,3 +890,87 @@ decodes them inside PDFium on the main thread even though the thumbnail output
 is clamped to 400 px. Fix direction: render record thumbnails for image-heavy
 docs in the engine worker (G4/G15), or derive them from the worker's first
 page render. Harness for verifying: `PERF_CORPUS_IDS=12 PERF_CORPUS_PERF=1`.
+
+## Streaming / low-allocation roadmap — evaluation results (2026-09-13)
+
+### Executed probes and shipped fixes
+
+**Read dedupe (roadmap 4-adjacent, shipped `fix(viewer): share cached bytes
+across File wrappers`).** Readable dev stacks (`PERF_STACKS=1`, plan PDF) showed
+three full reads on add: `generateThumbnailPairWithMetadata`,
+`extractPDFMetadata` (classification) and `LocalEmbedPDF` each called
+`getDocumentBytes` with a *different* `File` wrapper for the same bytes
+(`createStirlingFile` re-wraps with `new File([file], ...)`). Production
+measured two full reads (12.1 MB for the 6.1 MB plan). `documentBytesCache` now
+has a File-signature tier (name/size/type/lastModified + byte-length guard,
+LRU-capped, weak values) while bare Blobs stay identity-keyed. After:
+`blobArrayBufferCalls` 6, `blobArrayBufferMB` **6.1 (1 read)**. Unit tests:
+same-metadata wrappers share, changed mtime re-reads, bare Blobs of equal size
+do not share.
+
+**Dead code (shipped `chore(viewer): drop the unused signature-detection
+service`).** `signatureDetectionService.ts` had zero importers and handed a
+full `file.arrayBuffer()` to pdf.js (which detaches the buffer), bypassing
+`documentBytesCache`. Deleted.
+
+**Roadmap 6 audit (no change needed).** Hot paths already use zero-copy:
+`heap.subarray()` for wasm reads, `Blob.slice()` for encrypt/linearization
+probes, 8-byte header reads; the `new Uint8ClampedArray(heapView.subarray())`
+copies are deliberate (ImageData ownership before `free`).
+
+### Roadmap 1 (worker `createImageBitmap` + transfer) — PROBE result: mechanism valid, deferred
+
+Docs leg verified: MDN `createImageBitmap` accepts `Blob`/`ImageData`, is
+available on `WorkerGlobalScope`, and `ImageBitmap` is listed among
+transferable objects (move semantics). Two legs missing for a ship decision:
+
+- Path: with `defaultImageType: "image/bmp"` both converters
+  (`createWorkerPoolImageConverter`, `createHybridImageConverter`) return in
+  `rgbaToBmpBlob` **on the main thread** and never touch the encoder pool.
+  Switching to transferred `ImageBitmap` changes the `PdfPageImage` contract
+  consumed by `RenderLayer` (`<img src=URL.createObjectURL(blob)>`), the tiling
+  and thumbnail plugins, and the converters — an L cross-plugin refactor.
+- Benefit: not yet shown on current files. Scroll soaks measure 0 ms long tasks
+  with the BMP wrap; the plan-PDF 304+268 ms tasks attribute (stacks) to the
+  main-thread thumbnail/PDFium decode path (G15), not to the Blob wrap. The
+  win would be transient main-heap residency, which the WeakRef cache and
+  post-`onLoad` revocation already bound.
+Recommend: revisit together with G15 (worker-side record thumbnails) or when a
+profile shows main-side BMP wrap/decode cost; keep the bitmap `close()` audit
+as part of that work.
+
+**Roadmap 2 (`transferToImageBitmap`)** — no in-worker canvas rasterization
+path exists today (PDFium renders through its bitmap API; BMP bypasses the
+encoder pool on main). Not applicable; keep for tiling-in-worker.
+
+### Roadmap 5 (COOP/COEP + SharedArrayBuffer) — MEMO, owner decision
+
+What it unlocks: (a) `SharedArrayBuffer` shared wasm memory — the only true
+zero-copy main<->worker document mechanism; (b) `performance.measureUserAgentSpecificMemory()`
+(the documented harness gap). Requirements/costs verified locally:
+- Shared memory additionally needs a `-pthread`/`SHARED_MEMORY` pdfium build;
+  the pinned `@embedpdf/pdfium@2.15.0` exports a single non-shared `memory`,
+  so this means rebuilding the pinned binary — currently out of scope — and a
+  mandatory `maximum` because shared backing buffers cannot be reallocated when
+  the memory grows.
+- Header surface: Spring `WebMvcConfig`/security config can add
+  `Cross-Origin-Opener-Policy: same-origin` + `Cross-Origin-Embedder-Policy:
+  require-corp|credentialless`, but every cross-origin subresource then needs
+  CORP/CORS. Core/self-hosted loads none; the SaaS flavor loads Supabase
+  (`*.supabase.co`, auth/Realtime) and PostHog (`eu.i.posthog.com`), and those
+  must be audited (CORP headers, fetch modes, credentialless compatibility)
+  before any rollout. OAuth/SAML here is redirect-based, not popup-based, so
+  COOP same-origin should not break it — verify on staging.
+Recommendation: keep CLOSED for SaaS/proprietary; if pursued, stage it for
+core only: (1) serve the headers on a staging deploy and assert
+`self.crossOriginIsolated === true` in page **and** worker; (2) run the viewer
+e2e batch + auth flows; (3) only then evaluate SAB, which is a separate
+binary-rebuild decision.
+
+### Dead ends (confirmed, no work)
+
+localStorage/sessionStorage for bytes; IndexedDB wasm-module tier; IndexedDB as
+a document store — all rejected on the stated grounds (synchronous string API
+with ~5 MB quota and UTF-16 binary; measured unnecessary with ~50-80 ms eager
+compile and immutable `/assets/**`; every `get()` reconstructs a
+structured-cloned buffer).
