@@ -25,6 +25,10 @@ interface LocalPdfiumEngineOptions {
   logger?: Logger;
   encoderPoolSize?: number;
   fontFallback?: FontFallbackConfig | null;
+  cache?: {
+    pageTtl?: number;
+    maxPagesPerDocument?: number;
+  };
 }
 
 // Minimum time between respawns so close/open churn cannot cycle workers.
@@ -35,6 +39,7 @@ export function useLocalPdfiumEngine({
   logger,
   encoderPoolSize,
   fontFallback,
+  cache,
 }: LocalPdfiumEngineOptions) {
   const [engine, setEngine] = useState<PdfEngine<Blob> | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -43,6 +48,10 @@ export function useLocalPdfiumEngine({
   const optionsRef = useRef<
     | (CreatePdfiumEngineOptions & {
         wasmModule?: WebAssembly.Module;
+        cache?: {
+          pageTtl?: number;
+          maxPagesPerDocument?: number;
+        };
       })
     | null
   >(null);
@@ -64,7 +73,11 @@ export function useLocalPdfiumEngine({
     ]).finally(() => clearTimeout(precompileTimer));
     const options: CreatePdfiumEngineOptions & {
       wasmModule?: WebAssembly.Module;
-    } = { logger, encoderPoolSize, fontFallback };
+      cache?: {
+        pageTtl?: number;
+        maxPagesPerDocument?: number;
+      };
+    } = { logger, encoderPoolSize, fontFallback, cache };
     if (precompiled?.module) {
       options.wasmModule = precompiled.module;
     }

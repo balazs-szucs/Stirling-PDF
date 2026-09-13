@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 
 describe("PdfCache and engine cache configuration contract", () => {
   it("pins DEFAULT_CONFIG in @embedpdf/engines cache implementation", async () => {
-    // Read the engines direct-engine or cache bundle to pin default cache constants
+    // Read the engines worker-engine bundle to pin default cache constants
     const fs = await import("fs");
     const path = await import("path");
     const engineFile = path.resolve(
@@ -16,7 +16,7 @@ describe("PdfCache and engine cache configuration contract", () => {
     expect(content).toContain("maxPagesPerDocument: 10");
   });
 
-  it("pins that unpatched createPdfiumEngine omits cache configuration from wasmInit", async () => {
+  it("forwards cache configuration to worker wasmInit when provided, and preserves default when omitted", async () => {
     const originalWorker = globalThis.Worker;
     const originalUrl = globalThis.URL;
     const originalBlob = globalThis.Blob;
@@ -50,28 +50,53 @@ describe("PdfCache and engine cache configuration contract", () => {
         "@embedpdf/engines/pdfium-worker-engine"
       );
 
-      // Call createPdfiumEngine with cache option
-      // @ts-expect-error testing extra cache option
+      // 1. With cache option provided
+      // @ts-expect-error testing exposed cache option
       createPdfiumEngine("https://example.com/pdfium.wasm", {
         cache: { pageTtl: 10000, maxPagesPerDocument: 25 },
       });
 
       expect(postedMessages.length).toBeGreaterThan(0);
-      const initMessage = postedMessages.find(
-        (msg): msg is { type: string; cache?: unknown } =>
-          typeof msg === "object" &&
-          msg !== null &&
-          "type" in msg &&
-          (msg as { type: string }).type === "wasmInit",
-      );
+      const msgWithCache = postedMessages[0] as {
+        type: string;
+        cache?: { pageTtl: number; maxPagesPerDocument: number };
+      };
+      expect(msgWithCache.type).toBe("wasmInit");
+      expect(msgWithCache.cache).toEqual({
+        pageTtl: 10000,
+        maxPagesPerDocument: 25,
+      });
 
-      expect(initMessage).toBeDefined();
-      // In unpatched state, cache is omitted from wasmInit
-      expect(initMessage?.cache).toBeUndefined();
+      // 2. Without cache option provided
+      postedMessages.length = 0;
+      createPdfiumEngine("https://example.com/pdfium.wasm", {});
+      const msgWithoutCache = postedMessages[0] as {
+        type: string;
+        cache?: unknown;
+      };
+      expect(msgWithoutCache.type).toBe("wasmInit");
+      expect(msgWithoutCache.cache).toBeUndefined();
     } finally {
       globalThis.Worker = originalWorker;
       globalThis.URL = originalUrl;
       globalThis.Blob = originalBlob;
     }
+  });
+
+  it("verifies worker script bundle wires cache into PdfCache instantiation", async () => {
+    const fs = await import("fs");
+    const path = await import("path");
+    const engineFile = path.resolve(
+      __dirname,
+      "../../../../../node_modules/@embedpdf/engines/dist/lib/pdfium/web/worker-engine.js",
+    );
+    const content = fs.readFileSync(engineFile, "utf8");
+
+    // Pin that the worker bundle extracts cache from event.data, passes to runner, and supplies to PdfCache
+    expect(content).toContain("cache: cacheConfig");
+    expect(content).toContain("this.cacheConfig = cacheConfig");
+    expect(content).toContain(
+      "new PdfCache(this.pdfiumModule, this.memoryManager, cacheConfig)",
+    );
   });
 });

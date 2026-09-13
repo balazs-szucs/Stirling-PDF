@@ -49,6 +49,10 @@ const patchedSnippets = [
   "delete wasmInitMessage.wasmModule",
   "__stirlingCreatedUrls",
   "URL.revokeObjectURL(__stirlingUrl)",
+  "cache: cacheConfig",
+  "if (options.cache) wasmInitMessage.cache = options.cache;",
+  "this.cacheConfig = cacheConfig",
+  "new PdfCache(this.pdfiumModule, this.memoryManager, cacheConfig)",
 ];
 
 if (checkOnly) {
@@ -96,26 +100,20 @@ const replacements = [
       'respond(response) {\\n    this.logger.debug(LOG_SOURCE, LOG_CATEGORY, "Sending response:", response.type);\\n    const imagePayload = response && response.data;\\n    const imageData = imagePayload && imagePayload.data;\\n    if (imageData && typeof imagePayload.width === "number" && typeof imagePayload.height === "number" && imageData.byteLength >= 65536) {\\n      const imageBuffer = imageData.buffer;\\n      if (imageBuffer instanceof ArrayBuffer && imageData.byteOffset === 0 && imageData.byteLength === imageBuffer.byteLength) {\\n        self.postMessage(response, [imageBuffer]);\\n        return;\\n      }\\n    }\\n    self.postMessage(response);\\n  }',
   },
   {
-    label: "engine: read wasmModule option",
-    find: "const { logger, encoderPoolSize, fontFallback } = config;",
+    label: "engine: read wasmModule and cache options",
+    find: /const \{ logger, encoderPoolSize, fontFallback(, wasmModule: precompiledWasmModule)? \} = config;/,
     replace:
-      "const { logger, encoderPoolSize, fontFallback, wasmModule: precompiledWasmModule } = config;",
+      "const { logger, encoderPoolSize, fontFallback, wasmModule: precompiledWasmModule, cache: cacheConfig } = config;",
   },
   {
-    label: "engine: pass wasmModule to executor",
-    find: "const remoteExecutor = new RemoteExecutor(worker, { wasmUrl, logger, fontFallback });",
+    label: "engine: pass wasmModule and cache to executor",
+    find: /const remoteExecutor = new RemoteExecutor\(worker, \{ wasmUrl, logger, fontFallback(, wasmModule: precompiledWasmModule)? \}\);/,
     replace:
-      "const remoteExecutor = new RemoteExecutor(worker, { wasmUrl, logger, fontFallback, wasmModule: precompiledWasmModule });",
+      "const remoteExecutor = new RemoteExecutor(worker, { wasmUrl, logger, fontFallback, wasmModule: precompiledWasmModule, cache: cacheConfig });",
   },
   {
-    label: "engine: post wasmModule with clone fallback",
-    find: `    this.worker.postMessage({
-      id: _RemoteExecutor.READY_TASK_ID,
-      type: "wasmInit",
-      wasmUrl: options.wasmUrl,
-      logger: options.logger ? serializeLogger(options.logger) : void 0,
-      fontFallback: options.fontFallback
-    });`,
+    label: "engine: post wasmModule with clone fallback and cache",
+    find: /( {4}this\.worker\.postMessage\({\n {6}id: _RemoteExecutor\.READY_TASK_ID,\n {6}type: "wasmInit",\n {6}wasmUrl: options\.wasmUrl,\n {6}logger: options\.logger \? serializeLogger\(options\.logger\) : void 0,\n {6}fontFallback: options\.fontFallback\n {4}}\);| {4}const wasmInitMessage = {\n {6}id: _RemoteExecutor\.READY_TASK_ID,\n {6}type: "wasmInit",\n {6}wasmUrl: options\.wasmUrl,\n {6}logger: options\.logger \? serializeLogger\(options\.logger\) : void 0,\n {6}fontFallback: options\.fontFallback\n {4}};\n( {4}if \(options\.cache\) wasmInitMessage\.cache = options\.cache;\n)? {4}\/\/ WebAssembly\.Module is structured-cloneable in Chromium\/Firefox but not\n {4}\/\/ WebKit; when cloning fails the worker fetches the URL itself\.\n {4}if \(options\.wasmModule\) wasmInitMessage\.wasmModule = options\.wasmModule;\n {4}try {\n {6}this\.worker\.postMessage\(wasmInitMessage\);\n {4}} catch \(cloneError\) {\n {6}if \(!wasmInitMessage\.wasmModule\) throw cloneError;\n {6}delete wasmInitMessage\.wasmModule;\n {6}this\.worker\.postMessage\(wasmInitMessage\);\n {4}})/,
     replace: `    const wasmInitMessage = {
       id: _RemoteExecutor.READY_TASK_ID,
       type: "wasmInit",
@@ -123,6 +121,7 @@ const replacements = [
       logger: options.logger ? serializeLogger(options.logger) : void 0,
       fontFallback: options.fontFallback
     };
+    if (options.cache) wasmInitMessage.cache = options.cache;
     // WebAssembly.Module is structured-cloneable in Chromium/Firefox but not
     // WebKit; when cloning fails the worker fetches the URL itself.
     if (options.wasmModule) wasmInitMessage.wasmModule = options.wasmModule;
@@ -136,9 +135,9 @@ const replacements = [
   },
   {
     label: "engine: capture worker blob URLs",
-    find: `  const { logger, encoderPoolSize, fontFallback, wasmModule: precompiledWasmModule } = config;
-  const worker = new Worker(`,
-    replace: `  const { logger, encoderPoolSize, fontFallback, wasmModule: precompiledWasmModule } = config;
+    find:
+      / {2}const \{ logger, encoderPoolSize, fontFallback, wasmModule: precompiledWasmModule(, cache: cacheConfig)? \} = config;\n( {2}const __stirlingCreatedUrls = \[\];\n {2}const __stirlingCreateObjectURL = URL\.createObjectURL\.bind\(URL\);\n {2}URL\.createObjectURL = \(obj\) => \{\n {4}const url = __stirlingCreateObjectURL\(obj\);\n {4}__stirlingCreatedUrls\.push\(url\);\n {4}return url;\n {2}\};\n)? {2}const worker = new Worker\(/,
+    replace: `  const { logger, encoderPoolSize, fontFallback, wasmModule: precompiledWasmModule, cache: cacheConfig } = config;
   const __stirlingCreatedUrls = [];
   const __stirlingCreateObjectURL = URL.createObjectURL.bind(URL);
   URL.createObjectURL = (obj) => {
@@ -149,11 +148,56 @@ const replacements = [
   const worker = new Worker(`,
   },
   {
+    label: "worker: receive cache configuration in wasmInit",
+    find: 'const { type, wasmUrl, logger: serializedLogger, fontFallback } = event.data;\\n  if (type === "wasmInit"',
+    replace:
+      'const { type, wasmUrl, logger: serializedLogger, fontFallback, cache: cacheConfig } = event.data;\\n  if (type === "wasmInit"',
+  },
+  {
+    label: "worker: pass cache to PdfiumEngineRunner",
+    find: "runner = new PdfiumEngineRunner(wasmBinary, logger, effectiveFontFallback);",
+    replace:
+      "runner = new PdfiumEngineRunner(wasmBinary, logger, effectiveFontFallback, cacheConfig);",
+  },
+  {
+    label: "worker: accept cache in PdfiumEngineRunner",
+    find: "constructor(wasmBinary, logger, fontFallback) {\\n    super(logger);\\n    this.wasmBinary = wasmBinary;\\n    this.fontFallback = fontFallback;\\n  }",
+    replace:
+      "constructor(wasmBinary, logger, fontFallback, cacheConfig) {\\n    super(logger);\\n    this.wasmBinary = wasmBinary;\\n    this.fontFallback = fontFallback;\\n    this.cacheConfig = cacheConfig;\\n  }",
+  },
+  {
+    label: "worker: forward cache to PdfiumNative in prepare",
+    find: "this.native = new PdfiumNative(wasmModule, {\\n      logger: this.logger,\\n      fontFallback: this.fontFallback\\n    });",
+    replace:
+      "this.native = new PdfiumNative(wasmModule, {\\n      logger: this.logger,\\n      fontFallback: this.fontFallback,\\n      cache: this.cacheConfig\\n    });",
+  },
+  {
+    label: "worker: forward cache configuration to PdfCache",
+    find: "const { logger = new NoopLogger(), fontFallback } = options;\\n    this.logger = logger;\\n    this.memoryManager = new MemoryManager(this.pdfiumModule, this.logger);\\n    this.cache = new PdfCache(this.pdfiumModule, this.memoryManager);",
+    replace:
+      "const { logger = new NoopLogger(), fontFallback, cache: cacheConfig } = options;\\n    this.logger = logger;\\n    this.memoryManager = new MemoryManager(this.pdfiumModule, this.logger);\\n    this.cache = new PdfCache(this.pdfiumModule, this.memoryManager, cacheConfig);",
+  },
+  {
     label: "engine: revoke worker blob URLs after construction",
-    find: `  return new PdfEngine(remoteExecutor, {
+    find: `  const __stirlingEngine = new PdfEngine(remoteExecutor, {
     imageConverter: createHybridImageConverter(encoderPool),
     logger
   });
+  URL.createObjectURL = __stirlingCreateObjectURL;
+  // The worker scripts are Blob URLs and this build never revokes them, so
+  // every engine (re)creation leaked one object URL per worker. All workers
+  // have been constructed synchronously by now; release the URLs on a
+  // macrotask so the platform has resolved them.
+  setTimeout(() => {
+    for (const __stirlingUrl of __stirlingCreatedUrls) {
+      try {
+        URL.revokeObjectURL(__stirlingUrl);
+      } catch {
+        /* already revoked */
+      }
+    }
+  }, 0);
+  return __stirlingEngine;
 }
 export {
   createPdfiumEngine
@@ -188,7 +232,8 @@ for (const { label, find, replace } of replacements) {
   if (source.includes(replace)) {
     continue;
   }
-  if (!source.includes(find)) {
+  const match = typeof find === "string" ? source.includes(find) : find.test(source);
+  if (!match) {
     console.error(
       `[patch-embedpdf-engines] anchor not found for "${label}" in @embedpdf/engines@${installedVersion}. ` +
         "The patch must be re-verified against this version.",
