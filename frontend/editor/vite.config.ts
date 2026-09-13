@@ -1,5 +1,6 @@
 import react from "@vitejs/plugin-react-swc";
 import { compression, defineAlgorithm } from "vite-plugin-compression2";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs/promises";
 import path, { resolve } from "node:path";
 import { constants, brotliCompress, gzip } from "node:zlib";
@@ -13,6 +14,23 @@ import { viteStaticCopy } from "vite-plugin-static-copy";
 const gzipPromise = promisify(gzip);
 const brotliPromise = promisify(brotliCompress);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+/** Patch/verify the pinned @embedpdf packages before any bundle is produced.
+ *  Runs in dev and build (not preview) so source builds that install with
+ *  `--ignore-scripts` or invoke `vite build` directly (Tauri
+ *  beforeBuildCommand, nixpkgs) still apply the patches or fail loudly. */
+function embedpdfPatchGatePlugin(): PluginOption {
+  return {
+    name: "ensure-embedpdf-patches",
+    buildStart() {
+      execFileSync(
+        process.execPath,
+        [resolve(__dirname, "../scripts/ensure-embedpdf-patches.mjs")],
+        { stdio: "inherit" },
+      );
+    },
+  };
+}
 
 function compressStaticCopyPlugin(): PluginOption {
   return {
@@ -273,6 +291,7 @@ export default defineConfig(async ({ mode, command }) => {
       __DEV_WORKTREE_LABEL__: JSON.stringify(devWorktreeLabel),
     },
     plugins: [
+      embedpdfPatchGatePlugin(),
       react(),
       ...(runSubpath ? [subpathBareRedirectPlugin(runSubpath)] : []),
       tsconfigPaths({

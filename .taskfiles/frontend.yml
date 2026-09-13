@@ -27,6 +27,12 @@ tasks:
     env:
       CI: '{{ .CI | default "false" }}'
 
+  ensure:embedpdf-patches:
+    desc: "Apply and verify the local embedpdf patches"
+    deps: [install]
+    cmds:
+      - node scripts/ensure-embedpdf-patches.mjs
+
   check:embedpdf-patch:
     desc: "Verify the local @embedpdf/engines patch is applied"
     deps: [install]
@@ -211,19 +217,19 @@ tasks:
 
   build:
     desc: "Production build (default mode)"
-    deps: [prepare, check:embedpdf-patch]
+    deps: [prepare, ensure:embedpdf-patches]
     cmds:
       - npx vite build editor
 
   build:core:
     desc: "Build for core mode"
-    deps: [prepare, check:embedpdf-patch]
+    deps: [prepare, ensure:embedpdf-patches]
     cmds:
       - npx vite build editor --mode core
 
   build:proprietary:
     desc: "Build for proprietary mode"
-    deps: [prepare, check:embedpdf-patch]
+    deps: [prepare, ensure:embedpdf-patches]
     vars:
       PREVIEW: '{{.PREVIEW | default ""}}'
     cmds:
@@ -234,7 +240,7 @@ tasks:
     deps:
       - task: prepare
         vars: { MODE: saas }
-      - task: check:embedpdf-patch
+      - task: ensure:embedpdf-patches
     cmds:
       - npx vite build editor --mode saas
 
@@ -243,13 +249,13 @@ tasks:
     deps:
       - task: prepare
         vars: { MODE: desktop }
-      - task: check:embedpdf-patch
+      - task: ensure:embedpdf-patches
     cmds:
       - npx vite build editor --mode desktop
 
   build:prototypes:
     desc: "Build for prototypes mode"
-    deps: [prepare, check:embedpdf-patch]
+    deps: [prepare, ensure:embedpdf-patches]
     cmds:
       - npx vite build editor --mode prototypes
 
