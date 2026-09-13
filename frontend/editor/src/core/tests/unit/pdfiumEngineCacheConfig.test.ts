@@ -46,9 +46,8 @@ describe("PdfCache and engine cache configuration contract", () => {
     };
 
     try {
-      const { createPdfiumEngine } = await import(
-        "@embedpdf/engines/pdfium-worker-engine"
-      );
+      const { createPdfiumEngine } =
+        await import("@embedpdf/engines/pdfium-worker-engine");
 
       // 1. With cache option provided
       // @ts-expect-error testing exposed cache option

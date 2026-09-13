@@ -21,7 +21,8 @@ describe("prefetchSpike contract characterization (R5)", () => {
     });
 
     it("activates when window.__PERF_PREFETCH is set", () => {
-      (window as unknown as { __PERF_PREFETCH?: boolean }).__PERF_PREFETCH = true;
+      (window as unknown as { __PERF_PREFETCH?: boolean }).__PERF_PREFETCH =
+        true;
       expect(isPrefetchSpikeEnabled()).toBe(true);
     });
 

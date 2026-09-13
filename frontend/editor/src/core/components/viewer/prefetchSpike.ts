@@ -16,7 +16,9 @@ export function isPrefetchSpikeEnabled(): boolean {
   }
   try {
     const params = new URLSearchParams(window.location.search);
-    return params.get("prefetch") === "1" || params.get("perf_prefetch") === "1";
+    return (
+      params.get("prefetch") === "1" || params.get("perf_prefetch") === "1"
+    );
   } catch {
     return false;
   }
@@ -40,7 +42,11 @@ export function computeDirectionalPrefetchTarget(
   return target >= 0 ? target : null;
 }
 
-export function DirectionalPrefetchController({ documentId }: { documentId: string }): React.ReactElement | null {
+export function DirectionalPrefetchController({
+  documentId,
+}: {
+  documentId: string;
+}): React.ReactElement | null {
   const enabled = isPrefetchSpikeEnabled();
   const { provides: scrollCapability } = useCapability<ScrollPlugin>("scroll");
   const { provides: renderCapability } = useCapability<RenderPlugin>("render");

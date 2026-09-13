@@ -135,8 +135,7 @@ const replacements = [
   },
   {
     label: "engine: capture worker blob URLs",
-    find:
-      / {2}const \{ logger, encoderPoolSize, fontFallback, wasmModule: precompiledWasmModule(, cache: cacheConfig)? \} = config;\n( {2}const __stirlingCreatedUrls = \[\];\n {2}const __stirlingCreateObjectURL = URL\.createObjectURL\.bind\(URL\);\n {2}URL\.createObjectURL = \(obj\) => \{\n {4}const url = __stirlingCreateObjectURL\(obj\);\n {4}__stirlingCreatedUrls\.push\(url\);\n {4}return url;\n {2}\};\n)? {2}const worker = new Worker\(/,
+    find: / {2}const \{ logger, encoderPoolSize, fontFallback, wasmModule: precompiledWasmModule(, cache: cacheConfig)? \} = config;\n( {2}const __stirlingCreatedUrls = \[\];\n {2}const __stirlingCreateObjectURL = URL\.createObjectURL\.bind\(URL\);\n {2}URL\.createObjectURL = \(obj\) => \{\n {4}const url = __stirlingCreateObjectURL\(obj\);\n {4}__stirlingCreatedUrls\.push\(url\);\n {4}return url;\n {2}\};\n)? {2}const worker = new Worker\(/,
     replace: `  const { logger, encoderPoolSize, fontFallback, wasmModule: precompiledWasmModule, cache: cacheConfig } = config;
   const __stirlingCreatedUrls = [];
   const __stirlingCreateObjectURL = URL.createObjectURL.bind(URL);
@@ -232,7 +231,8 @@ for (const { label, find, replace } of replacements) {
   if (source.includes(replace)) {
     continue;
   }
-  const match = typeof find === "string" ? source.includes(find) : find.test(source);
+  const match =
+    typeof find === "string" ? source.includes(find) : find.test(source);
   if (!match) {
     console.error(
       `[patch-embedpdf-engines] anchor not found for "${label}" in @embedpdf/engines@${installedVersion}. ` +

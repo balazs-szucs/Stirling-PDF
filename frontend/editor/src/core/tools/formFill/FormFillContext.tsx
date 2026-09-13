@@ -182,9 +182,7 @@ function reducer(state: FormFillState, action: Action): FormFillState {
             if (
               !mergedWidgets.some(
                 (mw) =>
-                  mw.pageIndex === w.pageIndex &&
-                  mw.x === w.x &&
-                  mw.y === w.y,
+                  mw.pageIndex === w.pageIndex && mw.x === w.x && mw.y === w.y,
               )
             ) {
               mergedWidgets.push(w);
@@ -789,7 +787,8 @@ export function FormFillProvider({
 
   const ensurePageFields = useCallback(
     async (pageIndex: number) => {
-      if (isExhaustiveRef.current || loadedPagesRef.current.has(pageIndex)) return;
+      if (isExhaustiveRef.current || loadedPagesRef.current.has(pageIndex))
+        return;
       loadedPagesRef.current.add(pageIndex);
       const file = activeFileRef.current;
       if (!file) return;
@@ -798,10 +797,17 @@ export function FormFillProvider({
           pageIndices: [pageIndex],
         });
         if (pageFields.length > 0) {
-          dispatch({ type: "MERGE_PAGE_FIELDS", pageIndex, fields: pageFields });
+          dispatch({
+            type: "MERGE_PAGE_FIELDS",
+            pageIndex,
+            fields: pageFields,
+          });
         }
       } catch (err) {
-        console.warn(`[FormFill] Failed to load fields for page ${pageIndex}:`, err);
+        console.warn(
+          `[FormFill] Failed to load fields for page ${pageIndex}:`,
+          err,
+        );
       }
     },
     [dispatch],

@@ -58,7 +58,10 @@ const _seenFileKeys = new Set<string>();
 /**
  * Statistics on documentBytesCache reads for profiling and test assertions.
  */
-export function getDocumentBytesStats(): { totalReads: number; reReads: number } {
+export function getDocumentBytesStats(): {
+  totalReads: number;
+  reReads: number;
+} {
   return { totalReads: _totalReads, reReads: _reReads };
 }
 

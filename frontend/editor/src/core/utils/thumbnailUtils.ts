@@ -450,4 +450,3 @@ export async function getOrFetchPageDimensions(
     await closeRawDocument(docPtr);
   }
 }
-
