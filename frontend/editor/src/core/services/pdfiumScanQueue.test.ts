@@ -18,5 +18,4 @@ describe("pdfiumScanQueue", () => {
     await Promise.all([a, b]);
     expect(order).toEqual(["a", "b"]);
   });
-
 });

@@ -1094,3 +1094,127 @@ Two attempts measured on the frozen base:
    app path is an L cross-plugin refactor, no measured main-thread win yet.
 7. **R2** — COOP/COEP memo (SAB needs a pthread pdfium rebuild; SaaS needs a
    Supabase/PostHog CORP audit); owner decision.
+
+## Pass 5 — frontier + tricks research pass (2026-09-13, CLI mode; semi-loaded machine, all timings UNVERIFIED)
+
+Exploration-only pass: no production code changed. Full report and the
+source-by-source ledger live in `frontend/editor/.perf-local/`
+(`frontier-report-pass5.md`, `research-ledger.md`); probes are
+`pass5-*.local.spec.ts` (git-excluded), profiles under `.perf-local/profiles/`.
+
+### Measured frontier outcomes (counts deterministic; timings UNVERIFIED)
+
+- **F1 interaction latency.** Scroll (30 wheel steps), zoom ×3, text select
+  and typing: **0 long tasks**, ≤21 ms frame gaps. Named >50 ms interactions:
+  page jump 1→450 on pages-500 = **1.08–1.16 s main-thread task** (727–809 ms
+  script, 154–164 layouts, ~2.1 s wall; back 1.3 s), search-popover open =
+  **71–88 ms long task**.
+- **F1/F2 jump attribution.** Jump CPU profile: embedpdf `getState` 22.8 % of
+  busy samples with `registerPageHandlers` → `emit` → `getHandlersForScope`
+  chains and scroller `extractTime`/`sortQueue`; GC 6.7 %. React rendering is
+  not the cost. → G19.
+- **F2 plan-open profile (extends G15).** Main busy 0.95 s, 662 ms long
+  tasks; **37 % of busy samples in the worker-bitmap receive/Blob-wrap path**
+  (`createObjectURL`-attributed), 29.5 % pdfium wasm. Pinned wasm has no name
+  section (indices only). → G20.
+- **F4 lifecycle.** bfcache not engaged (`pageshow.persisted:false`; reload +
+  IndexedDB restore, 5 pages back, no errors). Freeze/resume OK. Killing
+  **3/3 engine-worker targets** then zooming/scrolling: **3 workers
+  respawned, pages rendered, zero errors**. Offline→online OK.
+- **F7 search.** pages-500 query: first results 849 ms (incl. 300 ms app
+  debounce), 4000 matches; **400 ms long tasks / 680 ms main task** during
+  indexing. → G21.
+- **F8 startup.** Precise coverage: **45.6 %** of covered JS bytes executed
+  on first open; posthog 13 %/supabase 17 %/zip 16 % used (≈166 KB encoded)
+  on the viewer path. Eager wasm compile 60→99 ms, engine created 388 ms.
+  → G23.
+- **F9 multi-doc.** Sequential adds (pages-500 → large-40 → form-40): heap
+  16.5→18.3 MB after GC (no leak), worker wasm flat at 855 pp (one shared
+  engine, no per-doc multiply), main wasm ratchets 284→840→1187 pp (G13
+  grow-only high-water), 0 long tasks per add. → G22 (depends G13).
+- **F5/F6/F10.** Print/save both serialise a full copy in the worker then
+  Blob+URL on main (static read); struct-tree + progressive + custom-document
+  APIs are present in the pinned wasm but unused (zero a11y cost); Tauri
+  uses WKWebView on macOS and a Tauri member documents a ~2 GB webview
+  ceiling (no desktop run this pass).
+
+### Trick statuses (T1–T10; evidence in the report)
+
+- **PARKED:** T1 worker ImageBitmap transfer (R1; F2 gives it a measured
+  target), T3 JSPI/Asyncify dual-build (Chrome 137/Firefox 139; WebKit has
+  no JSPI — bug 283054; binary rebuild), T6 scheduler APIs (WebKit lacks
+  both), T10 COOP/COEP memo (new subresource list: jsdelivr default,
+  posthog, supabase, iconify, files.stirlingpdf.com).
+- **ADOPTED as guidance:** T4 flat payload shapes (measured: flat 8 MB clone
+  roundtrip 3.4 ms vs dense 32768-object graph 11.2 ms → ~7× per-byte, not
+  10–30×; sync transfer ≈0 ms), T8 pdf.js tactic audit (already clean:
+  per-page overlays, `EPDF_*ByIndex`, canvas pool).
+- **REJECTED measured/reasoned:** T2 (no in-worker canvas path), T5
+  `content-visibility` on page wrappers (ABBA: no-CV 614/681 ms vs CV
+  594/574 ms, layouts 67/70 vs 83/82 — virtualization already skips), T7
+  batched message channel (message overhead not a bottleneck), T9 warm second
+  worker (18.6 MB floor conflicts with G3/G16 respawn).
+
+### Gate state at pass end
+
+`frontend:typecheck` clean, `frontend:lint` clean, vitest **3451/3451**,
+viewer e2e **48 passed + 1 pre-existing skip**, soak default + form green,
+engine smoke 3/3 browsers, corpus 60/60 carried from pass 4 (no code
+changed). **`frontend:format:check` is red on entry and unchanged by this
+pass** — 16 files (14 tracked production files + 2 pre-existing local specs)
+fail oxfmt 0.62.0 while their `77b325cf1` versions pass; fix is
+`task frontend:format` in one commit (owner approval for the reformat).
+
+
+## Implementation pass 6 (2026-09-13): redaction fixes + greenlit perf set
+
+Owner approved the greenlight set and reported a functional bug ("manual redact
+does not work properly; you cannot select text to redact"). Changes below are
+tracked, one concern each; no pushes.
+
+### Manual redaction — two regressions from `2991e5285` fixed
+
+1. **`TextSelectionHandler` lost the selection-end contract.** PR #7875
+   replaced the plugin-internal `clear/begin/update/endSelection` sequence
+   with the public `setSelection()`, which dispatches only `selChange$`.
+   The annotation/redaction plugins convert a selection into a mark on
+   `endSelection$`, so the app's Unicode-aware word/line selection (the path
+   that exists precisely for documents where PDFium's boundary flags are
+   missing) produced a visible highlight with **no pending redaction**.
+   Fix: restored `setSelectionRange()` (typed cast, no `any`) and called it
+   from both double-click and triple-click; a unit test locks the
+   `clear → begin → update → end` order.
+2. **`RedactionSelectionMenu` ignored annotation-sourced pending marks.**
+   With `useAnnotationMode: true` pending redactions are REDACT annotations,
+   and the menu only handled legacy `type: "redaction"` contexts, so
+   selecting a pending mark showed the generic annotation menu with no
+   Apply/Remove. Fix: accept annotation contexts whose object type is
+   `PdfAnnotationSubtype.REDACT`, and route REDACT annotations from
+   `AnnotationLayer` to `RedactionSelectionMenu` in `LocalEmbedPDF`.
+
+Evidence: new `viewer-redaction-text-selection.spec.ts` (4 tests: drag,
+double-click, triple-click create pending marks; a pending mark exposes
+Apply/Remove and Apply clears the pending count). Test 4 **fails on the
+pre-fix build** (stash + rebuild + rerun) and passes after. Full viewer
+selection/forms/rotation/cropbox/session batch 52 passed + 1 skip.
+
+### Perf changes landed
+
+| Change | Evidence |
+| --- | --- |
+| **G19** local `@embedpdf/plugin-interaction-manager` patch (`frontend/scripts/patch-embedpdf-plugins.mjs`, version-anchored + `--check`, wired into postinstall and `check:embedpdf-patch`): coalesce the six `onHandlerChange` emits into one microtask so a page jump does one handler re-resolution per batch instead of one per tool per page | Jump profile (`pass5-jump-profile`), n=3/arm: busy samples median **8227 → 7002 (−15 %)**; the `registerPageHandlers → emit → getHandlersForScope → getState` chains disappear from the top self-time (446+399 samples → 0). Wall time to target stays ~1.30 s (render-bound). |
+| **G24** `npx oxfmt .` over the frontend: the branch's pre-existing format drift (14 tracked files + 2 local specs) is gone; `frontend:format:check` exits 0 | `task frontend:check` no longer stops at format:check |
+| **G23** posthog is now a gated dynamic import (`analytics.ts` + `usePosthogTracking.ts`): `setAnalyticsEnabled()` mirrors config/consent and track calls short-circuit before importing, so analytics-off installs never fetch the 75 KB vendor chunk | unit tests (6/6) + coverage run shows posthog still loads only because the stub config enables analytics on upload events |
+| **G21** parked with profile evidence | Search CPU profile: 500-page query busy 244 ms, dominated by per-page `handleMessage → progress → dispatch → getState` chains in the search plugin; needs a vendor progress-coalescing patch, not an app change |
+| **G20** refuted and reverted | Routing the BMP wrap through the encoder worker (transfer + Blob in worker) left the `createObjectURL`-attributed main cost unchanged (long tasks A 410–584 ms vs B 408–608 ms, overlapping) — the cost is blob materialization at `createObjectURL`, which only a worker `ImageBitmap` transfer (T1/R1) removes |
+| **G22** remains blocked on G13 (unchanged) | — |
+
+### Verification matrix (final build)
+
+`task frontend:typecheck` clean; `frontend:lint` clean; `frontend:format:check`
+clean; vitest **3452/3452** (389 files); full stubbed e2e **822 passed / 78
+skipped / 6 failed** — the 6 failures are PDF-text-editor caret/undo specs
+that fail identically on **pristine HEAD** (stash + original vendor plugin +
+rebuild bisect), i.e. pre-existing; focused viewer batch **52 passed + 1
+skip**; redaction spec **4/4**; soak default + form green; engine smoke
+Chromium/Firefox/WebKit **3/3**.

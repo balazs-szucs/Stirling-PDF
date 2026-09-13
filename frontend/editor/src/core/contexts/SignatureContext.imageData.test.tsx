@@ -4,7 +4,10 @@
  */
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { render, cleanup, act } from "@testing-library/react";
-import { SignatureProvider, useSignature } from "@app/contexts/SignatureContext";
+import {
+  SignatureProvider,
+  useSignature,
+} from "@app/contexts/SignatureContext";
 
 let probe: {
   store: (id: string, data: string) => void;

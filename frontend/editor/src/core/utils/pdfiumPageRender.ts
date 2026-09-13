@@ -67,8 +67,12 @@ export async function renderPdfiumPageDataUrl(
   scale: number,
   options: RenderPdfiumPageOptions = {},
 ): Promise<string | null> {
-  const { applyRotation = true, format = "png", quality, maxDimension } =
-    options;
+  const {
+    applyRotation = true,
+    format = "png",
+    quality,
+    maxDimension,
+  } = options;
   const m = await getPdfiumModule();
 
   const pagePtr = m.FPDF_LoadPage(docPtr, pageIndex);
@@ -183,10 +187,7 @@ export async function readPdfiumPageMetadata(
     try {
       // FS_RECTF is left, top, right, bottom; CROP falls back to MEDIA.
       const hasCrop = m.EPDF_GetPageBoxByIndex(docPtr, pageIndex, 1, rectPtr);
-      if (
-        hasCrop ||
-        m.EPDF_GetPageBoxByIndex(docPtr, pageIndex, 0, rectPtr)
-      ) {
+      if (hasCrop || m.EPDF_GetPageBoxByIndex(docPtr, pageIndex, 0, rectPtr)) {
         // Read rotation before creating heap views: a WASM call that grows
         // linear memory detaches the old buffer, so views must postdate the
         // last call that could grow it.

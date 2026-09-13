@@ -228,7 +228,9 @@ export class ThumbnailGenerationService {
           onProgress({
             completed,
             total: pageNumbers.length,
-            thumbnails: allResults.slice(-batch.length).filter((r) => r.success),
+            thumbnails: allResults
+              .slice(-batch.length)
+              .filter((r) => r.success),
           });
         }
 

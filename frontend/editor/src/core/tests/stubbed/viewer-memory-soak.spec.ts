@@ -21,10 +21,7 @@ import { test, expect } from "@app/tests/helpers/stub-test-base";
 
 const SAMPLE_PDF =
   process.env.SOAK_FIXTURE ??
-  path.join(
-    import.meta.dirname,
-    "../test-fixtures/annotation-text-sample.pdf",
-  );
+  path.join(import.meta.dirname, "../test-fixtures/annotation-text-sample.pdf");
 const SNAPSHOT_DIR = path.join(import.meta.dirname, "../../../../.perf-local");
 const ITERATIONS = Number(process.env.SOAK_ITERATIONS ?? 12);
 
@@ -59,10 +56,16 @@ const installWorkerMemoryProbe = () => {
     }
   };
   const instantiate = WebAssembly.instantiate.bind(WebAssembly);
-  WebAssembly.instantiate = ((...args: Parameters<typeof WebAssembly.instantiate>) => {
-    const result = instantiate(...(args as [BufferSource, WebAssembly.Imports?]));
+  WebAssembly.instantiate = ((
+    ...args: Parameters<typeof WebAssembly.instantiate>
+  ) => {
+    const result = instantiate(
+      ...(args as [BufferSource, WebAssembly.Imports?]),
+    );
     return Promise.resolve(result).then((res) => {
-      record((res as WebAssembly.WebAssemblyInstantiatedSource).instance ?? res);
+      record(
+        (res as WebAssembly.WebAssemblyInstantiatedSource).instance ?? res,
+      );
       return res;
     });
   }) as typeof WebAssembly.instantiate;
@@ -150,7 +153,11 @@ test.describe("viewer memory soak", { tag: "@memory-soak" }, () => {
       const origClearInterval = window.clearInterval.bind(window);
       const origRaf = window.requestAnimationFrame.bind(window);
       const origCancelRaf = window.cancelAnimationFrame.bind(window);
-      window.setTimeout = ((handler: TimerHandler, timeout?: number, ...args: unknown[]) => {
+      window.setTimeout = ((
+        handler: TimerHandler,
+        timeout?: number,
+        ...args: unknown[]
+      ) => {
         if (typeof handler !== "function") {
           return origSetTimeout(handler, timeout, ...(args as []));
         }
@@ -170,7 +177,11 @@ test.describe("viewer memory soak", { tag: "@memory-soak" }, () => {
         if (id !== undefined) retire(id);
         return origClearTimeout(id as number);
       }) as typeof window.clearTimeout;
-      window.setInterval = ((handler: TimerHandler, timeout?: number, ...args: unknown[]) => {
+      window.setInterval = ((
+        handler: TimerHandler,
+        timeout?: number,
+        ...args: unknown[]
+      ) => {
         if (typeof handler !== "function") {
           return origSetInterval(handler, timeout, ...(args as []));
         }
@@ -230,7 +241,10 @@ test.describe("viewer memory soak", { tag: "@memory-soak" }, () => {
           const memory = (instance as WebAssembly.Instance).exports?.memory as
             | WebAssembly.Memory
             | undefined;
-          if (memory && !w.__soak.memories.some((ref) => ref.deref() === memory)) {
+          if (
+            memory &&
+            !w.__soak.memories.some((ref) => ref.deref() === memory)
+          ) {
             w.__soak.memories.push(new WeakRef(memory));
           }
         } catch {
@@ -238,10 +252,16 @@ test.describe("viewer memory soak", { tag: "@memory-soak" }, () => {
         }
       };
       const instantiate = WebAssembly.instantiate.bind(WebAssembly);
-      WebAssembly.instantiate = ((...args: Parameters<typeof WebAssembly.instantiate>) => {
-        const result = instantiate(...(args as [BufferSource, WebAssembly.Imports?]));
+      WebAssembly.instantiate = ((
+        ...args: Parameters<typeof WebAssembly.instantiate>
+      ) => {
+        const result = instantiate(
+          ...(args as [BufferSource, WebAssembly.Imports?]),
+        );
         return Promise.resolve(result).then((res) => {
-          record((res as WebAssembly.WebAssemblyInstantiatedSource).instance ?? res);
+          record(
+            (res as WebAssembly.WebAssemblyInstantiatedSource).instance ?? res,
+          );
           return res;
         });
       }) as typeof WebAssembly.instantiate;
@@ -275,7 +295,9 @@ test.describe("viewer memory soak", { tag: "@memory-soak" }, () => {
     });
     const dumpHeapSnapshot = async (iter: number) => {
       snapshotChunks.length = 0;
-      await cdp.send("HeapProfiler.takeHeapSnapshot", { reportProgress: false });
+      await cdp.send("HeapProfiler.takeHeapSnapshot", {
+        reportProgress: false,
+      });
       const file = path.join(
         SNAPSHOT_DIR,
         `soak-snapshot-iter${iter}.heapsnapshot`,
@@ -285,10 +307,15 @@ test.describe("viewer memory soak", { tag: "@memory-soak" }, () => {
       console.log(`[MEMORY-SOAK-SNAPSHOT] ${file}`);
     };
 
-    const read = async (iter: number, phase: Sample["phase"]): Promise<Sample> => {
+    const read = async (
+      iter: number,
+      phase: Sample["phase"],
+    ): Promise<Sample> => {
       await cdp.send("HeapProfiler.collectGarbage");
       const { usedSize } = await cdp.send("Runtime.getHeapUsage");
-      const { nodes, jsEventListeners } = await cdp.send("Memory.getDOMCounters");
+      const { nodes, jsEventListeners } = await cdp.send(
+        "Memory.getDOMCounters",
+      );
       const main = await page.evaluate(() => {
         const soak = (
           window as unknown as {
@@ -321,8 +348,11 @@ test.describe("viewer memory soak", { tag: "@memory-soak" }, () => {
         try {
           workerWasmPages += await worker.evaluate(() => {
             const memories =
-              (self as unknown as { __soakWorkerMemories?: WebAssembly.Memory[] })
-                .__soakWorkerMemories ?? [];
+              (
+                self as unknown as {
+                  __soakWorkerMemories?: WebAssembly.Memory[];
+                }
+              ).__soakWorkerMemories ?? [];
             let pages = 0;
             for (const memory of memories) {
               try {
@@ -356,13 +386,18 @@ test.describe("viewer memory soak", { tag: "@memory-soak" }, () => {
 
     for (let iter = 1; iter <= ITERATIONS; iter++) {
       await page.getByTestId("files-button").click();
-      await page.locator('[data-testid="file-input"]').first().setInputFiles(SAMPLE_PDF);
+      await page
+        .locator('[data-testid="file-input"]')
+        .first()
+        .setInputFiles(SAMPLE_PDF);
       await expect(page.locator('[data-page-index="0"]').first()).toBeAttached({
         timeout: 120_000,
       });
       await expect(
         page
-          .locator('[data-page-index="0"] img[src^="blob:"], [data-page-index="0"] canvas')
+          .locator(
+            '[data-page-index="0"] img[src^="blob:"], [data-page-index="0"] canvas',
+          )
           .first(),
       ).toBeAttached({ timeout: 120_000 });
       await page.waitForTimeout(500);
@@ -395,8 +430,12 @@ test.describe("viewer memory soak", { tag: "@memory-soak" }, () => {
       await expect(row).toBeVisible({ timeout: 30_000 });
       await row.hover();
       await row.locator(".file-sidebar-kebab-btn").click({ timeout: 30_000 });
-      await page.getByRole("menuitem", { name: "Delete" }).click({ timeout: 30_000 });
-      const confirm = page.getByRole("button", { name: /^(Delete|Confirm|Yes)/i }).last();
+      await page
+        .getByRole("menuitem", { name: "Delete" })
+        .click({ timeout: 30_000 });
+      const confirm = page
+        .getByRole("button", { name: /^(Delete|Confirm|Yes)/i })
+        .last();
       if (await confirm.isVisible({ timeout: 1_000 }).catch(() => false)) {
         await confirm.click();
       }
@@ -408,7 +447,8 @@ test.describe("viewer memory soak", { tag: "@memory-soak" }, () => {
         // count is a lead for snapshot diffing, never a failure.
         await page.waitForTimeout(2000);
         const probe = await page.evaluate(() => {
-          const fr = (window as unknown as { __fr?: { finalized: string[] } }).__fr;
+          const fr = (window as unknown as { __fr?: { finalized: string[] } })
+            .__fr;
           const soak = (
             window as unknown as {
               __soak: { finalizedBlobs: Array<{ kind: string; size: number }> };
@@ -450,10 +490,7 @@ test.describe("viewer memory soak", { tag: "@memory-soak" }, () => {
           `[MEMORY-SOAK-TIMER-GROUPS] ${JSON.stringify({ iter, groups })}`,
         );
       }
-      if (
-        process.env.PERF_SNAPSHOTS &&
-        (iter === 5 || iter === ITERATIONS)
-      ) {
+      if (process.env.PERF_SNAPSHOTS && (iter === 5 || iter === ITERATIONS)) {
         await dumpHeapSnapshot(iter);
       }
     }
@@ -478,7 +515,9 @@ test.describe("viewer memory soak", { tag: "@memory-soak" }, () => {
       const median = (values: number[]) => {
         const sorted = [...values].sort((a, b) => a - b);
         const mid = Math.floor(sorted.length / 2);
-        return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+        return sorted.length % 2
+          ? sorted[mid]
+          : (sorted[mid - 1] + sorted[mid]) / 2;
       };
       const heapEarly = median(early.map((s) => s.jsHeapMB));
       const heapLate = median(late.map((s) => s.jsHeapMB));
@@ -493,8 +532,12 @@ test.describe("viewer memory soak", { tag: "@memory-soak" }, () => {
       // so early medians sit at the fresh floor while late medians sit at the
       // document's high-water. Compare peaks: only a peak that grows across
       // cycles is a ratchet.
-      const workerPagesPeakEarly = Math.max(...early.map((s) => s.workerWasmPages));
-      const workerPagesPeakLate = Math.max(...late.map((s) => s.workerWasmPages));
+      const workerPagesPeakEarly = Math.max(
+        ...early.map((s) => s.workerWasmPages),
+      );
+      const workerPagesPeakLate = Math.max(
+        ...late.map((s) => s.workerWasmPages),
+      );
       const workersEarly = median(early.map((s) => s.workers));
       const workersLate = median(late.map((s) => s.workers));
 

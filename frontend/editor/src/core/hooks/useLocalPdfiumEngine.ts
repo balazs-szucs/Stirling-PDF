@@ -40,9 +40,12 @@ export function useLocalPdfiumEngine({
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const engineRef = useRef<PdfEngine<Blob> | null>(null);
-  const optionsRef = useRef<CreatePdfiumEngineOptions & {
-    wasmModule?: WebAssembly.Module;
-  } | null>(null);
+  const optionsRef = useRef<
+    | (CreatePdfiumEngineOptions & {
+        wasmModule?: WebAssembly.Module;
+      })
+    | null
+  >(null);
   const respawnInFlightRef = useRef(false);
   const lastRespawnAtRef = useRef(0);
 
@@ -96,7 +99,9 @@ export function useLocalPdfiumEngine({
         if (typeof performance !== "undefined") {
           performance.mark("pdfium-engine-respawned");
         }
-        previous?.closeAllDocuments?.()?.wait(() => previous?.destroy?.(), ignore);
+        previous
+          ?.closeAllDocuments?.()
+          ?.wait(() => previous?.destroy?.(), ignore);
       } catch (cause) {
         // Keep the previous engine usable: a respawn failure must not take
         // the whole viewer down; the floor stays until the next attempt.
@@ -113,7 +118,9 @@ export function useLocalPdfiumEngine({
       try {
         const pdfEngine = await buildEngine();
         if (cancelled) {
-          pdfEngine.closeAllDocuments?.()?.wait(() => pdfEngine.destroy?.(), ignore);
+          pdfEngine
+            .closeAllDocuments?.()
+            ?.wait(() => pdfEngine.destroy?.(), ignore);
           return;
         }
         engineRef.current = pdfEngine;

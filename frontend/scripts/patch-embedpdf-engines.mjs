@@ -28,7 +28,9 @@ if (!existsSync(target) || !existsSync(packageJsonPath)) {
   process.exit(checkOnly ? 1 : 0);
 }
 
-const installedVersion = JSON.parse(readFileSync(packageJsonPath, "utf8")).version;
+const installedVersion = JSON.parse(
+  readFileSync(packageJsonPath, "utf8"),
+).version;
 if (installedVersion !== EXPECTED_VERSION) {
   console.error(
     `[patch-embedpdf-engines] expected @embedpdf/engines@${EXPECTED_VERSION}, found ${installedVersion}. ` +
@@ -48,8 +50,11 @@ const patchedSnippets = [
   "__stirlingCreatedUrls",
   "URL.revokeObjectURL(__stirlingUrl)",
 ];
+
 if (checkOnly) {
-  const missing = patchedSnippets.filter((snippet) => !source.includes(snippet));
+  const missing = patchedSnippets.filter(
+    (snippet) => !source.includes(snippet),
+  );
   if (missing.length > 0) {
     console.error(
       `[patch-embedpdf-engines] check failed: ${missing.length} patched snippet(s) missing. ` +
@@ -74,22 +79,19 @@ const replacements = [
   },
   {
     label: "worker: use module bytes or fetch",
-    find:
-      "const response = await fetch(wasmUrl);\\n      const wasmBinary = await response.arrayBuffer();",
+    find: "const response = await fetch(wasmUrl);\\n      const wasmBinary = await response.arrayBuffer();",
     replace:
       "let wasmBinary = event.data.wasmModule;\\n      if (!wasmBinary) {\\n        const response = await fetch(wasmUrl);\\n        wasmBinary = await response.arrayBuffer();\\n      }",
   },
   {
     label: "worker: instantiate precompiled module without recompiling",
-    find:
-      "async prepare() {\\n    const wasmBinary = this.wasmBinary;\\n    const wasmModule = await init({ wasmBinary });",
+    find: "async prepare() {\\n    const wasmBinary = this.wasmBinary;\\n    const wasmModule = await init({ wasmBinary });",
     replace:
       'async prepare() {\\n    const wasmBinary = this.wasmBinary;\\n    const isPrecompiled = typeof WebAssembly === "object" && WebAssembly.Module && wasmBinary instanceof WebAssembly.Module;\\n    const wasmModule = isPrecompiled ? await init({\\n      instantiateWasm: (imports, successCallback) => {\\n        const instance = new WebAssembly.Instance(wasmBinary, imports);\\n        successCallback(instance, wasmBinary);\\n        return instance.exports;\\n      }\\n    }) : await init({ wasmBinary });',
   },
   {
     label: "worker: transfer whole-buffer render results",
-    find:
-      'respond(response) {\\n    this.logger.debug(LOG_SOURCE, LOG_CATEGORY, "Sending response:", response.type);\\n    self.postMessage(response);\\n  }',
+    find: 'respond(response) {\\n    this.logger.debug(LOG_SOURCE, LOG_CATEGORY, "Sending response:", response.type);\\n    self.postMessage(response);\\n  }',
     replace:
       'respond(response) {\\n    this.logger.debug(LOG_SOURCE, LOG_CATEGORY, "Sending response:", response.type);\\n    const imagePayload = response && response.data;\\n    const imageData = imagePayload && imagePayload.data;\\n    if (imageData && typeof imagePayload.width === "number" && typeof imagePayload.height === "number" && imageData.byteLength >= 65536) {\\n      const imageBuffer = imageData.buffer;\\n      if (imageBuffer instanceof ArrayBuffer && imageData.byteOffset === 0 && imageData.byteLength === imageBuffer.byteLength) {\\n        self.postMessage(response, [imageBuffer]);\\n        return;\\n      }\\n    }\\n    self.postMessage(response);\\n  }',
   },
@@ -197,4 +199,7 @@ for (const { label, find, replace } of replacements) {
 }
 
 writeFileSync(target, source);
-console.log(`[patch-embedpdf-engines] applied local patches to @embedpdf/engines@${installedVersion}`);
+
+console.log(
+  `[patch-embedpdf-engines] applied local patches to @embedpdf/engines@${installedVersion}`,
+);

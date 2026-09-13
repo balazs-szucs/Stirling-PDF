@@ -24,7 +24,10 @@
 const resolved = new WeakMap<Blob, WeakRef<ArrayBuffer>>();
 const pending = new WeakMap<Blob, Promise<ArrayBuffer>>();
 const FILE_KEY_CACHE_LIMIT = 64;
-const resolvedByFileKey = new Map<string, { ref: WeakRef<ArrayBuffer>; size: number }>();
+const resolvedByFileKey = new Map<
+  string,
+  { ref: WeakRef<ArrayBuffer>; size: number }
+>();
 const pendingByFileKey = new Map<string, Promise<ArrayBuffer>>();
 
 function fileKey(blob: Blob): string | null {
@@ -34,7 +37,10 @@ function fileKey(blob: Blob): string | null {
 
 function rememberFileKey(key: string, buffer: ArrayBuffer): void {
   resolvedByFileKey.delete(key);
-  resolvedByFileKey.set(key, { ref: new WeakRef(buffer), size: buffer.byteLength });
+  resolvedByFileKey.set(key, {
+    ref: new WeakRef(buffer),
+    size: buffer.byteLength,
+  });
   while (resolvedByFileKey.size > FILE_KEY_CACHE_LIMIT) {
     const oldest = resolvedByFileKey.keys().next().value;
     if (oldest === undefined) break;

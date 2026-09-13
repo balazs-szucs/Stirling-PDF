@@ -9,7 +9,10 @@ import path from "path";
 import { test, expect } from "@app/tests/helpers/stub-test-base";
 import { uploadFiles } from "@app/tests/helpers/ui-helpers";
 
-const SAMPLE_PDF = path.join(import.meta.dirname, "../test-fixtures/sample.pdf");
+const SAMPLE_PDF = path.join(
+  import.meta.dirname,
+  "../test-fixtures/sample.pdf",
+);
 
 /** Collect every blob URL created on the page, keyed by MIME type. */
 const installBlobProbe = () => {
@@ -22,7 +25,8 @@ const installBlobProbe = () => {
     if (obj instanceof Blob) {
       const type = obj.type || "(empty)";
       w.__blobProbe.types[type] = (w.__blobProbe.types[type] ?? 0) + 1;
-      if (obj.type === "image/bmp" && !w.__blobProbe.bmp) w.__blobProbe.bmp = obj;
+      if (obj.type === "image/bmp" && !w.__blobProbe.bmp)
+        w.__blobProbe.bmp = obj;
     }
     return original(obj);
   };
@@ -41,7 +45,9 @@ test.describe("embedpdf engine patch", { tag: "@engine-capability" }, () => {
     page.on("pageerror", (err) => pageErrors.push(err.message));
     await page.addInitScript(installBlobProbe);
     await page.goto("/editor", { waitUntil: "domcontentloaded" });
-    await expect(page.getByTestId("files-button")).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByTestId("files-button")).toBeVisible({
+      timeout: 60_000,
+    });
 
     await uploadFiles(page, SAMPLE_PDF);
     const firstPage = page.locator('[data-page-index="0"]').first();
@@ -115,7 +121,11 @@ test.describe("embedpdf engine patch", { tag: "@engine-capability" }, () => {
         transfer?: Transferable[],
       ) {
         const shape = message as { type?: string; wasmModule?: unknown } | null;
-        if (shape && shape.type === "wasmInit" && shape.wasmModule !== undefined) {
+        if (
+          shape &&
+          shape.type === "wasmInit" &&
+          shape.wasmModule !== undefined
+        ) {
           w.__cloneFailures++;
           throw new DOMException("Forced DataCloneError", "DataCloneError");
         }

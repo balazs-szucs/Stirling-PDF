@@ -55,9 +55,7 @@ import { pdfiumWasmUrl } from "@app/services/wasmPrecompiler";
 import { getLocalFontFallbackConfig } from "@app/services/pdfiumFontFallback";
 import { useLocalPdfiumEngine } from "@app/hooks/useLocalPdfiumEngine";
 import { useFileSelector } from "@app/contexts/file/fileHooks";
-import {
-  consumeRemovedDocumentBytes,
-} from "@app/services/engineRespawnSignal";
+import { consumeRemovedDocumentBytes } from "@app/services/engineRespawnSignal";
 
 // The engine worker's wasm floor is the document's full clone plus PDFium
 // caches: 50.6 MB for the 40 MB fixture, 46.4 MB for the form fixture, 188 MB

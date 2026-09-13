@@ -186,7 +186,9 @@ export const HistoryAPIBridge = forwardRef<HistoryAPI>(
       // plugin's global emitter, which lives as long as the registry; without
       // the unsubscribe the listener (and this component's scope) outlives
       // the viewer.
-      const unsubscribe = annotationApi.onAnnotationEvent(handleAnnotationEvent);
+      const unsubscribe = annotationApi.onAnnotationEvent(
+        handleAnnotationEvent,
+      );
 
       // Cleanup function
       return () => {

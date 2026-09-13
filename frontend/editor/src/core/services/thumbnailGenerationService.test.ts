@@ -48,7 +48,9 @@ describe("ThumbnailGenerationService document cache", () => {
     const gate = new Promise<void>((resolve) => {
       releaseRenders = resolve;
     });
-    renderMock.mockImplementation(() => gate.then(() => "data:image/jpeg;base64,x"));
+    renderMock.mockImplementation(() =>
+      gate.then(() => "data:image/jpeg;base64,x"),
+    );
 
     const firstTen = Array.from({ length: 10 }, (_, i) =>
       service.generateThumbnails(fileId(i), pdfBytes(), [1], {}),
@@ -57,7 +59,12 @@ describe("ThumbnailGenerationService document cache", () => {
     expect(openMock).toHaveBeenCalledTimes(10);
 
     releaseRenders();
-    const eleventh = service.generateThumbnails(fileId("late"), pdfBytes(), [1], {});
+    const eleventh = service.generateThumbnails(
+      fileId("late"),
+      pdfBytes(),
+      [1],
+      {},
+    );
     const winner = await Promise.race([
       eleventh.then(() => "resolved"),
       settle(5000).then(() => "hung"),
@@ -99,11 +106,19 @@ describe("ThumbnailGenerationService thumbnail cache accounting", () => {
 
   it("does not double-count a replaced entry", () => {
     const page = "accounting-page-1";
-    thumbnailGenerationService.addThumbnailToCache(page, "data:image/jpeg;base64,aaa");
+    thumbnailGenerationService.addThumbnailToCache(
+      page,
+      "data:image/jpeg;base64,aaa",
+    );
     const afterFirst = thumbnailGenerationService.getCacheStats().sizeBytes;
-    thumbnailGenerationService.addThumbnailToCache(page, "data:image/jpeg;base64,aaa");
+    thumbnailGenerationService.addThumbnailToCache(
+      page,
+      "data:image/jpeg;base64,aaa",
+    );
     expect(thumbnailGenerationService.getCacheStats().size).toBe(1);
-    expect(thumbnailGenerationService.getCacheStats().sizeBytes).toBe(afterFirst);
+    expect(thumbnailGenerationService.getCacheStats().sizeBytes).toBe(
+      afterFirst,
+    );
   });
 
   it("clearPDFCache releases each cached reference exactly once", async () => {
@@ -112,7 +127,9 @@ describe("ThumbnailGenerationService thumbnail cache accounting", () => {
     const gate = new Promise<void>((resolve) => {
       releaseRenders = resolve;
     });
-    renderMock.mockImplementation(() => gate.then(() => "data:image/jpeg;base64,x"));
+    renderMock.mockImplementation(() =>
+      gate.then(() => "data:image/jpeg;base64,x"),
+    );
 
     // Keep both documents in the pdf cache: cleanupCompletedDocument would
     // drop them after a completed generation.

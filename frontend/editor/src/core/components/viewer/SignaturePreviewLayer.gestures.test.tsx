@@ -42,22 +42,26 @@ function spyListeners(el: Element) {
   const attached = new Map<string, EventListener[]>();
   const realAdd = el.addEventListener.bind(el);
   const realRemove = el.removeEventListener.bind(el);
-  vi.spyOn(el, "addEventListener").mockImplementation((
-    (type: string, handler: EventListener, options?: unknown) => {
-      const list = attached.get(type) ?? [];
-      list.push(handler);
-      attached.set(type, list);
-      realAdd(type, handler, options);
-    }) as typeof el.addEventListener,
-  );
-  vi.spyOn(el, "removeEventListener").mockImplementation((
-    (type: string, handler: EventListener, options?: unknown) => {
-      const list = attached.get(type) ?? [];
-      const idx = list.indexOf(handler);
-      if (idx >= 0) list.splice(idx, 1);
-      realRemove(type, handler, options);
-    }) as typeof el.removeEventListener,
-  );
+  vi.spyOn(el, "addEventListener").mockImplementation(((
+    type: string,
+    handler: EventListener,
+    options?: unknown,
+  ) => {
+    const list = attached.get(type) ?? [];
+    list.push(handler);
+    attached.set(type, list);
+    realAdd(type, handler, options);
+  }) as typeof el.addEventListener);
+  vi.spyOn(el, "removeEventListener").mockImplementation(((
+    type: string,
+    handler: EventListener,
+    options?: unknown,
+  ) => {
+    const list = attached.get(type) ?? [];
+    const idx = list.indexOf(handler);
+    if (idx >= 0) list.splice(idx, 1);
+    realRemove(type, handler, options);
+  }) as typeof el.removeEventListener);
   return attached;
 }
 
