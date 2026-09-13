@@ -1,16 +1,27 @@
 #!/usr/bin/env node
-// Local patches for pinned @embedpdf plugins (see package.json). The
-// interaction-manager emits `onHandlerChange` synchronously from every
-// registerHandlers/registerAlways call, and every mounted InteractionManager
-// scope re-resolves `getHandlersForScope` on each emit. Page mounting registers
-// one handler per annotation tool, so a page jump on a large document turns
-// into hundreds of emits x scope recomputes (22.8% of main-thread busy samples
-// in the pass-5 jump profile). Coalescing emits into one microtask keeps the
-// notification contract (listeners run before the next task/event) while doing
-// one recompute per batch.
+// Local patches for pinned @embedpdf plugins (see package.json).
 //
-// Delete this script and its postinstall hook once the pinned plugin batches
-// handler-change notifications natively.
+// 1. interaction-manager: emits `onHandlerChange` synchronously from every
+//    registerHandlers/registerAlways call, and every mounted
+//    InteractionManager scope re-resolves `getHandlersForScope` on each emit.
+//    Page mounting registers one handler per annotation tool, so a page jump
+//    on a large document turns into hundreds of emits x scope recomputes
+//    (22.8% of main-thread busy samples in the pass-5 jump profile).
+//    Coalescing emits into one microtask keeps the notification contract
+//    (listeners run before the next task/event) while doing one recompute
+//    per batch.
+// 2. search: `searchAllPages` dispatches `appendSearchResults` (+ a
+//    `setActiveResultIndex`/`notifyActiveResultChange` pair) synchronously
+//    from every engine progress callback, and the engine reports progress
+//    per page — a 500-page query is ~500 dispatches x subscriber recompute
+//    (680 ms main task, 400 ms long tasks on pages-500). Coalescing progress
+//    batches into one microtask keeps incremental streaming (flushes run
+//    before the next task) while dispatching once per batch. Same template
+//    as pdf.js `updateMatchesCountOnProgress=false` (GeckoView): only the
+//    final counts must be exact, intermediate updates may batch.
+//
+// Delete this script and its postinstall hook once the pinned plugins batch
+// these notifications natively.
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -18,34 +29,46 @@ import { fileURLToPath } from "node:url";
 const EXPECTED_VERSION = "2.15.0";
 const MARKER = "STIRLING_LOCAL_EMBEDPDF_PLUGIN_PATCH";
 const checkOnly = process.argv.includes("--check");
-const pluginsDir = path.resolve(
+const nodeModulesDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
-  "../node_modules/@embedpdf/plugin-interaction-manager",
+  "../node_modules",
 );
-const packageJsonPath = path.join(pluginsDir, "package.json");
-const target = path.join(pluginsDir, "dist/index.js");
 
-if (!existsSync(target) || !existsSync(packageJsonPath)) {
-  console.error(
-    "[patch-embedpdf-plugins] @embedpdf/plugin-interaction-manager is not installed; skipping",
-  );
-  process.exit(checkOnly ? 1 : 0);
+function loadPackage(name) {
+  const dir = path.join(nodeModulesDir, name);
+  const packageJsonPath = path.join(dir, "package.json");
+  const target = path.join(dir, "dist/index.js");
+  if (!existsSync(target) || !existsSync(packageJsonPath)) {
+    console.error(
+      `[patch-embedpdf-plugins] ${name} is not installed; skipping`,
+    );
+    process.exit(checkOnly ? 1 : 0);
+  }
+  const installedVersion = JSON.parse(
+    readFileSync(packageJsonPath, "utf8"),
+  ).version;
+  if (installedVersion !== EXPECTED_VERSION) {
+    console.error(
+      `[patch-embedpdf-plugins] expected ${name}@${EXPECTED_VERSION}, found ${installedVersion}. ` +
+        "Re-verify every patch anchor against the new version before updating EXPECTED_VERSION.",
+    );
+    process.exit(1);
+  }
+  return { name, target, source: readFileSync(target, "utf8") };
 }
 
-const installedVersion = JSON.parse(
-  readFileSync(packageJsonPath, "utf8"),
-).version;
-if (installedVersion !== EXPECTED_VERSION) {
+function fail(name, label) {
   console.error(
-    `[patch-embedpdf-plugins] expected @embedpdf/plugin-interaction-manager@${EXPECTED_VERSION}, found ${installedVersion}. ` +
-      "Re-verify every patch anchor against the new version before updating EXPECTED_VERSION.",
+    `[patch-embedpdf-plugins] anchor not found for "${label}" in ${name}@${EXPECTED_VERSION}. ` +
+      "The patch must be re-verified against this version.",
   );
   process.exit(1);
 }
 
+// --- interaction-manager: batch onHandlerChange emits -----------------------
 const emitSnippet = "this.onHandlerChange$.emit({ ...this.state });";
 const callSnippet = "this.__stirlingScheduleHandlerChange();";
-const helperSnippet = `__stirlingScheduleHandlerChange() {
+const emitHelperSnippet = `__stirlingScheduleHandlerChange() {
     if (this.__stirlingHandlerChangeQueued) return;
     this.__stirlingHandlerChangeQueued = true;
     queueMicrotask(() => {
@@ -54,59 +77,149 @@ const helperSnippet = `__stirlingScheduleHandlerChange() {
     });
   } /* ${MARKER} */`;
 
-let source = readFileSync(target, "utf8");
-const callSites = source.split(callSnippet).length - 1;
-
-if (checkOnly) {
-  const rawEmits = source.split(emitSnippet).length - 1;
-  if (!source.includes(MARKER) || rawEmits !== 1 || callSites !== 6) {
-    console.error(
-      "[patch-embedpdf-plugins] check failed: expected the batched helper and 6 call sites " +
-        `(helper=${source.includes(MARKER)}, raw emits=${rawEmits}, batched calls=${callSites}). ` +
-        "Run `npm install` (or `npm run postinstall`) to apply the local plugin patch.",
-    );
-    process.exit(1);
-  }
-  console.log(
-    `[patch-embedpdf-plugins] check passed for @embedpdf/plugin-interaction-manager@${installedVersion}`,
-  );
-  process.exit(0);
+function checkInteractionManager(pkg) {
+  const rawEmits = pkg.source.split(emitSnippet).length - 1;
+  const callSites = pkg.source.split(callSnippet).length - 1;
+  return pkg.source.includes(MARKER) && rawEmits === 1 && callSites === 6;
 }
 
-if (source.includes(MARKER)) {
-  console.log(
-    `[patch-embedpdf-plugins] already applied (${callSites} call sites) for @embedpdf/plugin-interaction-manager@${installedVersion}`,
-  );
-  process.exit(0);
-}
-
-const registerAnchor = `  registerHandlers({
+function applyInteractionManager(pkg) {
+  if (pkg.source.includes(MARKER)) return pkg.source;
+  const registerAnchor = `  registerHandlers({
     documentId,
     modeId,
     handlers,
     pageIndex
   }) {`;
-if (!source.includes(registerAnchor)) {
-  console.error(
-    "[patch-embedpdf-plugins] anchor not found for registerHandlers; re-verify against the installed version.",
+  if (!pkg.source.includes(registerAnchor)) fail(pkg.name, "registerHandlers");
+  const occurrences = pkg.source.split(emitSnippet).length - 1;
+  if (occurrences !== 6) {
+    console.error(
+      `[patch-embedpdf-plugins] expected 6 emit sites, found ${occurrences}; re-verify against the installed version.`,
+    );
+    process.exit(1);
+  }
+  // Replace the call sites first: the helper below still needs a real emit,
+  // and a blanket replace after insertion would rewrite the helper into a
+  // self-call.
+  let source = pkg.source.split(emitSnippet).join(callSnippet);
+  source = source.replace(
+    registerAnchor,
+    `  ${emitHelperSnippet}\n${registerAnchor}`,
   );
-  process.exit(1);
+  return source;
 }
-const occurrences = source.split(emitSnippet).length - 1;
-if (occurrences !== 6) {
-  console.error(
-    `[patch-embedpdf-plugins] expected 6 emit sites, found ${occurrences}; re-verify against the installed version.`,
+
+// --- search: batch searchAllPages progress dispatches ------------------------
+const searchProgressFind = `    task.onProgress((p) => {
+      var _a2;
+      if ((_a2 = p == null ? void 0 : p.results) == null ? void 0 : _a2.length) {
+        if (this.currentTask.get(documentId) === task) {
+          this.dispatch(appendSearchResults(documentId, p.results));
+          if (this.state.documents[documentId].activeResultIndex === -1) {
+            this.dispatch(setActiveResultIndex(documentId, 0));
+            this.notifyActiveResultChange(documentId, 0);
+          }
+        }
+      }
+    });`;
+const searchProgressReplace = `    task.onProgress((p) => {
+      var _a2;
+      if ((_a2 = p == null ? void 0 : p.results) == null ? void 0 : _a2.length) {
+        if (this.currentTask.get(documentId) === task) {
+          this.__stirlingQueueSearchProgress(documentId, task, p.results);
+        }
+      }
+    });`;
+const searchHelperAnchor = "  stopSearchSession(documentId) {";
+const searchHelperSnippet = `  __stirlingQueueSearchProgress(documentId, task, results) {
+    if (!this.__stirlingSearchQueue) this.__stirlingSearchQueue = /* @__PURE__ */ new Map();
+    let entry = this.__stirlingSearchQueue.get(documentId);
+    if (!entry || entry.task !== task) {
+      entry = { task, batches: [], queued: false };
+      this.__stirlingSearchQueue.set(documentId, entry);
+    }
+    entry.batches.push(results);
+    if (entry.queued) return;
+    entry.queued = true;
+    queueMicrotask(() => {
+      entry.queued = false;
+      const pending = entry.batches.splice(0);
+      if (this.__stirlingSearchQueue.get(documentId) === entry) this.__stirlingSearchQueue.delete(documentId);
+      if (this.currentTask.get(documentId) !== task || pending.length === 0) return;
+      const merged = pending.length === 1 ? pending[0] : pending.flat();
+      this.dispatch(appendSearchResults(documentId, merged));
+      const docState = this.state.documents[documentId];
+      if (docState && docState.activeResultIndex === -1) {
+        this.dispatch(setActiveResultIndex(documentId, 0));
+        this.notifyActiveResultChange(documentId, 0);
+      }
+    });
+  } /* ${MARKER} */
+`;
+
+function checkSearch(pkg) {
+  return (
+    pkg.source.includes(searchHelperSnippet) &&
+    pkg.source.includes("this.__stirlingQueueSearchProgress(documentId, task, p.results);")
   );
-  process.exit(1);
 }
-// Replace the call sites first: the helper below still needs a real emit, and a
-// blanket replace after insertion would rewrite the helper into a self-call.
-source = source.split(emitSnippet).join(callSnippet);
-source = source.replace(
-  registerAnchor,
-  `  ${helperSnippet}\n${registerAnchor}`,
-);
-writeFileSync(target, source);
-console.log(
-  `[patch-embedpdf-plugins] applied local patches to @embedpdf/plugin-interaction-manager@${installedVersion}`,
-);
+
+function applySearch(pkg) {
+  if (pkg.source.includes(MARKER)) return pkg.source;
+  if (!pkg.source.includes(searchProgressFind)) fail(pkg.name, "onProgress");
+  if (!pkg.source.includes(searchHelperAnchor))
+    fail(pkg.name, "stopSearchSession");
+  let source = pkg.source.replace(
+    searchProgressFind,
+    () => searchProgressReplace,
+  );
+  source = source.replace(
+    searchHelperAnchor,
+    () => `${searchHelperSnippet}${searchHelperAnchor}`,
+  );
+  return source;
+}
+
+const jobs = [
+  {
+    name: "@embedpdf/plugin-interaction-manager",
+    check: checkInteractionManager,
+    apply: applyInteractionManager,
+  },
+  { name: "@embedpdf/plugin-search", check: checkSearch, apply: applySearch },
+];
+
+if (checkOnly) {
+  let failed = false;
+  for (const job of jobs) {
+    const pkg = loadPackage(job.name);
+    if (!job.check(pkg)) {
+      console.error(
+        `[patch-embedpdf-plugins] check failed for ${job.name}@${EXPECTED_VERSION}. ` +
+          "Run `npm install` (or `npm run postinstall`) to apply the local plugin patch.",
+      );
+      failed = true;
+    } else {
+      console.log(
+        `[patch-embedpdf-plugins] check passed for ${job.name}@${EXPECTED_VERSION}`,
+      );
+    }
+  }
+  process.exit(failed ? 1 : 0);
+}
+
+for (const job of jobs) {
+  const pkg = loadPackage(job.name);
+  const patched = job.apply(pkg);
+  if (patched !== pkg.source) {
+    writeFileSync(pkg.target, patched);
+    console.log(
+      `[patch-embedpdf-plugins] applied local patches to ${job.name}@${EXPECTED_VERSION}`,
+    );
+  } else {
+    console.log(
+      `[patch-embedpdf-plugins] already applied for ${job.name}@${EXPECTED_VERSION}`,
+    );
+  }
+}
