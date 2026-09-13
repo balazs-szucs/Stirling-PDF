@@ -19,24 +19,11 @@ const getWasmUrl = (): string => {
 
 export const pdfiumWasmUrl = getWasmUrl();
 
-// Inject a <link rel="preload"> into <head> at module-evaluation time so the
-// browser starts fetching the WASM binary immediately, before React mounts
-// and before startEagerWasmCompilation() is explicitly called by the app.
-// This is safe to call multiple times; duplicate links are a no-op in browsers.
-if (typeof document !== "undefined") {
-  const existing = document.querySelector(
-    `link[rel="preload"][href="${pdfiumWasmUrl}"]`,
-  );
-  if (!existing) {
-    const link = document.createElement("link");
-    link.rel = "preload";
-    link.as = "fetch";
-    link.href = pdfiumWasmUrl;
-    link.crossOrigin = "anonymous";
-    document.head.appendChild(link);
-  }
-}
-
+// No <link rel="preload">: WebKit does not reuse a preloaded fetch for
+// WebAssembly.compileStreaming(fetch(url)) and downloaded the 4.6 MB binary
+// twice (link + fetch, both in flight), while Chromium only saves ~10 ms over
+// starting the compile at module-eval time. startEagerWasmCompilation() below
+// runs on import so the fetch still starts before React mounts.
 export interface WasmModuleContainer {
   module: WebAssembly.Module | null;
 }
@@ -98,4 +85,12 @@ export function startEagerWasmCompilation(): void {
       resolvePromise(module ? { module } : null);
     })
     .catch(() => resolvePromise(null));
+}
+
+// Start at module-eval time (before React mounts) so the binary fetch and
+// compile begin as early as the removed preload link did; the flag in
+// startEagerWasmCompilation keeps later callers as no-ops. Skipped under
+// vitest so service tests do not issue a real fetch on import.
+if (import.meta.env.MODE !== "test") {
+  startEagerWasmCompilation();
 }
