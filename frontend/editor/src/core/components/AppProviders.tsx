@@ -176,10 +176,6 @@ export function AppProviders({
         ? Math.min(2, navigator.hardwareConcurrency)
         : 1,
     fontFallback,
-    cache: {
-      pageTtl: 10000,
-      maxPagesPerDocument: 15,
-    },
   });
 
   return (
