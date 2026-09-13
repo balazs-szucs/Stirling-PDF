@@ -240,6 +240,8 @@ export interface FormFillContextValue {
   ) => Promise<void>;
   /** Ensure form fields are loaded for a given page index (on-demand loading) */
   ensurePageFields?: (pageIndex: number) => Promise<void>;
+  /** Ensure every page's fields are loaded (save-time validation) */
+  ensureAllFields?: () => Promise<void>;
   /** Update a single field value */
   setValue: (fieldName: string, value: string) => void;
   /** Set the currently focused field */
@@ -791,11 +793,20 @@ export function FormFillProvider({
         return;
       loadedPagesRef.current.add(pageIndex);
       const file = activeFileRef.current;
-      if (!file) return;
+      if (!file) {
+        loadedPagesRef.current.delete(pageIndex);
+        return;
+      }
+      const version = fetchVersionRef.current;
       try {
         const pageFields = await providerRef.current.fetchFields(file, {
           pageIndices: [pageIndex],
         });
+        if (
+          fetchVersionRef.current !== version ||
+          activeFileRef.current !== file
+        )
+          return;
         if (pageFields.length > 0) {
           dispatch({
             type: "MERGE_PAGE_FIELDS",
@@ -804,6 +815,7 @@ export function FormFillProvider({
           });
         }
       } catch (err) {
+        loadedPagesRef.current.delete(pageIndex);
         console.warn(
           `[FormFill] Failed to load fields for page ${pageIndex}:`,
           err,
@@ -812,6 +824,20 @@ export function FormFillProvider({
     },
     [dispatch],
   );
+
+  /**
+   * Load every page's fields when a flow needs the complete set (save-time
+   * required-field validation). Reuses the version-guarded full fetch, which
+   * also invalidates in-flight per-page loads.
+   */
+  const ensureAllFields = useCallback(async () => {
+    if (isExhaustiveRef.current) return;
+    const file = activeFileRef.current;
+    if (!file) return;
+    await fetchFields(file, forFileIdRef.current ?? undefined, {
+      exhaustive: true,
+    });
+  }, [fetchFields]);
 
   const reset = useCallback(() => {
     // Increment version to invalidate any in-flight fetch
@@ -1024,6 +1050,7 @@ export function FormFillProvider({
       state,
       fetchFields,
       ensurePageFields,
+      ensureAllFields,
       setValue,
       setActiveField,
       submitForm,
@@ -1071,6 +1098,7 @@ export function FormFillProvider({
       state,
       fetchFields,
       ensurePageFields,
+      ensureAllFields,
       setValue,
       setActiveField,
       submitForm,
