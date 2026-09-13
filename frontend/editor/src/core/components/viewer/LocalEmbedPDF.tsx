@@ -348,6 +348,13 @@ export function LocalEmbedPDF({
   // the unsubscribe the listener pins the document bytes after unmount.
   const annotationUnsubscribeRef = useRef<(() => void) | null>(null);
 
+  useEffect(() => {
+    return () => {
+      annotationUnsubscribeRef.current?.();
+      annotationUnsubscribeRef.current = null;
+    };
+  }, []);
+
   // Read file/url directly into an ArrayBuffer on the main thread so EmbedPDF's worker
   // receives the document data via buffer rather than failing to fetch partitioned blob URLs.
   useEffect(() => {
@@ -395,6 +402,19 @@ export function LocalEmbedPDF({
     }
     setIsBufferReady(false);
   }, [file ? fileStableKey : null, url]);
+
+  // Debug handle for the live plugin registry. It also keeps the registry
+  // (and every config object on it) reachable after unmount, so drop it with
+  // the viewer instead of leaving it on window.
+  useEffect(
+    () => () => {
+      if (typeof window !== "undefined") {
+        delete (window as unknown as { __embedPdfRegistry?: PluginRegistry })
+          .__embedPdfRegistry;
+      }
+    },
+    [],
+  );
 
   // Keyed by fileStableKey to avoid recomputing on every FileContext re-render.
   const exportFileName = useMemo(() => {
@@ -1143,71 +1163,73 @@ export function LocalEmbedPDF({
                 },
               });
 
-              annotationApi.onAnnotationEvent((event: AnnotationEvent) => {
-                if (event.type === "create" && event.committed) {
-                  setAnnotations((prev) => [
-                    ...prev,
-                    {
-                      id: event.annotation.id,
-                      pageIndex: event.pageIndex,
-                      rect: event.annotation.rect,
-                    },
-                  ]);
+              annotationUnsubscribeRef.current?.();
+              annotationUnsubscribeRef.current =
+                annotationApi.onAnnotationEvent((event: AnnotationEvent) => {
+                  if (event.type === "create" && event.committed) {
+                    setAnnotations((prev) => [
+                      ...prev,
+                      {
+                        id: event.annotation.id,
+                        pageIndex: event.pageIndex,
+                        rect: event.annotation.rect,
+                      },
+                    ]);
 
-                  // If the annotation doesn't have customData.toolId, patch it from the active tool.
-                  // EmbedPDF doesn't always persist customData from setToolDefaults into created annotations.
-                  const annotationId = event.annotation.id;
-                  const existingCustomData = (
-                    event.annotation as unknown as {
-                      customData?: Record<string, unknown>;
-                    }
-                  ).customData;
-                  if (annotationId && !existingCustomData?.toolId) {
-                    const activeTool = (
-                      annotationApi as unknown as {
-                        getActiveTool?: () => { id: string } | null;
+                    // If the annotation doesn't have customData.toolId, patch it from the active tool.
+                    // EmbedPDF doesn't always persist customData from setToolDefaults into created annotations.
+                    const annotationId = event.annotation.id;
+                    const existingCustomData = (
+                      event.annotation as unknown as {
+                        customData?: Record<string, unknown>;
                       }
-                    ).getActiveTool?.();
-                    if (activeTool?.id && activeTool.id !== "select") {
+                    ).customData;
+                    if (annotationId && !existingCustomData?.toolId) {
+                      const activeTool = (
+                        annotationApi as unknown as {
+                          getActiveTool?: () => { id: string } | null;
+                        }
+                      ).getActiveTool?.();
+                      if (activeTool?.id && activeTool.id !== "select") {
+                        (
+                          annotationApi as unknown as {
+                            updateAnnotation?: (
+                              page: number,
+                              id: string,
+                              patch: Record<string, unknown>,
+                            ) => void;
+                          }
+                        ).updateAnnotation?.(event.pageIndex, annotationId, {
+                          customData: {
+                            ...(existingCustomData ?? {}),
+                            toolId: activeTool.id,
+                          },
+                        });
+                      }
+                    }
+
+                    // Auto-select the annotation after creation so the selection menu appears immediately,
+                    // letting users discover the editing options before they click away.
+                    if (annotationId) {
                       (
                         annotationApi as unknown as {
-                          updateAnnotation?: (
-                            page: number,
+                          selectAnnotation?: (
+                            pageIndex: number,
                             id: string,
-                            patch: Record<string, unknown>,
                           ) => void;
                         }
-                      ).updateAnnotation?.(event.pageIndex, annotationId, {
-                        customData: {
-                          ...(existingCustomData ?? {}),
-                          toolId: activeTool.id,
-                        },
-                      });
+                      ).selectAnnotation?.(event.pageIndex, annotationId);
                     }
-                  }
 
-                  // Auto-select the annotation after creation so the selection menu appears immediately,
-                  // letting users discover the editing options before they click away.
-                  if (annotationId) {
-                    (
-                      annotationApi as unknown as {
-                        selectAnnotation?: (
-                          pageIndex: number,
-                          id: string,
-                        ) => void;
-                      }
-                    ).selectAnnotation?.(event.pageIndex, annotationId);
+                    if (onSignatureAdded) {
+                      onSignatureAdded(event.annotation);
+                    }
+                  } else if (event.type === "delete" && event.committed) {
+                    setAnnotations((prev) =>
+                      prev.filter((ann) => ann.id !== event.annotation.id),
+                    );
                   }
-
-                  if (onSignatureAdded) {
-                    onSignatureAdded(event.annotation);
-                  }
-                } else if (event.type === "delete" && event.committed) {
-                  setAnnotations((prev) =>
-                    prev.filter((ann) => ann.id !== event.annotation.id),
-                  );
-                }
-              });
+                });
             }
           }}
         >
