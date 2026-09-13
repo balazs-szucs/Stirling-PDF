@@ -14,6 +14,7 @@ vi.mock("posthog-js", () => ({
 import {
   trackPdfUploaded,
   trackEditorOperation,
+  setAnalyticsEnabled,
 } from "@app/services/analytics";
 
 function pdf(name: string, size = 100): File {
@@ -24,37 +25,42 @@ describe("analytics", () => {
   beforeEach(() => {
     capture.mockClear();
     optedIn = true;
+    setAnalyticsEnabled(true);
   });
 
-  it("captures one event per uploaded PDF (no dedup)", () => {
+  it("captures one event per uploaded PDF (no dedup)", async () => {
     trackPdfUploaded([pdf("a.pdf"), pdf("a.pdf"), pdf("b.pdf")]);
-    expect(capture).toHaveBeenCalledTimes(3);
+    // posthog is loaded with a dynamic import, so capture lands a tick later.
+    await vi.waitFor(() => expect(capture).toHaveBeenCalledTimes(3));
     expect(capture).toHaveBeenCalledWith("editor_pdf_uploaded", {
       source: "editor",
     });
   });
 
-  it("counts every uploaded file regardless of type", () => {
+  it("counts every uploaded file regardless of type", async () => {
     trackPdfUploaded([
       new File(["x"], "a.png", { type: "image/png" }),
       pdf("b.pdf"),
     ]);
-    expect(capture).toHaveBeenCalledTimes(2);
+    await vi.waitFor(() => expect(capture).toHaveBeenCalledTimes(2));
   });
 
-  it("captures one event per editor operation run", () => {
+  it("captures one event per editor operation run", async () => {
     trackEditorOperation("compress", 3);
-    expect(capture).toHaveBeenCalledWith("editor_operation", {
-      source: "editor",
-      tool: "compress",
-      file_count: 3,
-    });
+    await vi.waitFor(() =>
+      expect(capture).toHaveBeenCalledWith("editor_operation", {
+        source: "editor",
+        tool: "compress",
+        file_count: 3,
+      }),
+    );
   });
 
-  it("does not capture when opted out", () => {
+  it("does not capture when opted out", async () => {
     optedIn = false;
     trackPdfUploaded([pdf("a.pdf")]);
     trackEditorOperation("compress", 1);
+    await new Promise((resolve) => setTimeout(resolve, 10));
     expect(capture).not.toHaveBeenCalled();
   });
 });
