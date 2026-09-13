@@ -48,12 +48,24 @@ function rememberFileKey(key: string, buffer: ArrayBuffer): void {
   }
 }
 
-/** Files at or above this threshold have their main-thread cache dropped after worker load. */
-export const LARGE_DOC_CACHE_DROP_THRESHOLD = 100 * 1024 * 1024; // 100 MB
-
 let _totalReads = 0;
 let _reReads = 0;
-const _seenFileKeys = new Set<string>();
+// Insertion-ordered LRU window: exact re-read detection for recent files,
+// bounded so a long session cannot accumulate key strings without limit.
+const _seenFileKeys = new Map<string, null>();
+const SEEN_FILE_KEYS_LIMIT = 64;
+
+function markFileKeySeen(key: string): boolean {
+  const seen = _seenFileKeys.has(key);
+  _seenFileKeys.delete(key);
+  _seenFileKeys.set(key, null);
+  while (_seenFileKeys.size > SEEN_FILE_KEYS_LIMIT) {
+    const oldest = _seenFileKeys.keys().next().value;
+    if (oldest === undefined) break;
+    _seenFileKeys.delete(oldest);
+  }
+  return seen;
+}
 
 /**
  * Statistics on documentBytesCache reads for profiling and test assertions.
@@ -107,7 +119,7 @@ export function getDocumentBytes(blob: Blob): Promise<ArrayBuffer> {
 
   const reading = blob.arrayBuffer().then(
     (buffer) => {
-      if (key && _seenFileKeys.has(key)) {
+      if (key && markFileKeySeen(key)) {
         _reReads++;
         console.debug(
           "[documentBytesCache] Re-reading buffer on demand for:",
@@ -119,8 +131,6 @@ export function getDocumentBytes(blob: Blob): Promise<ArrayBuffer> {
           };
           if (w.__perf) w.__perf.documentBytesReReads = _reReads;
         }
-      } else if (key) {
-        _seenFileKeys.add(key);
       }
       resolved.set(blob, new WeakRef(buffer));
       if (key) {
