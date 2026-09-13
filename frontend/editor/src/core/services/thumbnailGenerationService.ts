@@ -8,6 +8,7 @@ import {
   closeRawDocument,
 } from "@app/services/pdfiumService";
 import { renderPdfiumPageDataUrl } from "@app/utils/pdfiumPageRender";
+import { THUMBNAIL_MAX_DIMENSION } from "@app/utils/thumbnailUtils";
 
 export interface ThumbnailResult {
   pageNumber: number;
@@ -198,6 +199,7 @@ export class ThumbnailGenerationService {
                 format: "jpeg",
                 quality,
                 returnBlobUrl: true,
+                maxDimension: THUMBNAIL_MAX_DIMENSION,
               },
             );
             if (!thumbnail) {

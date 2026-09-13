@@ -49,6 +49,11 @@ export interface RenderPdfiumPageOptions {
   quality?: number;
   /** Return a temporary Blob Object URL instead of a data URL. */
   returnBlobUrl?: boolean;
+  /** Clamp the rendered output's larger side to this many pixels. Thumbnail
+   *  consumers display at ≤ ~250 CSS px, so an oversized page at scale 1.0
+   *  would otherwise mint a multi-hundred-KB PNG that then rides along on
+   *  every copy of the file record for the session. */
+  maxDimension?: number;
 }
 
 /**
@@ -62,7 +67,8 @@ export async function renderPdfiumPageDataUrl(
   scale: number,
   options: RenderPdfiumPageOptions = {},
 ): Promise<string | null> {
-  const { applyRotation = true, format = "png", quality } = options;
+  const { applyRotation = true, format = "png", quality, maxDimension } =
+    options;
   const m = await getPdfiumModule();
 
   const pagePtr = m.FPDF_LoadPage(docPtr, pageIndex);
@@ -82,8 +88,13 @@ export async function renderPdfiumPageDataUrl(
     const outH = applyRotation ? rawH : isQuarterTurn ? rawW : rawH;
     const renderRotate = applyRotation ? 0 : (4 - pageRotQuarters) % 4;
 
-    const w = Math.max(1, Math.round(outW * scale));
-    const h = Math.max(1, Math.round(outH * scale));
+    let w = Math.max(1, Math.round(outW * scale));
+    let h = Math.max(1, Math.round(outH * scale));
+    if (maxDimension && Math.max(w, h) > maxDimension) {
+      const shrink = maxDimension / Math.max(w, h);
+      w = Math.max(1, Math.round(w * shrink));
+      h = Math.max(1, Math.round(h * shrink));
+    }
 
     const bitmapPtr = m.FPDFBitmap_Create(w, h, 1);
     try {

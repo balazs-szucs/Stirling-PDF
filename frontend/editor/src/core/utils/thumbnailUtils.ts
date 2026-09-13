@@ -31,8 +31,21 @@ export function calculateScaleFromFileSize(fileSize: number): number {
   return 0.3; // Still usable quality, not tiny
 }
 
+// Thumbnails ride along on every copy of the file record (record, processedFile
+// pages, IndexedDB persistence), so a full-resolution PNG makes each stale
+// React state version cost hundreds of KB (see the form-fixture heap drift in
+// .perf-local/BASELINE.md). JPEG at a 400 px cap is visually identical at
+// thumbnail display sizes and ~30x smaller on the heap.
+export const THUMBNAIL_MAX_DIMENSION = 400;
+
+const THUMBNAIL_RENDER = {
+  format: "jpeg",
+  quality: 0.8,
+  maxDimension: THUMBNAIL_MAX_DIMENSION,
+} as const;
 /** Callers still get a placeholder, but log the cause: an empty thumbnail is
- *  indistinguishable from "no raster preview", so an outage hides as a nicety. */
+ * indistinguishable from "no raster preview", so an outage hides as a nicety. */
+
 function reportThumbnailFailure(file: File, error: unknown): void {
   console.warn(`Thumbnail generation failed for ${file.name}:`, error);
 }
@@ -117,6 +130,7 @@ async function renderPdfThumbnailPdfium(
     const pageCount = m.FPDF_GetPageCount(docPtr);
     const thumbnail = await renderPdfiumPageDataUrl(docPtr, 0, scale, {
       applyRotation,
+      ...THUMBNAIL_RENDER,
     });
     if (!thumbnail) throw new Error("PDFium: failed to render page 0");
 
@@ -179,6 +193,7 @@ async function renderPdfThumbnailPairPdfium(
     const firstRotation = firstMeta?.rotation ?? 0;
     const unrotatedThumb = await renderPdfiumPageDataUrl(docPtr, 0, scale, {
       applyRotation: false,
+      ...THUMBNAIL_RENDER,
     });
     // Both variants are pixel-identical when the page has no rotation.
     const rotatedThumb =
@@ -186,6 +201,7 @@ async function renderPdfThumbnailPairPdfium(
         ? unrotatedThumb
         : await renderPdfiumPageDataUrl(docPtr, 0, scale, {
             applyRotation: true,
+            ...THUMBNAIL_RENDER,
           });
     if (!unrotatedThumb || !rotatedThumb) {
       throw new Error("PDFium: failed to render page 0");
