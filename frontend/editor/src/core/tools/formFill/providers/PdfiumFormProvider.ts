@@ -16,6 +16,7 @@
 import { PDF_FORM_FIELD_TYPE } from "@app/services/pdfiumService";
 import {
   getDocumentBytes,
+  getFormVerdict,
   noteFormVerdict,
 } from "@app/services/documentBytesCache";
 import { runPdfiumScan } from "@app/services/pdfiumScanQueue";
@@ -155,6 +156,10 @@ export class PdfiumFormProvider implements IFormDataProvider {
     options: { exhaustive?: boolean; pageIndices?: number[] } = {},
   ): Promise<FormField[]> {
     try {
+      // Recorded literal-miss short-circuit (see noteFormVerdict): the
+      // on-render overlay path (ensurePageFields) would otherwise pull the
+      // full bytes again after an R2 drop just to re-prove form-lessness.
+      if (!options.exhaustive && getFormVerdict(file) === false) return [];
       const arrayBuffer = await getDocumentBytes(file);
       // The literal scan is a fast path for viewer opens, where the overlay
       // fetches on every file and a main-thread PDFium copy is expensive. It

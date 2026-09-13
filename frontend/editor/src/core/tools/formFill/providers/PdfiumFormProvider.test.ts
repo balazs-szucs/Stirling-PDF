@@ -26,7 +26,10 @@ vi.mock("@app/services/pdfiumService", () => ({
 
 import { allowConsole } from "@app/tests/failOnConsole";
 
-import { getDocumentBytes } from "@app/services/documentBytesCache";
+import {
+  getDocumentBytes,
+  getFormVerdict,
+} from "@app/services/documentBytesCache";
 import {
   extractFormFields,
   readRawFormType,
@@ -57,6 +60,33 @@ describe("PdfiumFormProvider", () => {
 
     expect(readRawFormType).toHaveBeenCalledTimes(1);
     expect(extractFormFields).not.toHaveBeenCalled();
+  });
+
+  it("short-circuits on a recorded literal-miss without reading bytes", async () => {
+    (getFormVerdict as Mock).mockReturnValue(false);
+    const provider = new PdfiumFormProvider();
+
+    await expect(
+      provider.fetchFields(new Blob([new Uint8Array([1, 2, 3])])),
+    ).resolves.toEqual([]);
+    expect(getDocumentBytes).not.toHaveBeenCalled();
+  });
+
+  it("reads through on unknown or positive verdicts", async () => {
+    const bytes = noLiteralBytes();
+    (getDocumentBytes as Mock).mockResolvedValue(bytes.buffer);
+    (readRawFormType as Mock).mockResolvedValue(0);
+    const provider = new PdfiumFormProvider();
+
+    (getFormVerdict as Mock).mockReturnValue(undefined);
+    await provider.fetchFields(new Blob([bytes]));
+    expect(getDocumentBytes).toHaveBeenCalledTimes(1);
+
+    vi.clearAllMocks();
+    (getDocumentBytes as Mock).mockResolvedValue(bytes.buffer);
+    (getFormVerdict as Mock).mockReturnValue(true);
+    await provider.fetchFields(new Blob([bytes]));
+    expect(getDocumentBytes).toHaveBeenCalledTimes(1);
   });
 
   it("extracts when the catalog probe finds a form the literal scan missed", async () => {
