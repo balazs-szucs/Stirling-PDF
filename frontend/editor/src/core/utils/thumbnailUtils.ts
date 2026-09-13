@@ -137,7 +137,10 @@ async function renderPdfThumbnailPdfium(
     // Page 0 metadata is already available via the render, but read it
     // directly for consistency with the later per-page loop.
     const firstMeta = await readPdfiumPageMetadata(docPtr, 0);
-    const pageRotations: number[] = [firstMeta?.rotation ?? 0];
+    const firstRotation = firstMeta?.rotation ?? 0;
+    const pageRotations = collectAllPagesMetadata
+      ? collectDocumentPageRotations(m, docPtr, pageCount, firstRotation)
+      : [firstRotation];
     const pageDimensions: Array<{ width: number; height: number }> = [
       {
         width: firstMeta?.width ?? 0,
@@ -145,19 +148,35 @@ async function renderPdfThumbnailPdfium(
       },
     ];
 
-    if (collectAllPagesMetadata) {
-      for (let i = 1; i < pageCount; i++) {
-        const meta = await readPdfiumPageMetadata(docPtr, i);
-        if (!meta) continue;
-        pageRotations[i] = meta.rotation;
-        pageDimensions[i] = { width: meta.width, height: meta.height };
-      }
-    }
-
     return { thumbnail, pageCount, pageRotations, pageDimensions };
   } finally {
     await closeRawDocument(docPtr);
   }
+}
+
+/**
+ * Read rotations for all pages via lightweight index reads without loading pages
+ * or allocating bounding-box memory.
+ */
+function collectDocumentPageRotations(
+  m: Parameters<typeof readPdfiumPageMetadata>[0] extends number
+    ? Awaited<ReturnType<typeof getPdfiumModule>>
+    : never,
+  docPtr: number,
+  pageCount: number,
+  firstRotation: number,
+): number[] {
+  const rotations: number[] = [firstRotation];
+  const hasIndexApi = typeof m.EPDF_GetPageRotationByIndex === "function";
+  for (let i = 1; i < pageCount; i++) {
+    if (hasIndexApi) {
+      const raw = Number(m.EPDF_GetPageRotationByIndex(docPtr, i));
+      rotations[i] = ((raw | 0) & 3) * 90;
+    } else {
+      rotations[i] = 0;
+    }
+  }
+  return rotations;
 }
 
 /**
@@ -207,18 +226,12 @@ async function renderPdfThumbnailPairPdfium(
       throw new Error("PDFium: failed to render page 0");
     }
 
-    const pageRotations: number[] = [firstRotation];
+    const pageRotations = collectAllPagesMetadata
+      ? collectDocumentPageRotations(m, docPtr, pageCount, firstRotation)
+      : [firstRotation];
     const pageDimensions: Array<{ width: number; height: number }> = [
       { width: firstMeta?.width ?? 0, height: firstMeta?.height ?? 0 },
     ];
-    if (collectAllPagesMetadata) {
-      for (let i = 1; i < pageCount; i++) {
-        const meta = await readPdfiumPageMetadata(docPtr, i);
-        if (!meta) continue;
-        pageRotations[i] = meta.rotation;
-        pageDimensions[i] = { width: meta.width, height: meta.height };
-      }
-    }
 
     const base = { pageCount, pageRotations, pageDimensions };
     return {
@@ -420,3 +433,21 @@ export async function generateThumbnailPairWithMetadata(file: File): Promise<{
     };
   }
 }
+
+/**
+ * Read dimensions for a specific page on demand (lazy fill).
+ */
+export async function getOrFetchPageDimensions(
+  file: File,
+  pageIndex: number,
+): Promise<{ width: number; height: number } | null> {
+  const bytes = await getDocumentBytes(file);
+  const docPtr = await openRawDocumentSafe(bytes);
+  try {
+    const meta = await readPdfiumPageMetadata(docPtr, pageIndex);
+    return meta ? { width: meta.width, height: meta.height } : null;
+  } finally {
+    await closeRawDocument(docPtr);
+  }
+}
+
