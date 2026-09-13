@@ -834,3 +834,59 @@ Verification for the pass: typecheck/lint clean, 3448/3448 vitest (one
 pre-existing Mantine teardown unhandled timer under full-suite load; the
 file passes 3/3 in isolation), 48 e2e + 1 pre-existing skip, engine smoke
 3/3 browsers, soak 3x (default x2 + form x1), corpus 60/60 on both arms.
+
+## Approved follow-through (2026-09-13): G12a + G14 + G16 shipped, G13 blocked, G15 diagnosed
+
+Owner approved the greenlight set. Four commits on top of the corpus pass:
+`c1860a3da` (document-bytes release), `e9b820d5a` (engine URL revoke),
+`852192fac` (worker respawn threshold).
+
+### Before/after (huge-150mb.pdf, production preview, forced GC, git-excluded mh14 probe)
+
+| signal after workbench-empty | before | after |
+| --- | --- | --- |
+| live `JSArrayBufferData` of the document | **162,539,566 B** | **none** (no backing store >1 MB) |
+| shortest retainer | Window -> annotation listener closure -> context -> buffer | — |
+| second retainer (after listener fix) | `WeakMap<File, Promise<ArrayBuffer>>` entry | removed by the weak-value cache |
+| main PDFium wasm backing store | 18,612,224 B (284 pp) | 18,612,224 B (unchanged, G13) |
+| registry `initialDocuments` after init | 1 (buffer) | 0 |
+| `window.__embedPdfRegistry` after unmount | set | deleted |
+
+The annotation listener fix alone was not enough (mh16 snapshot still showed
+162.5 MB); the retainer then moved to the bytes cache, and the WeakRef value
+cache released it (mh17 snapshot). The reference trace named exactly one
+closure in the heap capturing the buffer — the anonymous
+`onAnnotationEvent` listener registered by `LocalEmbedPDF`.
+
+### G16 + engine URL leak
+
+Respawn threshold 100 MB -> 10 MB. The first form soak after the change failed
+the object-URL budget (drift 0 -> 4): each respawn leaked two object URLs
+because `@embedpdf/engines@2.15.0` creates the engine worker and encoder pool
+from `URL.createObjectURL` and never revokes (`revokeObjectURL` count: 0). The
+local engine patch now captures and revokes them after worker construction.
+Form soak with respawns on cycles 1/5/9: worker pages 742 -> 284 after each
+empty, blob count flat at 1, worker-peak budget green (peaks 742 vs 742). Engine
+smoke green on Chromium/Firefox/WebKit after revocation.
+
+### G13 (blocked, evidence recorded)
+
+`resetPdfiumModule()` still does not release the old instance: after reset +
+2x forced GC the old `WebAssembly.Memory` (284 pp on the huge fixture) is live,
+retained through a chain rooted at a `PromiseReaction` (pending promise
+continuation; `initPdfiumModule`'s async context). Shipping reset-on-empty
+would create a second instance per close/open (`liveMems` 1 -> 2, 568 pp on
+reopen, mh18), so the helper and its tests were reverted a second time. Next
+step: snapshot during the first open and name the pending promise chain
+(microtask instrumentation), then reclaim per `mh14 MH14_EXPECT_RECLAIM=1`.
+
+### G15 (diagnosed, L-sized fix pending)
+
+`22060_A1_01_Plans.pdf` (6.1 MB, scanned plan): main wasm 1968 pp (123 MB),
+worker 2350 pp (147 MB), `firstPageMs` 988, two long tasks 304+268 ms, two full
+7-call reads (12.1 MB) with stacks on the record-thumbnail render (`Fn <- hb`)
+and one other `Fn` caller. Rendering a page whose source images are large
+decodes them inside PDFium on the main thread even though the thumbnail output
+is clamped to 400 px. Fix direction: render record thumbnails for image-heavy
+docs in the engine worker (G4/G15), or derive them from the worker's first
+page render. Harness for verifying: `PERF_CORPUS_IDS=12 PERF_CORPUS_PERF=1`.
