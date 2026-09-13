@@ -84,4 +84,18 @@ describe("documentBytesCache", () => {
     expect(buffer.byteLength).toBe(1);
     expect(spy).toHaveBeenCalledTimes(2);
   });
+
+  it("characterizes on-demand re-read from Blob when cache is bypassed or re-queried", async () => {
+    const blob = new Blob([new Uint8Array([10, 20, 30])]);
+    const spy = vi.spyOn(blob, "arrayBuffer");
+
+    const first = await getDocumentBytes(blob);
+    expect(first.byteLength).toBe(3);
+    expect(spy).toHaveBeenCalledTimes(1);
+
+    // If arrayBuffer is invoked directly as late scan fallback, it returns fresh buffer with same content
+    const direct = await blob.arrayBuffer();
+    expect(direct).not.toBe(first);
+    expect(Array.from(new Uint8Array(direct))).toEqual([10, 20, 30]);
+  });
 });
