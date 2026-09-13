@@ -4,6 +4,288 @@ Status: **local only, never pushed**. The working tree is clean and the branch i
 kept for a 2nd/3rd agent pass. Do not push or open PRs without the owner's
 explicit approval.
 
+Status: **local only, never pushed**. The working tree is clean and the branch is
+kept for a 2nd/3rd agent pass. Do not push or open PRs without the owner's
+explicit approval.
+
+## Current State — convergence pass (2026-09-13, HEAD `5f98b13c6`)
+
+Single authoritative section; dated sections below are the archive. Where
+they disagree with this section, this section wins.
+
+### P0 record
+
+- Mode: IDE (editor tooling; perf runs sequential). Load: **loaded, not
+  idle** — entry loadavg 5.68/7.39/10.56 (Firefox plugin-container ~100%,
+  IntelliJ ~32%, JVM ~29%, several procs >5% sustained; rose to ~11.75
+  mid-pass). Network: localhost harness; no external fetch needed.
+- Entry tree was **dirty**: `TextSelectionMenu.tsx` +364/-9 plus untracked
+  `viewer-text-selection-menu.spec.ts` (5 tests) — the pass-6 menu port,
+  documented below as landed but never committed. Re-verified (typecheck /
+  lint / format clean, spec 5/5 ×3, selection batch 26/26) and committed as
+  `5f98b13c6`. Tree clean after.
+- Docs read fully: this file (1313 lines), `ux/ux-flows.md`,
+  `.perf-local/BASELINE.md` (758), `research-ledger.md` (153, pass-5 A–D +
+  pass-6 E–F), `NEXT_AGENT_PROMPT.md` (stale, see finding 4).
+- Harness / fixtures / corpus present: `perf-baseline.local.spec.ts`,
+  `engine-patch-smoke.local.spec.ts`, `corpus-gauntlet.local.spec.ts`,
+  `viewer-memory-soak.spec.ts` (committed), fixtures large-40mb / huge-150mb
+  / form-40mb / pages-500, corpus manifest at `corpus/corpus-manifest.csv`
+  (60 files). Baseline ref `77b325cf1` present; the `../sp-baseline` A/B
+  worktree was removed after use.
+- Baseline repro on entry (production preview, single large-40mb run):
+  firstPage 706 ms, 1 long task 59 ms (pre-existing), 1 full copy 40.6 MB,
+  main wasm 810 pp / 50.6 MB, worker→main 5.3/5.4 MB transferred, m2w 40.4 MB
+  cloned, bootstrap marks 54/80/373 ms — matches the documented branch state.
+  Environment reproduces; timings UNVERIFIED (loaded machine).
+
+### Master truth table
+
+Status: LANDED (in tree, still true today) · DECAYED (present but drifted) ·
+PARTIAL (started, unfinished) · CLOSED (refuted/ruled-out, closure holds) ·
+GHOST (documented, absent — now zero open).
+
+| # | Claim | Commit | Status | Evidence today |
+| --- | --- | --- | --- | --- |
+| 1 | Branch layers viewer-fonts + embedpdf-noodling + #7878 | `6170eb194`, `9b9c53dff` | LANDED | merges in log; in-flight PR branches untouched |
+| 2 | One-read bytes + scan queue | `81ba215e3` | LANDED | repro: 1 full copy 40.6 MB; files + contract tests present |
+| 3 | Shared main-thread document (ref-counted) | `92f7fbaa1`, `d786c1822` | LANDED | `openRawDocument`/release-pending in tree; shared-doc unit tests present |
+| 4 | `/AcroForm` byte gate + catalog `FPDF_GetFormType` probe | `118ee1718`, `88d6b40dd` | LANDED | `hasAcroForm` + probe in tree; huge fixture main wasm 285 pp |
+| 5 | `EPDF_*ByIndex` metadata, single thumb render, rotation-first views | `2a2528796`, `3fb4727eb` | LANDED | index APIs + rotation-before-heap-views in tree |
+| 6 | Per-page signature/button overlays | `2e6d1c38b` | LANDED | `pageIndexes` filters in tree |
+| 7 | Engine patch: worker→main transfers + module handoff | `bc519ae07`, `e9b820d5a` | LANDED | repro 5.3/5.4 MB transferred; smoke 3/3 browsers, 0 worker wasm fetches; `check:embedpdf-patch` green |
+| 8 | Wasm `.br`/`.gz` + immutable `/assets/**` | `3cd84a5e3` | LANDED | dist has `.br`/`.gz`; bootstrap marks ~50/80/370 ms |
+| 9 | BMP default, encoder band documented | #557 + `72c2b8934` | LANDED | `defaultImageType` + scroll deltas transfer ~99% |
+| 10 | U1 resume reverted; skeleton removed | `86111af5a` → `323bed080` | CLOSED | no `readingPosition`/skeleton remnants in tree |
+| 11 | Hunt fixes (dead hooks, queue wedge, LRU keys, form-fill/pdfbox + thumbnail reads, overlay teardown, race timers, thumbnail release) | `16f4bb6d8`, `c41008d99`, `bf0c5b4f7`, `9b7d92afa`, `8c0fbf4e1`, `290fe972d`, `2bf8d5a1f`, `37db8f0f6`, `79ef97cd3`, `fcc1d0b34`, `789a573e6`, `eea2e63a5`, `2ced8f0e9`, `0af4de496` | LANDED | each commit focused + scoped as messaged; deleted files gone; soak green |
+| 12 | F10 JPEG-q0.8/400px record thumbnails | `87205808e` | LANDED | clamp + quality in tree; form soak green |
+| 13 | G3/G16 worker respawn (10 MB threshold, URL revoke) | `8c2e740c1`, `852192fac`, `e9b820d5a` | LANDED | 10 MB threshold + watcher + revoke in tree; soak worker pages flat |
+| 14 | G11 registry pin dropped; G12a listener unsubscribe; G14 WeakRef cache; File-signature dedupe | `a542633f1`, `c1860a3da`, `2dad72c57` | LANDED | registry 0 docs, unsubscribe + `WeakMap<Blob, WeakRef>` + signature tier in tree |
+| 15 | G13 reclaim blocked (two negative attempts) | — | CLOSED (blocked) | main wasm floor unchanged by design; do not retry blind |
+| 16 | G19/G21 plugin coalescing; G23 posthog gate; G23b jszip lazy; G24 format | `cac5fdb64`, `c511e6da6`, `b99a0c8b1`, `28fb8583e`, `911188913` | LANDED | anchors in `patch-embedpdf-plugins.mjs`, check green; dynamic imports in tree; dist vendor-zip lazy-only; format check clean |
+| 17 | G20 encoder-worker BMP routing | — | CLOSED | never committed, zero remnants; cost is blob materialization |
+| 18 | Manual-redaction regressions fixed | `ceb52f779` | LANDED | redaction spec in verification batch, green |
+| 19 | Text-selection annotation/redact menu | `5f98b13c6` | **LANDED (was GHOST)** | entry state uncommitted; re-verified and committed this pass |
+| 20 | Legacy perf specs dropped; soak/contract tests committed | `f868993d1`, `f6bfbc02d`, `34ce4a546`, `30f30cee5`, `4fa05005d` | LANDED | stale specs gone; soak budgets hold (default + form green this pass) |
+| 21 | Streaming/low-allocation evaluation (dedupe shipped, dead service dropped, COOP/COEP memo, dead ends) | `2dad72c57`, `faeadac74`, `e2885425d` | LANDED/CLOSED | one-read holds on corpus-shape files; memo stands |
+| 22 | Corpus 60/60 functional parity (pass 4) + pass-7 spot 18/18 | `c92191bb9` | LANDED (carried) | manifest + runner intact; full both-arms re-run deferred (risk register 6) |
+| 23 | Frontier numbers (F1–F10, T1–T11, G30–G32) | `0eebb2bfc` + ledger §E–F | LANDED (evidence) | reports + raw logs + profiles present |
+
+Contradictions named: (a) vitest counts across sections
+3422→3430→3448→3444→3451→3452 are monotonic landings, current **3452/3452
+(389 files)** re-verified; (b) e2e batch sizes differ by composition —
+canonical batch is the 11-spec verification list below (57 passed + 1
+ambiguous, this pass); (c) BASELINE.md top-table absolutes are superseded
+by the table below; (d) G20 "reverted" = discarded pre-commit, correctly
+absent; (e) pass-7 "concurrent agent" note = the menu-port dirty state,
+resolved by `5f98b13c6`.
+
+### Current numbers (this pass, HEAD `5f98b13c6`, loaded machine — timings UNVERIFIED, counts deterministic)
+
+| Fixture | firstPage | long tasks | heap | main wasm | worker wasm | copies | m2w |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| large-40mb | 706 ms | 59 ms (pre-existing) | 16.7 MB | 810 pp / 50.6 MB | 810 pp | 1 × 40.6 MB | 40.4 MB cloned |
+| pages-500 | 724 ms | 0 | 17.0 MB | 285 pp / 17.8 MB | 285 pp | 0.5 MB | 0.3 MB |
+| huge-150mb | 675 ms | 59 ms (pre-existing) | 16.4 MB | 285 pp / 17.8 MB | 3010 pp / 188.1 MB | 1 × 155 MB | 155 MB cloned, post 12.4 ms |
+| form-40mb | 706 ms | 52 ms | 17.2 MB | 1070 pp / 66.9 MB | 742 pp / 46.4 MB | 1 × 30.6 MB | 30.9 MB |
+| large scroll (50 wheel steps) | 711 ms | 0 | 16.7→17.2 MB | 810 pp | — | — | 209.2 posted / 207.1 transferred |
+
+Gate this pass: typecheck / lint / format clean; vitest **3452/3452**;
+verification batch **57 passed + 1 ambiguous** (`page-editor-rotation`,
+finding 2); menu spec **5/5 ×3**; soak default + form **green**;
+engine smoke **3/3 browsers** (0 worker wasm fetches);
+`check:embedpdf-patch` green.
+
+### Findings (new this pass)
+
+1. **GHOST→LANDED.** The pass-6 menu port was documented with full evidence
+   but never committed. Re-verified and landed as `5f98b13c6` (one commit,
+   code + spec). No other GHOST rows; no DECAYED production rows.
+2. **P1 ambiguous: `page-editor-rotation` fails** (expects 4 page images
+   with `data-original-rotation`, mounts 1 in 30 s). Fails identically with
+   and without `5f98b13c6` (parent-tree bisect) — not caused by this pass.
+   Claimed passing in earlier verification lists; load at failure time was
+   ~11.75 with IntelliJ at 338%. Verdict open: regression-vs-load. Probe:
+   idle-machine re-run (risk register 1).
+3. **ux-flows.md line refs drifted** (LocalEmbedPDF edits moved them); row 1
+   and row 5 re-anchored this pass. Substance verified current.
+4. **`NEXT_AGENT_PROMPT.md` (excluded scratch) is stale** (3420 tests, old
+   backlog/gotchas). Superseded by this section; left in place, do not follow
+   without checking here first.
+5. **Hunt item 7 CLOSED by verification, no code:** url-only opens do not
+   occur — both `LocalEmbedPDF` callers always pass `file`, and
+   `useFileWithUrl` never returns file-null. The `fetch(url)` branch is
+   defensive-only; routing it through the cache buys nothing.
+6. **In-flight thumbnail settle + bare-Blob LRU routing stand** as
+   specified-but-unshipped (queued requests settle per `d470105a6`;
+   in-flight settle needs a reject-vs-resolve-null decision; bare-Blob path
+   is latent — both live callers pass Files).
+
+### Phase B verdict: BLOCKED — runbook TODO (machine never idle this session)
+
+No process-quiet window met the idle bar (no proc >5% sustained); every
+absolute timing in the table above stays UNVERIFIED. Runbook for the idle
+pass (owner or next agent):
+
+1. Idle bar: `uptime` loadavg <2 with `ps -eo pcpu,comm -r` showing nothing
+   >5% sustained over 60 s (quit browsers/IDEs/builds first).
+2. `git status` clean at the recorded HEAD; rebuild:
+   `VITE_BUILD_FOR_PREVIEW=1 task frontend:build`.
+3. Recreate the baseline arm once: `git worktree add ../sp-baseline
+   77b325cf1 && cd ../sp-baseline && task engine:install` (only if a
+   backend is needed) `&& cd frontend && npm ci && npm run
+   check:embedpdf-patch` (expected: FAIL — pre-patch baseline, the guard
+   working) then build that worktree's `dist` for its arm. Keep the worktree
+   path out of the repo; delete after.
+4. Interleave A/B per fixture (large-40mb / huge-150mb with
+   `PERF_LARGE_FIXTURE=… PERF_SETTLE_MS=15000` / form-40mb / pages-500),
+   n>=5/arm, alternating arms, recording median + range of: first page,
+   long tasks, full copies, main+worker WASM high-water (50 ms sampling),
+   post-GC heap, worker→main transfer counts, engine fetch/compile counts.
+   Scroll arm: `PERF_SCROLL_WHEEL=1 PERF_SCROLL_STEPS=50` (plus the
+   `PERF_SCROLL_SCROLL`/harness variants in the harness doc).
+5. Respawn arm: huge-document open → workbench-empty → worker pages
+   3010→284; soak default + form (12-cycle) with all budgets; corpus runner
+   both arms (60 files) + affected-tag parity.
+6. Replace every UNVERIFIED timing with the golden median+range, stamp
+   BASELINE.md with the idle loadavg readout, delete `../sp-baseline`.
+
+### Phase C verdict: no code landable — approval intersection is empty
+
+Mapped brief R-labels → tree state: R1 = G17 (per-page form state —
+**needs owner sign-off before coding**, product semantics); R2 =
+G18-first-slice (main-cache drop for ≥100 MB — **"when greenlit"**, not
+greenlit; needs viewer-lifecycle coordination); R3 = PdfCache
+configurability (no evidence yet, never approved); R4 = metadata deferral
+(never approved); R5 = prefetch/G31 (no measurements, parked); streaming /
+decoder probes = settled law (IndexedDB/localStorage rejected with
+grounds; OPFS/JSPI parked as memo — re-running needs new evidence).
+Settled law was not re-litigated. Hunt item 7 closed by verification
+(finding 5) with no code. Characterization tests were kept, not added:
+no change shipped, so no new tests were warranted.
+
+### Phase D artifacts
+
+#### Revert map (one command proves green after any revert: `task frontend:typecheck && task frontend:lint && task frontend:test` plus the affected e2e/soak row)
+
+| Landed change | Revert (`git revert <sha>`) | Joint-revert note |
+| --- | --- | --- |
+| One-read bytes + scan queue | `81ba215e3` | — |
+| Shared main-thread document (+ release-pending) | `92f7fbaa1`, `d786c1822` | revert both; rerun soak |
+| AcroForm gate + catalog probe | `118ee1718`, `88d6b40dd` | revert both; rerun huge + form fixtures |
+| Index metadata + single thumb | `2a2528796` | — |
+| Per-page overlays | `2e6d1c38b` | rerun form fixture |
+| Engine transfer/module patch | `bc519ae07` | with it, also drop `useLocalPdfiumEngine` handoff (`61…` no — contained in patch + hook); rerun smoke 3/3 + scroll |
+| Engine URL revoke | `e9b820d5a` | patch-file only; rerun form soak (blob budget trips without it once respawn fires) |
+| Wasm precompression | `3cd84a5e3` | build-only; rebuild to verify |
+| F10 JPEG thumbnails | `87205808e` | rerun form soak (heap budget trips without it) |
+| Respawn on huge close + 10 MB threshold | `8c2e740c1`, `852192fac` | revert both; rerun huge soak |
+| Registry/bytes-cache release + File-signature dedupe | `a542633f1`, `c1860a3da`, `2dad72c57` | rerun mh14-style snapshot or huge close/remove |
+| G19/G21 plugin coalescing | `cac5fdb64`, `c511e6da6` | patch-file only; rerun jump profile + search settle |
+| G23 posthog gate | `b99a0c8b1` | rerun analytics unit tests |
+| G23b jszip lazy | `28fb8583e` | rebuild; vendor-zip must rejoin the waterfall |
+| Text-selection menu | `5f98b13c6` | rerun menu spec (fails without) + selection batch |
+| Hunt teardown/counts fixes (each independently revertable) | `16f4bb6d8`, `c41008d99`, `bf0c5b4f7`, `9b7d92afa`, `290fe972d`, `2bf8d5a1f`, `37db8f0f6`, `79ef97cd3`, `fcc1d0b34`, `8c0fbf4e1`, `789a573e6`, `eea2e63a5`, `2ced8f0e9`, `0af4de496`, `3fb4727eb`, `d470105a6`, `faeadac74` | rerun the commit's named test/soak row |
+
+#### Patch-integrity readout
+
+Pin: `@embedpdf/engines` + `@embedpdf/plugin-*` installed **2.15.0**
+(lockfile agrees; `package.json` range `^2.14.4` admits it). Both patch
+scripts assert `EXPECTED_VERSION = "2.15.0"` plus per-anchor strings and
+fail loudly otherwise — verified green just now. Coverage:
+`frontend:build` + `frontend:check` + `desktop:build` depend on
+`check:embedpdf-patch`; Tauri workflow and `docker/frontend/Dockerfile`
+run it; an unpatched tree fails the build instead of shipping zero
+transfers (the guard has tripped once before, per the ledger). Bump
+failure modes: version mismatch (exact-string gate), anchor drift
+(per-anchor gate naming file+label), CJS-entry consumers silently
+unpatched (only the ESM entry is patched — graceful, no transfers), older
+WebKit structured-clone fallback (try/catch path, no test coverage —
+risk register 2). Own-worker swap stays parked until a release exports
+the runner with a precompiled-module option.
+
+#### Risk register (blast radius × uncertainty)
+
+1. `page-editor-rotation` ambiguous failure (finding 2) — probe: idle re-run.
+2. Older-WebKit `DataCloneError` fallback untested — probe: pre-26 WebKit run.
+3. Desktop/Tauri never exercised (WKWebView ~2 GB ceiling noted) — probe: desktop build + smoke.
+4. G13 main-wasm floor 17.8–123 MB/session unreclaimed — probe: first-open snapshot + microtask instrumentation per mh14.
+5. Full 822-spec suite not re-run (6 known pre-existing caret/undo failures
+   + 1 ambiguous rotation) — probe: full idle run.
+6. Corpus both-arms predates G19/G21/G23/G23b/menu (full 60/60 is pass-4;
+   pass-7 re-ran text+forms+large-real 18/18) — probe: full both-arms run.
+7. Startup-byte win (posthog 77 KB conditional + zip 45 KB) rests on chunk
+   math + one runtime probe — probe: post-G23b coverage run.
+8. Supabase static edge in the viewer waterfall (G30, 190 KB raw) — parked,
+   needs sign-off + flavour matrix.
+
+#### Owner decision memo
+
+1. **Phase-C authorization.** Options: (a) land nothing further on this
+   branch — recommended (branch is green, measured, and shippable as a
+   snapshot; every remaining item needs sign-off, design, or idle numbers);
+   (b) greenlight exactly one of R2 (S, counts-measurable on loaded
+   machine, timings re-debited to Phase B) with the viewer-lifecycle
+   coordination designed up front. Evidence: Phase C verdict above.
+2. **G17 per-page form state.** Options: per-page extraction (kills the
+   66.9 MB all-page pass, touches save/validation) vs status quo.
+   Recommendation: product decision first; the 16 MB-over-image-only cost
+   does not justify a blind refactor. Evidence: form-fixture rows.
+3. **G18 buffer ownership.** Options: R2 first-slice (drop main entry for
+   ≥100 MB after worker clone) vs full worker-owns-buffer inversion
+   (multi-pass: every main-thread scan becomes a worker task) vs status
+   quo (155 MB clone + 155 MB main residency). Evidence: G4 decision
+   record; mh runs.
+4. **COOP/COEP + OPFS/JSPI staging (R2 memo / R6).** Options: keep closed
+   (recommended for SaaS/proprietary — Supabase/PostHog CORP audit + pthread
+   pdfium rebuild required) vs core-only staging per the memo's 3 steps.
+   Evidence: roadmap-5 memo; Tauri rows in the ledger.
+5. **Upstream approach timing.** Suggested split (unchanged): #7691 →
+   #7878 → perf PRs (bytes/cache/queue + shared session + gates +
+   metadata/index + per-page overlays + engine patch/build compression),
+   replayed as focused commits to drop the ~40 merge commits. The three PR
+   branches were not touched by this pass. Evidence: branch-shape section.
+
+### Remaining greenlight TODO
+
+Schema: ID | kind | severity | title | target | action | risks both
+directions | runnable acceptance | depends on. Sizes S/M/L. Decision items
+carry options + recommendation.
+
+| ID | Kind | Sev | Title | Target | Action | Risks (ship / skip) | Acceptance | Dep |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| R1/G17 | FEATURE | P1 | Per-page form extraction | form-40mb main wasm 66.9 MB | Resolve fields per page preserving save/validation | product-semantics regression / 66.9 MB all-page pass stays | form soak + save/validation e2e green, main wasm down on form fixture | owner sign-off (DECISION memo 2) |
+| R2/G18-slice | PERF | P2 | Drop main cache entry for ≥100 MB after worker clone | 155 MB main residency | Release `documentBytesCache` entry post-clone with viewer-lifecycle coordination | use-after-release in scans holding the buffer / 155 MB stays resident | huge close/remove: no backing store >1 MB AND no new full read on scroll; counts A/B | greenlight; viewer-lifecycle design |
+| R3 | PERF | P3 | `PdfCache` TTL/page configurability | scroll-heavy working set | Expose or patch 5 s TTL / 10-page cap, measure | churn-vs-memory tradeoff unmeasured / status quo | scroll-window A/B shows win | measurement-first approval |
+| R4 | PERF | P3 | Defer <100 MB all-page hydration sweep | open path | Page-0-only metadata + lazy rotations | PageEditor staleness / full sweep stays | open A/B counts + PageEditor e2e | approval |
+| R5/G31 | PERF | P3 | Scroll-direction prefetch with cancel | jump/scroll wall ~1.3 s | Tile/next-page prefetch + cancellation points | jank + focus theft / wall stays worker-bound | prefetch A/B + rude-interruption audit | design approval |
+| R6/OPFS | DECISION | P2 | OPFS/JSPI production wiring | multi-hundred-MB opens | `FPDF_LoadCustomDocument` + sync access handles | WebKit/Tauri gap, pthread rebuild / clone stays | Chrome+Firefox win with Safari fallback documented | DECISION memo 4 |
+| G13 | BLOCKED | P2 | Main PDFium floor reclaim | 17.8–123 MB/session | Name the `PromiseReaction` chain, reclaim per mh14 | second instance (measured twice) / floor stays | `MH14_EXPECT_RECLAIM=1` green, no `liveMems` 1→2 | microtask instrumentation |
+| G15 | PERF | P1 | Worker-side record thumbnails | plan PDF 123 MB main / 558 ms tasks | Render record thumbs in worker or from worker's first render | worker-render coupling / main-thread decode stays | `PERF_CORPUS_IDS=12 PERF_CORPUS_PERF=1` down | design (pairs with R1-image path) |
+| G30 | PERF | P3 | Supabase static-edge lazy | 190 KB waterfall | G23-style async getter | auth/licensing adjacency / bytes stay | waterfall A/B + flavour matrix | sign-off + matrix |
+| G12b | CARRY | P3 | Full plugin-teardown decoupling | registry/plugin graph | Decouple teardown from React closures | teardown churn / superseded by G12a | retainer-map proof | only if graph grows |
+| G32/G22/G25–G29 | CARRY | P3 | Low-end encode compare; multi-doc floor; print-DPI; GPU RSS; 8-flow matrix; Tauri run; JSPI memo | various | As previously specified | — | per-item probes | as noted |
+| in-flight-settle | DECISION | P3 | Settle in-flight thumbnail requesters on destroy | dangling awaiters | Decide reject-vs-resolve-null, then settle | caller-contract break / dangle stays | unit test pins the choice | owner call |
+| bare-Blob-route | CARRY | P4 | Route large bare-Blob URLs through evictable keys | latent | Only if a large bare-Blob caller appears | churn / nothing (latent) | audit stays: callers pass Files | trigger-based |
+
+Safest-minimal-set if the owner wants one more slice: R2 alone (S-sized,
+counts-provable without idle silicon). Nothing in this pass was
+implemented beyond approved scope: the sole production commit
+(`5f98b13c6`) reconciles a documented-but-uncommitted bug fix; hunt item
+7 closed by verification with no code.
+
+### Self-check
+
+- Gate green (typecheck/lint/format/vitest 3452/3452/smoke 3/3/soaks
+  green; verification batch 57+1-ambiguous with bisect proving
+  non-causation). Tree clean at `5f98b13c6`.
+- `.perf-local/` + corpus untouched by commits (git-excluded; only new
+  `result-*.log`-free console output this pass — no new scratch files
+  added; `dist/` rebuilt, git-ignored).
+- Every claim above traces to a commit, a file:line, or a fresh run in
+  this pass. Mode + load + network recorded. No pushes, no PRs, no
+  upstream branches touched, no binary rebuilds.
+
 ## Hard constraints for follow-up work
 
 - **No upstream EmbedPDF patches.** The maintainer is preparing the 3.0 launch
@@ -1252,6 +1534,9 @@ viewer batch **59 passed + 1 skip**; `viewer-redaction-text-selection` +
 `viewer-redaction-exit-restores-selection` + `viewer-text-selection`
 **17/17**; engine smoke 3/3; soak default + form green; typecheck/lint/format
 clean.
+
+(Convergence pass: this port sat uncommitted at pass-7 close; re-verified
+— spec 5/5 ×3, selection batch 26/26 — and landed as `5f98b13c6`.)
 
 ## Implementation pass 7 — frontier + tricks (2026-09-13, CLI; loaded machine, timings UNVERIFIED)
 
