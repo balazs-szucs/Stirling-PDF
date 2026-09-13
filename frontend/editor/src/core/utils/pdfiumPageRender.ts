@@ -176,12 +176,15 @@ export async function readPdfiumPageMetadata(
         hasCrop ||
         m.EPDF_GetPageBoxByIndex(docPtr, pageIndex, 0, rectPtr)
       ) {
-        const heap = (m.pdfium as typeof m.pdfium & ExtendedPdfiumRuntime)
-          .HEAPU8;
-        const rect = new Float32Array(heap.buffer, rectPtr, 4);
+        // Read rotation before creating heap views: a WASM call that grows
+        // linear memory detaches the old buffer, so views must postdate the
+        // last call that could grow it.
         const rawRotation = Number(
           m.EPDF_GetPageRotationByIndex(docPtr, pageIndex),
         );
+        const heap = (m.pdfium as typeof m.pdfium & ExtendedPdfiumRuntime)
+          .HEAPU8;
+        const rect = new Float32Array(heap.buffer, rectPtr, 4);
         const index = (rawRotation | 0) & 3;
         // FPDF_GetPageWidthF reports rotated dimensions; mirror that swap so
         // callers see the same size they saw when this loaded the page.
