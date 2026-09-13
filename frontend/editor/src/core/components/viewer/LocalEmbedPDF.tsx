@@ -935,12 +935,14 @@ export function LocalEmbedPDF({
 
   const [isBufferReady, setIsBufferReady] = useState(false);
   const initialBufferRef = useRef<ArrayBuffer | null>(null);
-  // Flipped when the R2 release drops the buffer: recomputes the plugin memo
-  // below so the registration config stops referencing the ArrayBuffer. The
-  // document manager reads initialDocuments only at initialize (verified in
-  // the pinned build), and isBufferReady keeps the loader gate stable, so the
-  // recompute changes no behavior.
-  const [largeBufferReleased, setLargeBufferReleased] = useState(false);
+  // Identity of the initialDocuments array handed to the document manager.
+  // The R2 release empties it in place (no state change, no memo recompute):
+  // a recompute would hand EmbedPDF a new plugins identity and re-trigger a
+  // document open, while the manager only reads initialDocuments at
+  // initialize — so in-place emptying frees the bytes with zero re-render.
+  const initialDocsArrayRef = useRef<
+    Array<{ buffer?: ArrayBuffer; url?: string; name: string }>
+  >([]);
 
   // The annotation plugin keeps `onGlobal` listeners for the registry's whole
   // life (no plugin destroy override clears them), and this component's
@@ -953,7 +955,6 @@ export function LocalEmbedPDF({
   useEffect(() => {
     let cancelled = false;
     setIsBufferReady(false);
-    setLargeBufferReleased(false);
     initialBufferRef.current = null;
     if (file && typeof (file as Blob).arrayBuffer === "function") {
       getDocumentBytes(file as Blob)
@@ -1053,23 +1054,28 @@ export function LocalEmbedPDF({
     const baseBufferSize = deviceMemory >= 4 ? 4 : 2;
     const bufferSize = prefetchActive ? baseBufferSize + 2 : baseBufferSize;
 
+    // The R2 release empties this exact array in place; stashing the identity
+    // here (idempotent overwrite) is what makes that free work.
+    const initialDocuments = initialBufferRef.current
+      ? [
+          {
+            buffer: initialBufferRef.current,
+            name: exportFileName,
+          },
+        ]
+      : pdfUrl
+        ? [
+            {
+              url: pdfUrl,
+              name: exportFileName,
+            },
+          ]
+        : [];
+    initialDocsArrayRef.current = initialDocuments;
+
     return [
       createPluginRegistration(DocumentManagerPluginPackage, {
-        initialDocuments: initialBufferRef.current
-          ? [
-              {
-                buffer: initialBufferRef.current,
-                name: exportFileName,
-              },
-            ]
-          : pdfUrl
-            ? [
-                {
-                  url: pdfUrl,
-                  name: exportFileName,
-                },
-              ]
-            : [],
+        initialDocuments,
       }),
       createPluginRegistration(ViewportPluginPackage, {
         viewportGap: VIEWPORT_GAP,
@@ -1157,14 +1163,7 @@ export function LocalEmbedPDF({
 
       createPluginRegistration(PrintPluginPackage),
     ];
-  }, [
-    !!file,
-    isBufferReady,
-    largeBufferReleased,
-    pdfUrl,
-    enableAnnotations,
-    exportFileName,
-  ]);
+  }, [!!file, isBufferReady, pdfUrl, enableAnnotations, exportFileName]);
 
   // Retrieve the global engine instance from context
   const { engine, isLoading, error } = useEngineContext();
@@ -1374,9 +1373,12 @@ export function LocalEmbedPDF({
 
             // Release the main-thread buffer and cache entry for large
             // form-less documents after the worker clone lands, so ~150MB is
-            // not pinned on the main thread. The memo below recomputes on the
-            // release flag: without that the registration config would keep
-            // referencing the ArrayBuffer (proven by retainer trace).
+            // not pinned on the main thread. Empties the registration array
+            // in place on purpose: rebuilding the plugin list here would hand
+            // EmbedPDF a new plugins identity and re-trigger a document open
+            // (measured: a second 155 MB clone). The manager reads
+            // initialDocuments only at initialize, so in-place emptying frees
+            // the bytes with no further render.
             const releaseLargeBuffer = () => {
               const buf = initialBufferRef.current;
               if (
@@ -1388,8 +1390,8 @@ export function LocalEmbedPDF({
                 )
               ) {
                 initialBufferRef.current = null;
+                initialDocsArrayRef.current.length = 0;
                 releaseDocumentBytes(file as Blob);
-                setLargeBufferReleased(true);
                 console.debug(
                   "[LocalEmbedPDF] Released main-thread document buffer for large file:",
                   (file as File).name || "blob",
