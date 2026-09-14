@@ -426,8 +426,12 @@ export const ViewerProvider: React.FC<ViewerProviderProps> = ({ children }) => {
 
   const cyclePdfRenderMode = useCallback(() => {
     setPdfRenderModeState((prev) => {
-      const next: PdfRenderMode =
-        prev === "normal" ? "dark" : prev === "dark" ? "sepia" : "normal";
+      // Two-state toggle on purpose: the old normal -> dark -> sepia cycle
+      // landed dark-mode users on the sepia filter with one click, which
+      // reads as "the PDF turned yellow" and persisted across sessions.
+      // Sepia stays supported for profiles that already store it; any active
+      // filter turns off on the next click.
+      const next: PdfRenderMode = prev === "normal" ? "dark" : "normal";
       preferencesService.setPreference("pdfRenderMode", next);
       return next;
     });
