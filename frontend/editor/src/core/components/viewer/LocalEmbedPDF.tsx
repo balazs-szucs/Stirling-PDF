@@ -1104,7 +1104,7 @@ export function LocalEmbedPDF({
 
       // Register tiling plugin (depends on Render, Scroll, Viewport)
       createPluginRegistration(TilingPluginPackage, {
-        tileSize: 768,
+        tileSize: 1024,
         overlapPx: 2.5,
         extraRings: 1, // Pre-renders 1 tile ring outside viewport to eliminate checkerboard during momentum scroll
         defaultImageType: "image/bmp", // BMP is faster for local processing than WebP
@@ -1531,11 +1531,9 @@ export function LocalEmbedPDF({
                       flex: 1,
                       minHeight: 0,
                       minWidth: 0,
-                      contain: "content",
+                      contain: "layout style",
                       WebkitOverflowScrolling: "touch",
                       overscrollBehavior: "contain",
-                      transform: "translateZ(0)",
-                      willChange: "scroll-position",
                     }}
                   >
                     <DocumentScroller

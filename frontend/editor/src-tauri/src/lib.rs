@@ -146,6 +146,20 @@ pub fn run() {
     .setup(|app| {
       add_log("🚀 Tauri app setup started".to_string());
 
+      // macOS throttles WKWebView rendering and timer resolution when App Nap or occlusion
+      // triggers. Beginning an activity with UserInitiated | LatencyCritical prevents the 5 FPS cap.
+      #[cfg(target_os = "macos")]
+      {
+        use objc2_foundation::{NSActivityOptions, NSProcessInfo, NSString};
+        let process_info = NSProcessInfo::processInfo();
+        let reason = NSString::from_str("Interactive UI and PDF rendering");
+        let activity = process_info.beginActivityWithOptions_reason(
+          NSActivityOptions::UserInitiated | NSActivityOptions::LatencyCritical,
+          &reason,
+        );
+        std::mem::forget(activity);
+      }
+
       // Windows: drop the native title bar so the in-app custom title bar
       // (window controls + drag region) takes over. Runtime toggle because the
       // main window is defined in tauri.conf.json; spawned windows set it at
@@ -356,5 +370,16 @@ mod tests {
     // Look-alike hosts must not slip past the allowlist.
     assert!(!allows("https://localhost.evil.test/"));
     assert!(!allows("https://nottauri.localhost.evil.test/"));
+  }
+
+  #[cfg(target_os = "macos")]
+  #[test]
+  fn test_macos_activity() {
+    use objc2_foundation::{NSActivityOptions, NSProcessInfo, NSString};
+    let info = NSProcessInfo::processInfo();
+    let reason = NSString::from_str("Interactive UI performance");
+    let options = NSActivityOptions::UserInitiated | NSActivityOptions::LatencyCritical;
+    let activity = info.beginActivityWithOptions_reason(options, &reason);
+    drop(activity);
   }
 }

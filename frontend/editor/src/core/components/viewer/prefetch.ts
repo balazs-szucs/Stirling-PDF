@@ -1,41 +1,22 @@
 import React, { useEffect, useRef } from "react";
-import { useCapability } from "@embedpdf/core/react";
-import { PdfErrorCode, type PdfErrorReason } from "@embedpdf/models";
-import type { RenderPlugin } from "@embedpdf/plugin-render";
-import type { ScrollPlugin } from "@embedpdf/plugin-scroll";
+import { useDocumentState } from "@embedpdf/core/react";
+import { useTilingCapability } from "@embedpdf/plugin-tiling/react";
+import { useScrollCapability } from "@embedpdf/plugin-scroll/react";
+import type { Tile } from "@embedpdf/plugin-tiling";
+import { ignore, PdfErrorCode } from "@embedpdf/models";
 
-/**
- * Directional next-page prefetch — default-on for smooth scrolling (formerly
- * the R5 harness spike). Renders one page ahead of the scroll direction at
- * scale 0.2/dpr 1 to warm the engine's parsed-page cache without blocking the
- * single-threaded worker queue for active visible tiles. Disable with `?prefetch=0`
- * or `window.__PERF_PREFETCH = false` (used by the A/B harness).
- */
+export interface StirlingTileCacheGlobal {
+  get: (id: string) => string | undefined;
+  put: (id: string, url: string) => void;
+  has: (id: string) => boolean;
+  clear: () => void;
+  size: () => number;
+}
 
-type PrefetchDebugStats = {
-  scrollEvents: number;
-  targets: number;
-  started: number;
-  completed: number;
-  failed: number;
-};
-
-/** Debug-gated counters for harness/desktop investigations. */
-function debugStats(): PrefetchDebugStats | null {
-  if (typeof window === "undefined") return null;
-  const w = window as unknown as {
-    __PERF_PREFETCH_DEBUG?: boolean;
-    __prefetchStats?: PrefetchDebugStats;
-  };
-  if (!w.__PERF_PREFETCH_DEBUG) return null;
-  w.__prefetchStats ??= {
-    scrollEvents: 0,
-    targets: 0,
-    started: 0,
-    completed: 0,
-    failed: 0,
-  };
-  return w.__prefetchStats;
+declare global {
+  interface Window {
+    __stirlingTileCache?: StirlingTileCacheGlobal;
+  }
 }
 
 export function isPrefetchEnabled(): boolean {
@@ -72,115 +53,274 @@ export function computeDirectionalPrefetchTarget(
   return target >= 0 ? target : null;
 }
 
+export function computeIdlePrefetchTargets(
+  currentPageIndex: number,
+  totalPages: number,
+): number[] {
+  if (
+    totalPages <= 1 ||
+    currentPageIndex < 0 ||
+    currentPageIndex >= totalPages
+  ) {
+    return [];
+  }
+  const targets: number[] = [];
+  if (currentPageIndex + 1 < totalPages) {
+    targets.push(currentPageIndex + 1);
+  }
+  if (currentPageIndex - 1 >= 0) {
+    targets.push(currentPageIndex - 1);
+  }
+  return targets;
+}
+
+export interface PrefetchPageInfo {
+  index: number;
+  size: { width: number; height: number };
+  rotation?: number;
+}
+
+export function calculateTilesForPrefetchPage({
+  page,
+  scale,
+  fromTop = true,
+  tileSize = 768,
+  overlapPx = 2.5,
+}: {
+  page: PrefetchPageInfo;
+  scale: number;
+  fromTop?: boolean;
+  tileSize?: number;
+  overlapPx?: number;
+}): Tile[] {
+  const step = tileSize - overlapPx;
+  const pageW = page.size.width * scale;
+  const pageH = page.size.height * scale;
+  const maxCol = Math.floor((pageW - 1) / step);
+  const maxRow = Math.floor((pageH - 1) / step);
+
+  let startRow = 0;
+  let endRow = maxRow;
+  if (maxRow > 1) {
+    if (!fromTop) {
+      startRow = Math.max(0, maxRow - 1);
+    } else {
+      endRow = Math.min(maxRow, 1);
+    }
+  }
+
+  const tiles: Tile[] = [];
+  for (let col = 0; col <= maxCol; col++) {
+    const xScreen = col * step;
+    const wScreen = Math.min(tileSize, pageW - xScreen);
+    const xPage = xScreen / scale;
+    const wPage = wScreen / scale;
+
+    for (let row = startRow; row <= endRow; row++) {
+      const yScreen = row * step;
+      const hScreen = Math.min(tileSize, pageH - yScreen);
+      const yPage = yScreen / scale;
+      const hPage = hScreen / scale;
+
+      tiles.push({
+        id: `p${page.index}-${scale}-x${xScreen}-y${yScreen}-w${wScreen}-h${hScreen}`,
+        col,
+        row,
+        pageRect: {
+          origin: { x: xPage, y: yPage },
+          size: { width: wPage, height: hPage },
+        },
+        screenRect: {
+          origin: { x: xScreen, y: yScreen },
+          size: { width: wScreen, height: hScreen },
+        },
+        status: "queued",
+        srcScale: scale,
+        isFallback: false,
+      });
+    }
+  }
+
+  return tiles;
+}
+
+interface InFlightTask {
+  pageIndex: number;
+  tileId: string;
+  abort: () => void;
+}
+
 export function DirectionalPrefetchController({
   documentId,
 }: {
   documentId: string;
 }): React.ReactElement | null {
   const enabled = isPrefetchEnabled();
-  const { provides: scrollCapability } = useCapability<ScrollPlugin>("scroll");
-  const { provides: renderCapability } = useCapability<RenderPlugin>("render");
-  const lastScrollYRef = useRef<number | null>(null);
-  const inFlightTasksRef = useRef<
-    Map<number, { abort: (reason: PdfErrorReason) => void }>
-  >(new Map());
+  const { provides: tilingCapability } = useTilingCapability();
+  const { provides: scrollCapability } = useScrollCapability();
+  const documentState = useDocumentState(documentId);
+
+  const inFlightRef = useRef<Map<string, InFlightTask>>(new Map());
+  const directionalTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+  const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastScrollYRef = useRef<number>(0);
+  const targetPageRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (!enabled || !scrollCapability || !renderCapability) return;
-
+    if (!enabled || !scrollCapability || !tilingCapability) return;
     const scrollScope = scrollCapability.forDocument(documentId);
-    const renderScope = renderCapability.forDocument(documentId);
+    const tilingScope = tilingCapability.forDocument(documentId);
+    if (!scrollScope || !tilingScope) return;
 
-    const unsubscribe = scrollScope.onScroll((metrics) => {
-      const stats = debugStats();
-      if (stats) stats.scrollEvents++;
-      const currentY = metrics.scrollOffset.y;
-      if (lastScrollYRef.current === null) {
-        lastScrollYRef.current = currentY;
-        return;
+    const pages = documentState?.document?.pages;
+    if (!pages || pages.length <= 1) return;
+
+    const scale = documentState?.scale ?? 1;
+    const totalPages = pages.length;
+
+    const abortOppositeTasks = (
+      newTargetIndex: number,
+      scrollingDown: boolean,
+    ) => {
+      for (const [id, task] of inFlightRef.current.entries()) {
+        const isOpposite = scrollingDown
+          ? task.pageIndex < newTargetIndex
+          : task.pageIndex > newTargetIndex;
+        if (isOpposite) {
+          task.abort();
+          inFlightRef.current.delete(id);
+        }
       }
-      const delta = currentY - lastScrollYRef.current;
-      lastScrollYRef.current = currentY;
+    };
 
-      if (Math.abs(delta) < 15) return;
+    const runPrefetchForPage = (targetIndex: number, fromTop: boolean) => {
+      if (targetIndex < 0 || targetIndex >= totalPages) return;
+      const targetPage = pages[targetIndex];
+      if (!targetPage) return;
 
-      const visibleIndexes = metrics.visiblePages.map((p) => p - 1);
-      const totalPages = scrollScope.getTotalPages();
-      const target = computeDirectionalPrefetchTarget(
-        visibleIndexes,
-        totalPages,
-        delta,
+      const tiles = calculateTilesForPrefetchPage({
+        page: targetPage,
+        scale,
+        fromTop,
+      });
+
+      const missing = tiles.filter(
+        (t) =>
+          !inFlightRef.current.has(t.id) &&
+          !window.__stirlingTileCache?.has(t.id),
       );
 
-      // Cancel tasks for pages in the opposite direction of current scroll
-      if (delta > 0) {
-        for (const [pageIdx, task] of inFlightTasksRef.current) {
-          if (pageIdx < Math.min(...visibleIndexes)) {
-            task.abort({
-              code: PdfErrorCode.Cancelled,
-              message: "canceled prefetch task on scroll reversal",
-            });
-            inFlightTasksRef.current.delete(pageIdx);
-          }
-        }
-      } else if (delta < 0) {
-        for (const [pageIdx, task] of inFlightTasksRef.current) {
-          if (pageIdx > Math.max(...visibleIndexes)) {
-            task.abort({
-              code: PdfErrorCode.Cancelled,
-              message: "canceled prefetch task on scroll reversal",
-            });
-            inFlightTasksRef.current.delete(pageIdx);
-          }
+      const dpr = typeof window !== "undefined" ? window.devicePixelRatio : 1;
+      const budget = Math.max(0, 2 - inFlightRef.current.size);
+
+      for (let i = 0; i < Math.min(budget, missing.length); i++) {
+        const tile = missing[i];
+        try {
+          const task = tilingScope.renderTile({
+            pageIndex: targetIndex,
+            tile,
+            dpr,
+          });
+
+          const inFlightEntry: InFlightTask = {
+            pageIndex: targetIndex,
+            tileId: tile.id,
+            abort: () =>
+              task.abort({
+                code: PdfErrorCode.Cancelled,
+                message: "canceled prefetch task",
+              }),
+          };
+          inFlightRef.current.set(tile.id, inFlightEntry);
+
+          task.wait((blob: Blob) => {
+            inFlightRef.current.delete(tile.id);
+            if (typeof window !== "undefined" && window.__stirlingTileCache) {
+              const url = URL.createObjectURL(blob);
+              window.__stirlingTileCache.put(tile.id, url);
+            }
+          }, ignore);
+        } catch {
+          inFlightRef.current.delete(tile.id);
         }
       }
+    };
 
-      if (target === null || inFlightTasksRef.current.has(target)) return;
-      if (stats) stats.targets++;
+    const scheduleIdlePrefetch = () => {
+      if (idleTimerRef.current !== null) {
+        clearTimeout(idleTimerRef.current);
+      }
+      idleTimerRef.current = setTimeout(() => {
+        idleTimerRef.current = null;
+        const curPage = scrollScope.getCurrentPage() || 1;
+        const curIdx = curPage - 1;
+        const idleTargets = computeIdlePrefetchTargets(curIdx, totalPages);
+        for (const targetIdx of idleTargets) {
+          runPrefetchForPage(targetIdx, targetIdx > curIdx);
+        }
+      }, 150);
+    };
 
-      try {
-        if (stats) stats.started++;
-        // Pre-warm the page in the engine cache at scaleFactor 0.2 / dpr 1.
-        // Takes ~2ms instead of 100ms and leaves the worker queue free for visible tiles.
-        const task = renderScope.renderPage({
-          pageIndex: target,
-          options: {
-            scaleFactor: 0.2,
-            dpr: 1,
-          },
-        });
-        inFlightTasksRef.current.set(target, task);
-        task.wait(
-          () => {
-            if (stats) stats.completed++;
-            inFlightTasksRef.current.delete(target);
-          },
-          () => {
-            if (stats) stats.failed++;
-            inFlightTasksRef.current.delete(target);
-          },
+    scheduleIdlePrefetch();
+
+    const unsubscribeScroll = scrollScope.onScroll((metrics) => {
+      const currentY = metrics.scrollOffset ? metrics.scrollOffset.y : 0;
+      const deltaY = currentY - lastScrollYRef.current;
+      lastScrollYRef.current = currentY;
+
+      if (Math.abs(deltaY) >= 10) {
+        const visibleIndices = metrics.pageVisibilityMetrics.map(
+          (m) => m.pageNumber - 1,
         );
-      } catch {
-        if (stats) stats.failed++;
-        inFlightTasksRef.current.delete(target);
+        const target = computeDirectionalPrefetchTarget(
+          visibleIndices,
+          totalPages,
+          deltaY,
+        );
+        if (target !== null && target !== targetPageRef.current) {
+          targetPageRef.current = target;
+          const scrollingDown = deltaY > 0;
+          if (directionalTimerRef.current !== null) {
+            clearTimeout(directionalTimerRef.current);
+          }
+          // Debounce directional prefetch so the single-threaded PDFium worker is not
+          // contending with tiles for currently visible pages during active momentum scroll.
+          directionalTimerRef.current = setTimeout(() => {
+            directionalTimerRef.current = null;
+            abortOppositeTasks(target, scrollingDown);
+            runPrefetchForPage(target, scrollingDown);
+          }, 80);
+        }
       }
+
+      scheduleIdlePrefetch();
     });
 
     return () => {
-      unsubscribe?.();
-      inFlightTasksRef.current.forEach((task) => {
-        try {
-          task.abort({
-            code: PdfErrorCode.Cancelled,
-            message: "canceled prefetch task on unmount",
-          });
-        } catch {
-          /* ignore */
-        }
-      });
-      inFlightTasksRef.current.clear();
+      if (directionalTimerRef.current !== null) {
+        clearTimeout(directionalTimerRef.current);
+        directionalTimerRef.current = null;
+      }
+      if (idleTimerRef.current !== null) {
+        clearTimeout(idleTimerRef.current);
+        idleTimerRef.current = null;
+      }
+      unsubscribeScroll();
+      for (const task of inFlightRef.current.values()) {
+        task.abort();
+      }
+      inFlightRef.current.clear();
     };
-  }, [enabled, documentId, scrollCapability, renderCapability]);
+  }, [
+    documentId,
+    enabled,
+    scrollCapability,
+    tilingCapability,
+    documentState?.scale,
+    documentState?.document?.pages,
+  ]);
 
   return null;
 }

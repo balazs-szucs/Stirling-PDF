@@ -110,35 +110,67 @@ function applyInteractionManager(pkg) {
   return source;
 }
 
-// --- tiling: abort stale tile renders and never mint an orphan blob URL ------
-// TileImg's cleanup aborted only when no URL had been produced yet, so a tile
-// that resolved after unmount still created an object URL that nothing revoked
-// (fast scroll = orphan blobs). Guard the success callback, always mark the
-// task aborted, and keep TilingLayer SSR-safe (window may be undefined in
-// unsupported/embedded deployments).
-const tileBlockFind = `    const task = scope.renderTile({ pageIndex, tile, dpr });
-    task.wait((blob) => {
-      const objectUrl = URL.createObjectURL(blob);
-      urlRef.current = objectUrl;
-      setUrl(objectUrl);
-    }, ignore);
-    return () => {
-      if (urlRef.current) {
-        URL.revokeObjectURL(urlRef.current);
-        urlRef.current = null;
-      } else {
-        task.abort({
-          code: PdfErrorCode.Cancelled,
-          message: "canceled render task"
-        });
-      }
-    };`;
-const tileBlockReplace = `    let stirlingCancelled = false; /* ${MARKER} */
+// --- tiling: LRU tile cache, async decoding, and SSR safety -----------------
+const tileCacheHelperSnippet = `const STIRLING_MAX_TILE_CACHE = 128;
+const stirlingTileCache = /* @__PURE__ */ new Map();
+function stirlingPutTile(id, objectUrl) {
+  if (stirlingTileCache.has(id)) {
+    stirlingTileCache.delete(id);
+  } else if (stirlingTileCache.size >= STIRLING_MAX_TILE_CACHE) {
+    const oldestKey = stirlingTileCache.keys().next().value;
+    const oldestUrl = stirlingTileCache.get(oldestKey);
+    stirlingTileCache.delete(oldestKey);
+    if (oldestUrl) {
+      try { URL.revokeObjectURL(oldestUrl); } catch (_) {}
+    }
+  }
+  stirlingTileCache.set(id, objectUrl);
+}
+function stirlingGetTile(id) {
+  const url = stirlingTileCache.get(id);
+  if (url) {
+    stirlingTileCache.delete(id);
+    stirlingTileCache.set(id, url);
+  }
+  return url;
+}
+function stirlingClearTileCache() {
+  for (const url of stirlingTileCache.values()) {
+    try { URL.revokeObjectURL(url); } catch (_) {}
+  }
+  stirlingTileCache.clear();
+}
+if (typeof window !== "undefined") {
+  window.__stirlingTileCache = {
+    get: stirlingGetTile,
+    put: stirlingPutTile,
+    has: (id) => stirlingTileCache.has(id),
+    clear: stirlingClearTileCache,
+    size: () => stirlingTileCache.size,
+  };
+} /* ${MARKER} */`;
+
+const tileImgComponentSnippet = `function TileImg({ documentId, pageIndex, tile, dpr, scale }) {
+  const { provides: tilingCapability } = useTilingCapability();
+  const scope = useMemo(
+    () => tilingCapability == null ? void 0 : tilingCapability.forDocument(documentId),
+    [tilingCapability, documentId]
+  );
+  const [url, setUrl] = useState(() => stirlingGetTile(tile.id));
+  const relativeScale = scale / tile.srcScale;
+  useEffect(() => {
+    const cached = stirlingGetTile(tile.id);
+    if (cached) {
+      setUrl(cached);
+      return;
+    }
+    if (!scope) return;
+    let stirlingCancelled = false;
     const task = scope.renderTile({ pageIndex, tile, dpr });
     task.wait((blob) => {
       if (stirlingCancelled) return;
       const objectUrl = URL.createObjectURL(blob);
-      urlRef.current = objectUrl;
+      stirlingPutTile(tile.id, objectUrl);
       setUrl(objectUrl);
     }, ignore);
     return () => {
@@ -147,11 +179,26 @@ const tileBlockReplace = `    let stirlingCancelled = false; /* ${MARKER} */
         code: PdfErrorCode.Cancelled,
         message: "canceled render task"
       });
-      if (urlRef.current) {
-        URL.revokeObjectURL(urlRef.current);
-        urlRef.current = null;
+    };
+  }, [scope, pageIndex, tile.id]);
+  if (!url) return null;
+  return /* @__PURE__ */ jsx(
+    "img",
+    {
+      src: url,
+      decoding: "async",
+      style: {
+        position: "absolute",
+        left: tile.screenRect.origin.x * relativeScale,
+        top: tile.screenRect.origin.y * relativeScale,
+        width: tile.screenRect.size.width * relativeScale,
+        height: tile.screenRect.size.height * relativeScale,
+        display: "block"
       }
-    };`;
+    }
+  );
+}`;
+
 const tileDprFind = "dpr: window.devicePixelRatio,";
 const tileDprReplace =
   'dpr: typeof window !== "undefined" ? window.devicePixelRatio : 1,';
@@ -159,39 +206,81 @@ const tileDprReplace =
 function checkTiling(pkg) {
   return (
     pkg.source.includes(MARKER) &&
-    pkg.source.includes("if (stirlingCancelled) return;") &&
-    pkg.source.includes(tileDprReplace) &&
+    pkg.source.includes("stirlingTileCache") &&
+    pkg.source.includes("window.__stirlingTileCache") &&
+    pkg.source.includes('decoding: "async"') &&
     !pkg.source.includes(tileDprFind)
   );
 }
 
 function applyTiling(pkg) {
   let source = pkg.source;
-  if (!source.includes(tileBlockFind) && !source.includes(MARKER)) {
-    fail(pkg.name, "TileImg render/cleanup");
+  if (checkTiling(pkg)) return source;
+  const startAnchor =
+    "function TileImg({ documentId, pageIndex, tile, dpr, scale }) {";
+  const endAnchor = "function TilingLayer({";
+  if (!source.includes(startAnchor) || !source.includes(endAnchor)) {
+    fail(pkg.name, "TileImg ESM bounds");
   }
-  if (source.includes(tileBlockFind)) {
-    source = source.replace(tileBlockFind, () => tileBlockReplace);
-  } else if (
-    source.includes("stirlingCancelled") &&
-    source.includes("} else {\n        task.abort({")
-  ) {
-    source = source.replace(
-      /if \(urlRef\.current\) \{\s+URL\.revokeObjectURL\(urlRef\.current\);\s+urlRef\.current = null;\s+\} else \{\s+task\.abort\(\{\s+code: PdfErrorCode\.Cancelled,\s+message: "canceled render task"\s+\}\);\s+\}/,
-      `task.abort({
-        code: PdfErrorCode.Cancelled,
-        message: "canceled render task"
-      });
-      if (urlRef.current) {
-        URL.revokeObjectURL(urlRef.current);
-        urlRef.current = null;
-      }`,
-    );
-  }
+  const startIndex = source.indexOf(startAnchor);
+  const endIndex = source.indexOf(endAnchor);
+  source =
+    source.slice(0, startIndex) +
+    `${tileCacheHelperSnippet}\n\n${tileImgComponentSnippet}\n` +
+    source.slice(endIndex);
   if (source.includes(tileDprFind)) {
     source = source.replace(tileDprFind, () => tileDprReplace);
   }
   return source;
+}
+
+const tileCacheCjsReplace =
+  "const _stirlingTileCache=new Map;function _stirlingPutTile(e,t){" +
+  "_stirlingTileCache.has(e)?_stirlingTileCache.delete(e):" +
+  "_stirlingTileCache.size>=128&&(()=>{const e=_stirlingTileCache.keys().next().value," +
+  "t=_stirlingTileCache.get(e);_stirlingTileCache.delete(e),t&&URL.revokeObjectURL(t)})()," +
+  "_stirlingTileCache.set(e,t)}function _stirlingGetTile(e){const t=_stirlingTileCache.get(e);" +
+  "return t&&(_stirlingTileCache.delete(e),_stirlingTileCache.set(e,t)),t}" +
+  'typeof window!="undefined"&&(window.__stirlingTileCache={get:_stirlingGetTile,' +
+  "put:_stirlingPutTile,has:e=>_stirlingTileCache.has(e),clear:()=>{" +
+  "for(const e of _stirlingTileCache.values())try{URL.revokeObjectURL(e)}catch(e){}" +
+  "_stirlingTileCache.clear()},size:()=>_stirlingTileCache.size});" +
+  "function l({documentId:e,pageIndex:t,tile:l,dpr:o,scale:s}){" +
+  "const{provides:u}=c(),d=n.useMemo(()=>null==u?void 0:u.forDocument(e),[u,e])," +
+  "[a,p]=n.useState(()=>_stirlingGetTile(l.id)),f=s/l.srcScale;" +
+  "return n.useEffect(()=>{const e=_stirlingGetTile(l.id);if(e)return void p(e);" +
+  "if(!d)return;let r=!1;const n=d.renderTile({pageIndex:t,tile:l,dpr:o});" +
+  "return n.wait(e=>{if(!r){const t=URL.createObjectURL(e);_stirlingPutTile(l.id,t),p(t)}},i.ignore)," +
+  '()=>{r=!0,n.abort({code:i.PdfErrorCode.Cancelled,message:"canceled render task"})}},[d,t,l.id]),' +
+  'a?r.jsx("img",{src:a,decoding:"async",style:{position:"absolute",left:l.screenRect.origin.x*f,' +
+  'top:l.screenRect.origin.y*f,width:l.screenRect.size.width*f,height:l.screenRect.size.height*f,display:"block"}}):null}' +
+  `/* ${MARKER} */`;
+
+function checkTilingCjs(pkg) {
+  return (
+    pkg.source.includes(MARKER) &&
+    pkg.source.includes("_stirlingTileCache") &&
+    pkg.source.includes("window.__stirlingTileCache") &&
+    pkg.source.includes('decoding:"async"')
+  );
+}
+
+function applyTilingCjs(pkg) {
+  if (checkTilingCjs(pkg)) return pkg.source;
+  const startAnchor =
+    "function l({documentId:e,pageIndex:t,tile:l,dpr:o,scale:s}){";
+  const endAnchor = "exports.TilingLayer=";
+  if (!pkg.source.includes(startAnchor) || !pkg.source.includes(endAnchor)) {
+    fail(pkg.name, "TileImg CJS bounds");
+  }
+  const startIndex = pkg.source.indexOf(startAnchor);
+  const endIndex = pkg.source.indexOf(endAnchor);
+  return (
+    pkg.source.slice(0, startIndex) +
+    tileCacheCjsReplace +
+    "\n" +
+    pkg.source.slice(endIndex)
+  );
 }
 
 // --- render: abort stale page renders and never mint an orphan blob URL ------
@@ -249,22 +338,42 @@ const renderDprFind = "return window.devicePixelRatio;";
 const renderDprReplace =
   'return typeof window !== "undefined" ? window.devicePixelRatio : 1;';
 
+const renderImgAsyncFind = `    "img",
+    {
+      src: imageUrl,
+      onLoad: handleImageLoad,
+      ...props,`;
+const renderImgAsyncReplace = `    "img",
+    {
+      src: imageUrl,
+      onLoad: handleImageLoad,
+      decoding: "async",
+      ...props,`;
+
 function checkRender(pkg) {
   return (
     pkg.source.includes(MARKER) &&
     pkg.source.includes("if (stirlingCancelled) return;") &&
     pkg.source.includes(renderDprReplace) &&
+    pkg.source.includes('decoding: "async"') &&
     !pkg.source.includes(renderDprFind)
   );
 }
 
 function applyRender(pkg) {
-  if (pkg.source.includes(MARKER)) return pkg.source;
-  if (!pkg.source.includes(renderBlockFind))
+  let source = pkg.source;
+  if (!source.includes(renderBlockFind) && !source.includes(MARKER)) {
     fail(pkg.name, "RenderLayer render/cleanup");
-  if (!pkg.source.includes(renderDprFind)) fail(pkg.name, "devicePixelRatio");
-  let source = pkg.source.replace(renderBlockFind, () => renderBlockReplace);
-  source = source.replace(renderDprFind, () => renderDprReplace);
+  }
+  if (source.includes(renderBlockFind)) {
+    source = source.replace(renderBlockFind, () => renderBlockReplace);
+  }
+  if (source.includes(renderDprFind)) {
+    source = source.replace(renderDprFind, () => renderDprReplace);
+  }
+  if (source.includes(renderImgAsyncFind)) {
+    source = source.replace(renderImgAsyncFind, () => renderImgAsyncReplace);
+  }
   return source;
 }
 
@@ -399,7 +508,15 @@ function applyScrollEsm(pkg) {
 }
 
 const scrollPushLayoutFindCjs = `pushScrollerLayout(t){const e=this.scrollerLayoutEmitters.get(t);if(e)try{const a=this.getScrollerLayout(t);e.emit(a)}catch(a){}}`;
-const scrollPushLayoutReplaceCjs = `pushScrollerLayout(t){const e=this.scrollerLayoutEmitters.get(t);if(e)try{const a=this.getScrollerLayout(t);if(this.__stirlingLastLayouts){const e=this.__stirlingLastLayouts.get(t);if(e&&e.startSpacing===a.startSpacing&&e.endSpacing===a.endSpacing&&e.totalWidth===a.totalWidth&&e.totalHeight===a.totalHeight&&e.pageGap===a.pageGap&&e.strategy===a.strategy&&e.items.length===a.items.length&&e.items.every((e,t)=>e.id===a.items[t].id))return}else this.__stirlingLastLayouts=new Map;this.__stirlingLastLayouts.set(t,a);e.emit(a)}catch(a){}}/* ${MARKER} */`;
+const scrollPushLayoutReplaceCjs =
+  "pushScrollerLayout(t){const e=this.scrollerLayoutEmitters.get(t);" +
+  "if(e)try{const a=this.getScrollerLayout(t);if(this.__stirlingLastLayouts){" +
+  "const e=this.__stirlingLastLayouts.get(t);" +
+  "if(e&&e.startSpacing===a.startSpacing&&e.endSpacing===a.endSpacing&&" +
+  "e.totalWidth===a.totalWidth&&e.totalHeight===a.totalHeight&&e.pageGap===a.pageGap&&" +
+  "e.strategy===a.strategy&&e.items.length===a.items.length&&" +
+  "e.items.every((e,t)=>e.id===a.items[t].id))return}else this.__stirlingLastLayouts=new Map;" +
+  `this.__stirlingLastLayouts.set(t,a);e.emit(a)}catch(a){}}/* ${MARKER} */`;
 
 function checkScrollCjs(pkg) {
   return (
@@ -418,7 +535,7 @@ function applyScrollCjs(pkg) {
   );
 }
 
-// --- tiling: optimize onScroll throttle to avoid 50ms trailing lag -----------
+// --- tiling: optimize onScroll throttle without store churn -----------------
 const tilingThrottleFindEsm = `    this.scrollCapability.onScroll(
       (event) => this.calculateVisibleTiles(event.documentId, event.metrics),
       {
@@ -436,40 +553,144 @@ const tilingThrottleReplaceEsm = `    this.scrollCapability.onScroll(
       }
     ); /* ${MARKER} */`;
 
+const tilingCalcFindEsm = `    this.dispatch(updateVisibleTiles(documentId, visibleTiles));`;
+const tilingCalcReplaceEsm = `    if (this.__stirlingVisibleTiles) {
+      const prev = this.__stirlingVisibleTiles.get(documentId);
+      if (prev) {
+        const prevKeys = Object.keys(prev);
+        const newKeys = Object.keys(visibleTiles);
+        if (
+          prevKeys.length === newKeys.length &&
+          prevKeys.every((k) => {
+            const pt = prev[k];
+            const nt = visibleTiles[k];
+            return (
+              pt &&
+              nt &&
+              pt.length === nt.length &&
+              pt.every((t, i) => t.id === nt[i].id)
+            );
+          })
+        ) {
+          return;
+        }
+      }
+    } else {
+      this.__stirlingVisibleTiles = new Map();
+    }
+    this.__stirlingVisibleTiles.set(documentId, visibleTiles);
+    this.dispatch(updateVisibleTiles(documentId, visibleTiles));`;
+
 function checkTilingThrottleEsm(pkg) {
   return (
     pkg.source.includes(MARKER) &&
-    pkg.source.includes('throttleMode: "leading-trailing"')
+    pkg.source.includes("wait: 16") &&
+    pkg.source.includes('throttleMode: "leading-trailing"') &&
+    pkg.source.includes("this.__stirlingVisibleTiles")
   );
 }
 
 function applyTilingThrottleEsm(pkg) {
-  if (pkg.source.includes(MARKER)) return pkg.source;
-  if (!pkg.source.includes(tilingThrottleFindEsm))
+  if (checkTilingThrottleEsm(pkg)) return pkg.source;
+  let source = pkg.source;
+  if (!source.includes(tilingThrottleFindEsm))
     fail(pkg.name, "tiling onScroll throttle ESM");
-  return pkg.source.replace(
+  if (!source.includes(tilingCalcFindEsm))
+    fail(pkg.name, "tiling calculateVisibleTiles ESM");
+  source = source.replace(
     tilingThrottleFindEsm,
     () => tilingThrottleReplaceEsm,
   );
+  source = source.replace(tilingCalcFindEsm, () => tilingCalcReplaceEsm);
+  return source;
 }
 
 const tilingThrottleFindCjs = `this.scrollCapability.onScroll(e=>this.calculateVisibleTiles(e.documentId,e.metrics),{mode:"throttle",wait:50,throttleMode:"trailing"})`;
 const tilingThrottleReplaceCjs = `this.scrollCapability.onScroll(e=>this.calculateVisibleTiles(e.documentId,e.metrics),{mode:"throttle",wait:16,throttleMode:"leading-trailing"})/* ${MARKER} */`;
 
+const tilingCalcFindCjs = `o[e]=a}this.dispatch(l(e,o))}`;
+const tilingCalcReplaceCjs =
+  `o[e]=a}if(this.__stirlingVisibleTiles){const t=this.__stirlingVisibleTiles.get(e);` +
+  `if(t){const i=Object.keys(t),s=Object.keys(o);` +
+  `if(i.length===s.length&&i.every(e=>{const i=t[e],s=o[e];return i&&s&&i.length===s.length&&i.every((e,t)=>e.id===s[t].id)}))return}}` +
+  `else this.__stirlingVisibleTiles=new Map;this.__stirlingVisibleTiles.set(e,o);this.dispatch(l(e,o))}`;
+
 function checkTilingThrottleCjs(pkg) {
   return (
     pkg.source.includes(MARKER) &&
-    pkg.source.includes('throttleMode:"leading-trailing"')
+    pkg.source.includes('wait:16,throttleMode:"leading-trailing"') &&
+    pkg.source.includes("this.__stirlingVisibleTiles")
   );
 }
 
 function applyTilingThrottleCjs(pkg) {
-  if (pkg.source.includes(MARKER)) return pkg.source;
-  if (!pkg.source.includes(tilingThrottleFindCjs))
+  if (checkTilingThrottleCjs(pkg)) return pkg.source;
+  let source = pkg.source;
+  if (!source.includes(tilingThrottleFindCjs))
     fail(pkg.name, "tiling onScroll throttle CJS");
-  return pkg.source.replace(
+  if (!source.includes(tilingCalcFindCjs))
+    fail(pkg.name, "tiling calculateVisibleTiles CJS");
+  source = source.replace(
     tilingThrottleFindCjs,
     () => tilingThrottleReplaceCjs,
+  );
+  source = source.replace(tilingCalcFindCjs, () => tilingCalcReplaceCjs);
+  return source;
+}
+
+// --- viewport: synchronous passive scroll listener ---------------------------
+const viewportScrollFindEsm = `    const onScroll = () => {
+      viewportPlugin.setViewportScrollMetrics(documentId, {
+        scrollTop: container.scrollTop,
+        scrollLeft: container.scrollLeft
+      });
+    };
+    container.addEventListener("scroll", onScroll);`;
+
+const viewportScrollReplaceEsm = `    const onScroll = () => {
+      viewportPlugin.setViewportScrollMetrics(documentId, {
+        scrollTop: container.scrollTop,
+        scrollLeft: container.scrollLeft
+      });
+    };
+    container.addEventListener("scroll", onScroll, { passive: true }); /* ${MARKER} */`;
+
+function checkViewportEsm(pkg) {
+  return (
+    pkg.source.includes(MARKER) &&
+    pkg.source.includes(
+      'container.addEventListener("scroll", onScroll, { passive: true });',
+    )
+  );
+}
+
+function applyViewportEsm(pkg) {
+  if (checkViewportEsm(pkg)) return pkg.source;
+  if (!pkg.source.includes(viewportScrollFindEsm))
+    fail(pkg.name, "viewport onScroll ESM");
+  return pkg.source.replace(
+    viewportScrollFindEsm,
+    () => viewportScrollReplaceEsm,
+  );
+}
+
+const viewportScrollFindCjs = `const i=()=>{r.setViewportScrollMetrics(e,{scrollTop:t.scrollTop,scrollLeft:t.scrollLeft})};t.addEventListener("scroll",i);`;
+const viewportScrollReplaceCjs = `const i=()=>{r.setViewportScrollMetrics(e,{scrollTop:t.scrollTop,scrollLeft:t.scrollLeft})};t.addEventListener("scroll",i,{passive:!0});/* ${MARKER} */`;
+
+function checkViewportCjs(pkg) {
+  return (
+    pkg.source.includes(MARKER) &&
+    pkg.source.includes('t.addEventListener("scroll",i,{passive:!0})')
+  );
+}
+
+function applyViewportCjs(pkg) {
+  if (checkViewportCjs(pkg)) return pkg.source;
+  if (!pkg.source.includes(viewportScrollFindCjs))
+    fail(pkg.name, "viewport onScroll CJS");
+  return pkg.source.replace(
+    viewportScrollFindCjs,
+    () => viewportScrollReplaceCjs,
   );
 }
 
@@ -485,6 +706,12 @@ const jobs = [
     file: "dist/react/index.js",
     check: checkTiling,
     apply: applyTiling,
+  },
+  {
+    name: "@embedpdf/plugin-tiling",
+    file: "dist/react/index.cjs",
+    check: checkTilingCjs,
+    apply: applyTilingCjs,
   },
   {
     name: "@embedpdf/plugin-tiling",
@@ -515,6 +742,18 @@ const jobs = [
     file: "dist/react/index.js",
     check: checkRender,
     apply: applyRender,
+  },
+  {
+    name: "@embedpdf/plugin-viewport",
+    file: "dist/react/index.js",
+    check: checkViewportEsm,
+    apply: applyViewportEsm,
+  },
+  {
+    name: "@embedpdf/plugin-viewport",
+    file: "dist/react/index.cjs",
+    check: checkViewportCjs,
+    apply: applyViewportCjs,
   },
 ];
 

@@ -13,6 +13,7 @@
   flex: 1;
   min-width: 0;
   height: 100%;
+  transform: translateZ(0);
 }
 
 /* The rail hides itself below the mobile breakpoint - see QuickNavRailContainer.css. */

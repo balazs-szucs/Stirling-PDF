@@ -59,6 +59,16 @@ export function armTranslatorDetector(): void {
     return;
   if (typeof document === "undefined" || !document.documentElement) return;
 
+  // Browser translation extensions cannot run inside desktop webviews; skipping
+  // the subtree observer avoids main-thread mutation overhead on every DOM change.
+  const isDesktop =
+    Boolean((window as unknown as { isTauri?: boolean }).isTauri) ||
+    Boolean(
+      (window as unknown as { __TAURI_INTERNALS__?: unknown })
+        .__TAURI_INTERNALS__,
+    );
+  if (isDesktop) return;
+
   // Edge case: class already set (e.g., bfcache restore).
   if (isGoogleTranslateActive()) {
     applyDomPatch("html class was already translated-* on arm");

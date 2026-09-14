@@ -4,5 +4,9 @@
 <dict>
   <key>NSLocalNetworkUsageDescription</key>
   <string>Stirling-PDF needs access to your local network to connect to self-hosted servers.</string>
+  <key>NSAppSleepDisabled</key>
+  <true/>
+  <key>NSSupportsAutomaticGraphicsSwitching</key>
+  <true/>
 </dict>
 </plist>
