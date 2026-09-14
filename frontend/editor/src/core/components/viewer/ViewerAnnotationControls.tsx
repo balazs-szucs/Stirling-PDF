@@ -18,6 +18,7 @@ import {
 } from "@app/contexts/NavigationContext";
 import { useToolWorkflow } from "@app/contexts/ToolWorkflowContext";
 import { useRedactionMode, useRedaction } from "@app/contexts/RedactionContext";
+import { leaveRedactionMode } from "@app/components/viewer/leaveRedactionMode";
 import {
   defaultParameters,
   RedactParameters,
@@ -64,6 +65,7 @@ export default function ViewerAnnotationControls({
     setRedactionsApplied,
     redactionApiRef,
     setActiveType,
+    setIsRedacting,
   } = useRedaction();
 
   // Check if we're in any annotation tool that should disable the toggle
@@ -115,11 +117,27 @@ export default function ViewerAnnotationControls({
   };
 
   const exitRedactionMode = useCallback(() => {
+    // Disarm the plugin's viewer-global redact mode as well: the selection
+    // menu is gated on the synced isRedacting flag, so leaving the plugin
+    // armed kept the menu hidden after "Exit Redaction Mode".
+    leaveRedactionMode(redactionApiRef.current);
+    // In annotation-mode redaction the vendor plugin can keep isRedacting set
+    // after endRedact (the annotation tool, not the interaction mode, owns
+    // that state); the selection menu gates on the synced flag, so clear it
+    // with the exit.
+    setIsRedacting(false);
     navActions.setToolAndWorkbench(null, "viewer");
     setLeftPanelView("toolPicker");
     setRedactionMode(false);
     setActiveType(null);
-  }, [navActions, setLeftPanelView, setRedactionMode, setActiveType]);
+  }, [
+    navActions,
+    setLeftPanelView,
+    setRedactionMode,
+    setActiveType,
+    redactionApiRef,
+    setIsRedacting,
+  ]);
 
   // Handle redaction mode toggle
   const handleRedactionToggle = async () => {

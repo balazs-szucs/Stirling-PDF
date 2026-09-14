@@ -80,4 +80,12 @@ test("exiting redaction restores text selection", async ({ page }) => {
   await expect(firstPage.locator(SELECTION_RECTS).first()).toBeAttached({
     timeout: 5_000,
   });
+  // The floating menu is gated on the synced isRedacting flag; exiting
+  // redaction must clear it or the pop-down never returns (regression).
+  await expect(page.locator("[data-redacting='false']")).toBeAttached({
+    timeout: 5_000,
+  });
+  await expect(page.locator("[data-text-selection-menu]")).toBeVisible({
+    timeout: 5_000,
+  });
 });

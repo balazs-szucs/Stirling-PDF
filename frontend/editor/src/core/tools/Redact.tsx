@@ -23,6 +23,7 @@ import {
   useNavigationState,
 } from "@app/contexts/NavigationContext";
 import { useRedaction } from "@app/contexts/RedactionContext";
+import { leaveRedactionMode } from "@app/components/viewer/leaveRedactionMode";
 import { useFileState } from "@app/contexts/file/fileHooks";
 
 const Redact = (props: BaseToolProps) => {
@@ -35,8 +36,13 @@ const Redact = (props: BaseToolProps) => {
 
   // Navigation and redaction context
   const { actions: navActions } = useNavigationActions();
-  const { setRedactionConfig, setRedactionMode, redactionConfig } =
-    useRedaction();
+  const {
+    setRedactionConfig,
+    setRedactionMode,
+    redactionConfig,
+    redactionApiRef,
+    setIsRedacting,
+  } = useRedaction();
   const { workbench } = useNavigationState();
   const hasOpenedViewer = useRef(false);
 
@@ -114,9 +120,18 @@ const Redact = (props: BaseToolProps) => {
   useEffect(() => {
     if (base.params.parameters.mode === "automatic") {
       hasOpenedViewer.current = false;
+      // Guarded: endRedact is a bare activateDefaultMode, so only disarm when
+      // redaction actually owns the interaction mode.
+      leaveRedactionMode(redactionApiRef.current);
+      setIsRedacting(false);
       setRedactionMode(false);
     }
-  }, [base.params.parameters.mode, setRedactionMode]);
+  }, [
+    base.params.parameters.mode,
+    setRedactionMode,
+    redactionApiRef,
+    setIsRedacting,
+  ]);
 
   const isExecuteDisabled = () => {
     if (base.params.parameters.mode === "manual") {

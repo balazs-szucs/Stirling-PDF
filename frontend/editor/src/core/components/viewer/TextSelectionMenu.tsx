@@ -446,7 +446,11 @@ function TextSelectionMenuInner({
 
   return (
     <>
-      <div ref={setRef} style={menuWrapperProps?.style} />
+      <div
+        ref={setRef}
+        data-redacting={isRedacting ? "true" : "false"}
+        style={menuWrapperProps?.style}
+      />
       {portalContent}
     </>
   );
