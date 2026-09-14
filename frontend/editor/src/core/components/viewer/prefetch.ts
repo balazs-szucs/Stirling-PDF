@@ -11,6 +11,32 @@ import type { ScrollPlugin } from "@embedpdf/plugin-scroll";
  * (used by the A/B harness).
  */
 
+type PrefetchDebugStats = {
+  scrollEvents: number;
+  targets: number;
+  started: number;
+  completed: number;
+  failed: number;
+};
+
+/** Debug-gated counters for harness/desktop investigations. */
+function debugStats(): PrefetchDebugStats | null {
+  if (typeof window === "undefined") return null;
+  const w = window as unknown as {
+    __PERF_PREFETCH_DEBUG?: boolean;
+    __prefetchStats?: PrefetchDebugStats;
+  };
+  if (!w.__PERF_PREFETCH_DEBUG) return null;
+  w.__prefetchStats ??= {
+    scrollEvents: 0,
+    targets: 0,
+    started: 0,
+    completed: 0,
+    failed: 0,
+  };
+  return w.__prefetchStats;
+}
+
 export function isPrefetchEnabled(): boolean {
   if (typeof window === "undefined") return false;
   const flag = (window as unknown as { __PERF_PREFETCH?: boolean })
@@ -63,6 +89,8 @@ export function DirectionalPrefetchController({
     const renderScope = renderCapability.forDocument(documentId);
 
     const unsubscribe = scrollScope.onScroll((metrics) => {
+      const stats = debugStats();
+      if (stats) stats.scrollEvents++;
       const currentY = metrics.scrollOffset.y;
       if (lastScrollYRef.current === null) {
         lastScrollYRef.current = currentY;
@@ -82,9 +110,11 @@ export function DirectionalPrefetchController({
       );
 
       if (target === null || inFlightRef.current.has(target)) return;
+      if (stats) stats.targets++;
 
       inFlightRef.current.add(target);
       try {
+        if (stats) stats.started++;
         const task = renderScope.renderPage({
           pageIndex: target,
           options: {
@@ -94,13 +124,16 @@ export function DirectionalPrefetchController({
         });
         task.wait(
           () => {
+            if (stats) stats.completed++;
             inFlightRef.current.delete(target);
           },
           () => {
+            if (stats) stats.failed++;
             inFlightRef.current.delete(target);
           },
         );
       } catch {
+        if (stats) stats.failed++;
         inFlightRef.current.delete(target);
       }
     });
