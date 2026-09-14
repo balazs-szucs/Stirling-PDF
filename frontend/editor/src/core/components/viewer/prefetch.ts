@@ -4,24 +4,27 @@ import type { RenderPlugin } from "@embedpdf/plugin-render";
 import type { ScrollPlugin } from "@embedpdf/plugin-scroll";
 
 /**
- * Directional prefetch spike behind an internal-only harness flag (R5).
- * Evaluates whether next-page prefetch by scroll direction improves scroll
- * latency or regresses idle-first-page / WASM memory high-water.
+ * Directional next-page prefetch — default-on for smooth scrolling (formerly
+ * the R5 harness spike). Renders one page ahead of the scroll direction at
+ * scale 1/dpr 1 to warm the engine's parsed-page cache before the page enters
+ * the viewport. Disable with `?prefetch=0` or `window.__PERF_PREFETCH = false`
+ * (used by the A/B harness).
  */
 
-export function isPrefetchSpikeEnabled(): boolean {
+export function isPrefetchEnabled(): boolean {
   if (typeof window === "undefined") return false;
-  if ((window as unknown as { __PERF_PREFETCH?: boolean }).__PERF_PREFETCH) {
-    return true;
-  }
+  const flag = (window as unknown as { __PERF_PREFETCH?: boolean })
+    .__PERF_PREFETCH;
+  if (flag === false) return false;
+  if (flag === true) return true;
   try {
     const params = new URLSearchParams(window.location.search);
-    return (
-      params.get("prefetch") === "1" || params.get("perf_prefetch") === "1"
-    );
+    const override = params.get("prefetch") ?? params.get("perf_prefetch");
+    if (override === "0") return false;
   } catch {
-    return false;
+    /* no location: default on */
   }
+  return true;
 }
 
 export function computeDirectionalPrefetchTarget(
@@ -47,7 +50,7 @@ export function DirectionalPrefetchController({
 }: {
   documentId: string;
 }): React.ReactElement | null {
-  const enabled = isPrefetchSpikeEnabled();
+  const enabled = isPrefetchEnabled();
   const { provides: scrollCapability } = useCapability<ScrollPlugin>("scroll");
   const { provides: renderCapability } = useCapability<RenderPlugin>("render");
   const lastScrollYRef = useRef<number | null>(null);

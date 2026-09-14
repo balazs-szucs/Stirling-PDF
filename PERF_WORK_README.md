@@ -1894,4 +1894,37 @@ New SETTLED LAW rows (do not re-open without new decay evidence):
 - Verification: `task frontend:check` green (394 files / 3494 tests), engine smoke 3/3,
   `viewer-engine-patch` 6/6, functional viewer e2e 23/23, comment-lint clean.
 
+## Clean-room recon (2026-09-13 v2): Audits, The Rabbit & Settled Law Demotions
+
+Clean-room re-examination of prior claims (passes 1–6) on branch `viewer-perf-recon` (@ `532ba6a17`). Zero inherited assumptions; independent diverged verification of 12 high-stakes claims, full blind-spot harvest (42 items), instrument calibration (M1), extended soaks & differential forensics, generalized anti-leak sweep, and unearthing "The Rabbit".
+
+- **Claim-Audit Sampling (12 claims; 91.7% trust score):**
+  - **CA-01 (Worker Respawn):** REPRODUCED (3010 pp -> 284 pp).
+  - **CA-02 (Worker Transfer Detach `mh12`):** WRONG-METHOD / REPRODUCED. The prior test harness `mh12-transfer-detach.local.spec.ts` had a broken assertion filter condition (`e.after && e.bytes` on disparate event objects) making assertion mathematically impossible to pass. Engine implementation correctly detaches array buffers (`after: 0`).
+  - **CA-03 (One-Read-Per-Open):** REPRODUCED (40.6 MB vs 283.2 MB on upstream `77b325cf1`).
+  - **CA-04 (F10 JPEG q0.8 Clamping):** REPRODUCED (1.114x / 1.127x drift vs 1.39x failure).
+  - **CA-05 (R2 Buffer Release):** REPRODUCED (162.5 MB dropped post-open; largest retained backing store 18.6 MB).
+  - **CA-06 (/AcroForm Byte Gate):** REPRODUCED (gate works for uncompressed trailers; Flate object stream and literal false positive edge cases documented).
+  - **CA-07 (F11 Form Ratchet Ruled Out):** REPRODUCED (0 pp peak delta across 12 cycles).
+  - **CA-08 (N1 Abandoned Jump Work Waste):** REPRODUCED (95.5% task duration waste, +104% blob churn on abandoned jumps).
+  - **CA-09 (BMP Parity Story):** REPRODUCED & REFINED. Prior claim of "alpha edge blending artifacts" disproved; page rasters are 100% opaque (722,349/722,349 pixels alpha=255). Variance was purely canvas context premultiplied alpha rounding on PNG export.
+  - **CA-10 (G13 Main PDFium Reclaim Blocked):** REPRODUCED (pending PromiseReaction + Emscripten closures).
+  - **CA-11 (G23b JSZip Waterfall Elimination):** REPRODUCED (0 zip requests on initial open).
+  - **CA-12 (Wasm Preload Removal):** REPRODUCED (WebKit resource entries 2 -> 1, 4.63 MB wire savings).
+
+- **THE RABBIT: The Read-Aloud Reality & Phantom AudioContext:**
+  - **Disproved Prior Prompt & Analysis Assumption:** Prompt and prior passes asserted *"Audio: the READ-ALOUD feature holds AudioContext/AudioBuffer/source nodes"*. In reality, `AudioContext` does not exist anywhere in the repository. The feature uses browser-native `window.speechSynthesis`.
+  - **WebIDL Crash Bug Discovered:** `useViewerReadAloud.ts:350` crashes with an unhandled WebIDL `TypeError` if `voice` is not a browser-native `SpeechSynthesisVoice` instance, aborting speech before utterance starts.
+  - **Silent Document Memory Pin Discovered:** `cachedArrayBufferRef` holds the 40–162 MB document `ArrayBuffer` in memory. `useStopReadAloudOnNavigation` only listens to `activeFileIndex`; deleting document 0 in a multi-file session does not trigger stop, permanently leaking the large buffer.
+  - **Multimodal Verification (G2):** Speech triggered live on `annotation-text-sample.pdf`, text extracted and highlighted in yellow, screenshot captured: `.perf-local/read-aloud-active.png`.
+
+- **Generalized Anti-Leak Discoveries:**
+  - **Raw Blob URL Overwrite Leak:** `DrawingCanvas.tsx` calls `URL.createObjectURL(trimmedBlob)` on signature changes and passes it to `SignSettings.tsx`, which overwrites `canvasSignatureData` without calling `URL.revokeObjectURL(prevData)`.
+
+New SETTLED LAW additions (and prior-law demotions):
+
+1. **CA-02 Harness Validity Demoted:** The prior `mh12-transfer-detach.local.spec.ts` test harness was flawed; do not rely on prior test logs without inspecting the event collection filter.
+2. **AudioContext Assumption Demoted:** Stirling-PDF Read-Aloud uses `window.speechSynthesis`, never Web Audio API (`AudioContext`). Leaks and crashes in read-aloud stem from unmanaged WebIDL `SpeechSynthesisUtterance` instances and `cachedArrayBufferRef` lifecycle mismatches, not audio buffer graphs.
+3. **CA-09 Exact BMP Opacity Promoted:** PDFium BMP page rasters are mathematically 100.0% opaque (`alpha = 255`). Prior explanations citing alpha edge blending were incorrect; all pixel differences between BMP and PNG are canvas context premultiplication rounding artifacts.
+4. **DrawingCanvas Blob URL Lifecycle:** Raw `URL.createObjectURL` in signature canvas must be paired with immediate cleanup on state transitions; do not assume all object URLs flow through `useFileWithUrl`.
 

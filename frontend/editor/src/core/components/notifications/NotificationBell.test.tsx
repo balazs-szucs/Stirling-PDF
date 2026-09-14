@@ -1,5 +1,14 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
+import {
+  cleanup,
   fireEvent,
   render as baseRender,
   screen,
@@ -152,6 +161,15 @@ describe("NotificationBell", () => {
     h.retryPayload = { operation: "removePassword" };
     h.notificationsAvailable = true;
     h.specs = {};
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  afterAll(async () => {
+    // Settle any pending Mantine Transition timers before happy-dom environment is torn down
+    await new Promise((resolve) => setTimeout(resolve, 300));
   });
 
   it("mounts nothing at all in a build with no notifications API", async () => {

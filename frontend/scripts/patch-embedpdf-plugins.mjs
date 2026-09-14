@@ -143,14 +143,13 @@ const tileBlockReplace = `    let stirlingCancelled = false; /* ${MARKER} */
     }, ignore);
     return () => {
       stirlingCancelled = true;
+      task.abort({
+        code: PdfErrorCode.Cancelled,
+        message: "canceled render task"
+      });
       if (urlRef.current) {
         URL.revokeObjectURL(urlRef.current);
         urlRef.current = null;
-      } else {
-        task.abort({
-          code: PdfErrorCode.Cancelled,
-          message: "canceled render task"
-        });
       }
     };`;
 const tileDprFind = "dpr: window.devicePixelRatio,";
@@ -167,12 +166,105 @@ function checkTiling(pkg) {
 }
 
 function applyTiling(pkg) {
-  if (pkg.source.includes(MARKER)) return pkg.source;
-  if (!pkg.source.includes(tileBlockFind))
+  let source = pkg.source;
+  if (!source.includes(tileBlockFind) && !source.includes(MARKER)) {
     fail(pkg.name, "TileImg render/cleanup");
-  if (!pkg.source.includes(tileDprFind)) fail(pkg.name, "devicePixelRatio");
-  let source = pkg.source.replace(tileBlockFind, () => tileBlockReplace);
-  source = source.replace(tileDprFind, () => tileDprReplace);
+  }
+  if (source.includes(tileBlockFind)) {
+    source = source.replace(tileBlockFind, () => tileBlockReplace);
+  } else if (
+    source.includes("stirlingCancelled") &&
+    source.includes("} else {\n        task.abort({")
+  ) {
+    source = source.replace(
+      /if \(urlRef\.current\) \{\s+URL\.revokeObjectURL\(urlRef\.current\);\s+urlRef\.current = null;\s+\} else \{\s+task\.abort\(\{\s+code: PdfErrorCode\.Cancelled,\s+message: "canceled render task"\s+\}\);\s+\}/,
+      `task.abort({
+        code: PdfErrorCode.Cancelled,
+        message: "canceled render task"
+      });
+      if (urlRef.current) {
+        URL.revokeObjectURL(urlRef.current);
+        urlRef.current = null;
+      }`,
+    );
+  }
+  if (source.includes(tileDprFind)) {
+    source = source.replace(tileDprFind, () => tileDprReplace);
+  }
+  return source;
+}
+
+// --- render: abort stale page renders and never mint an orphan blob URL ------
+const renderBlockFind = `    const task = renderProvides.forDocument(documentId).renderPage({
+      pageIndex,
+      options: {
+        scaleFactor: actualScale,
+        dpr: actualDpr
+      }
+    });
+    task.wait((blob) => {
+      const url = URL.createObjectURL(blob);
+      setImageUrl(url);
+      urlRef.current = url;
+    }, ignore);
+    return () => {
+      if (urlRef.current) {
+        URL.revokeObjectURL(urlRef.current);
+        urlRef.current = null;
+      } else {
+        task.abort({
+          code: PdfErrorCode.Cancelled,
+          message: "canceled render task"
+        });
+      }
+    };`;
+
+const renderBlockReplace = `    let stirlingCancelled = false; /* ${MARKER} */
+    const task = renderProvides.forDocument(documentId).renderPage({
+      pageIndex,
+      options: {
+        scaleFactor: actualScale,
+        dpr: actualDpr
+      }
+    });
+    task.wait((blob) => {
+      if (stirlingCancelled) return;
+      const url = URL.createObjectURL(blob);
+      setImageUrl(url);
+      urlRef.current = url;
+    }, ignore);
+    return () => {
+      stirlingCancelled = true;
+      task.abort({
+        code: PdfErrorCode.Cancelled,
+        message: "canceled render task"
+      });
+      if (urlRef.current) {
+        URL.revokeObjectURL(urlRef.current);
+        urlRef.current = null;
+      }
+    };`;
+
+const renderDprFind = "return window.devicePixelRatio;";
+const renderDprReplace =
+  'return typeof window !== "undefined" ? window.devicePixelRatio : 1;';
+
+function checkRender(pkg) {
+  return (
+    pkg.source.includes(MARKER) &&
+    pkg.source.includes("if (stirlingCancelled) return;") &&
+    pkg.source.includes(renderDprReplace) &&
+    !pkg.source.includes(renderDprFind)
+  );
+}
+
+function applyRender(pkg) {
+  if (pkg.source.includes(MARKER)) return pkg.source;
+  if (!pkg.source.includes(renderBlockFind))
+    fail(pkg.name, "RenderLayer render/cleanup");
+  if (!pkg.source.includes(renderDprFind)) fail(pkg.name, "devicePixelRatio");
+  let source = pkg.source.replace(renderBlockFind, () => renderBlockReplace);
+  source = source.replace(renderDprFind, () => renderDprReplace);
   return source;
 }
 
@@ -261,6 +353,12 @@ const jobs = [
     file: "dist/react/index.js",
     check: checkTiling,
     apply: applyTiling,
+  },
+  {
+    name: "@embedpdf/plugin-render",
+    file: "dist/react/index.js",
+    check: checkRender,
+    apply: applyRender,
   },
 ];
 

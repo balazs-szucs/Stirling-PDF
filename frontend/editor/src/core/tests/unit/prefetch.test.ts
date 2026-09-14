@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
-  isPrefetchSpikeEnabled,
+  isPrefetchEnabled,
   computeDirectionalPrefetchTarget,
-} from "@app/components/viewer/prefetchSpike";
+} from "@app/components/viewer/prefetch";
 
-describe("prefetchSpike contract characterization (R5)", () => {
+describe("prefetch contract", () => {
   const originalWindowLocation = window.location;
 
   beforeEach(() => {
@@ -13,52 +13,48 @@ describe("prefetchSpike contract characterization (R5)", () => {
 
   afterEach(() => {
     delete (window as unknown as { __PERF_PREFETCH?: boolean }).__PERF_PREFETCH;
+    Object.defineProperty(window, "location", {
+      writable: true,
+      value: originalWindowLocation,
+    });
   });
 
-  describe("isPrefetchSpikeEnabled", () => {
-    it("defaults to false in standard environment", () => {
-      expect(isPrefetchSpikeEnabled()).toBe(false);
+  describe("isPrefetchEnabled", () => {
+    it("defaults to true so scrolling prefetches without a flag", () => {
+      expect(isPrefetchEnabled()).toBe(true);
     });
 
-    it("activates when window.__PERF_PREFETCH is set", () => {
+    it("disables via window.__PERF_PREFETCH = false", () => {
+      (window as unknown as { __PERF_PREFETCH?: boolean }).__PERF_PREFETCH =
+        false;
+      expect(isPrefetchEnabled()).toBe(false);
+    });
+
+    it("stays enabled via window.__PERF_PREFETCH = true", () => {
       (window as unknown as { __PERF_PREFETCH?: boolean }).__PERF_PREFETCH =
         true;
-      expect(isPrefetchSpikeEnabled()).toBe(true);
+      expect(isPrefetchEnabled()).toBe(true);
     });
 
-    it("activates when search params contains prefetch=1", () => {
-      try {
-        Object.defineProperty(window, "location", {
-          writable: true,
-          value: { ...originalWindowLocation, search: "?prefetch=1" },
-        });
-        expect(isPrefetchSpikeEnabled()).toBe(true);
-      } finally {
-        Object.defineProperty(window, "location", {
-          writable: true,
-          value: originalWindowLocation,
-        });
-      }
+    it("disables when search params contains prefetch=0", () => {
+      Object.defineProperty(window, "location", {
+        writable: true,
+        value: { ...originalWindowLocation, search: "?prefetch=0" },
+      });
+      expect(isPrefetchEnabled()).toBe(false);
     });
 
-    it("activates when search params contains perf_prefetch=1", () => {
-      try {
-        Object.defineProperty(window, "location", {
-          writable: true,
-          value: { ...originalWindowLocation, search: "?perf_prefetch=1" },
-        });
-        expect(isPrefetchSpikeEnabled()).toBe(true);
-      } finally {
-        Object.defineProperty(window, "location", {
-          writable: true,
-          value: originalWindowLocation,
-        });
-      }
+    it("stays enabled when search params contains perf_prefetch=1", () => {
+      Object.defineProperty(window, "location", {
+        writable: true,
+        value: { ...originalWindowLocation, search: "?perf_prefetch=1" },
+      });
+      expect(isPrefetchEnabled()).toBe(true);
     });
   });
 
   describe("computeDirectionalPrefetchTarget", () => {
-    it("returns null when stationary (scrollDelta === 0) to avoid idle-first-page regressions", () => {
+    it("returns null when stationary (scrollDelta === 0)", () => {
       expect(computeDirectionalPrefetchTarget([0], 10, 0)).toBeNull();
     });
 

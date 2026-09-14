@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Box, TextInput, Text, Group } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 import { LocalIcon } from "@app/components/shared/LocalIcon";
@@ -87,42 +87,43 @@ export function SearchInterface({ visible, onClose }: SearchInterfaceProps) {
     };
   }, [searchQuery, searchActions]);
 
-  // Monitor search state changes
+  const checkSearchState = useCallback(() => {
+    // Fetch fresh search state from ViewerContext ref to avoid closure stale values
+    const searchState = viewerContextRef.current?.getSearchState();
+    const searchResults = searchState?.results;
+    const searchActiveIndex = searchState?.activeIndex;
+
+    if (searchResults && searchResults.length > 0) {
+      const activeIndex = searchActiveIndex || 1;
+
+      setResultInfo({
+        currentIndex: activeIndex,
+        totalResults: searchResults.length,
+        query: searchQuery, // Use local search query
+      });
+    } else if (searchQuery && searchResults?.length === 0) {
+      // Show "no results" state
+      setResultInfo({
+        currentIndex: 0,
+        totalResults: 0,
+        query: searchQuery,
+      });
+    } else {
+      setResultInfo(null);
+    }
+  }, [searchQuery]);
+
+  // Monitor search state changes: update immediately, only poll while actively searching
   useEffect(() => {
     if (!visible) return;
 
-    const checkSearchState = () => {
-      // Fetch fresh search state from ViewerContext ref to avoid closure stale values
-      const searchState = viewerContextRef.current?.getSearchState();
-      const searchResults = searchState?.results;
-      const searchActiveIndex = searchState?.activeIndex;
-
-      if (searchResults && searchResults.length > 0) {
-        const activeIndex = searchActiveIndex || 1;
-
-        setResultInfo({
-          currentIndex: activeIndex,
-          totalResults: searchResults.length,
-          query: searchQuery, // Use local search query
-        });
-      } else if (searchQuery && searchResults?.length === 0) {
-        // Show "no results" state
-        setResultInfo({
-          currentIndex: 0,
-          totalResults: 0,
-          query: searchQuery,
-        });
-      } else {
-        setResultInfo(null);
-      }
-    };
-
-    // Check immediately and then poll for updates
     checkSearchState();
-    const interval = setInterval(checkSearchState, 200);
 
+    if (!isSearching) return;
+
+    const interval = setInterval(checkSearchState, 200);
     return () => clearInterval(interval);
-  }, [visible, searchQuery]);
+  }, [visible, isSearching, checkSearchState]);
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Enter") {
@@ -144,10 +145,12 @@ export function SearchInterface({ visible, onClose }: SearchInterfaceProps) {
 
   const handleNext = () => {
     searchActions?.next();
+    checkSearchState();
   };
 
   const handlePrevious = () => {
     searchActions?.previous();
+    checkSearchState();
   };
 
   const handleClearSearch = () => {

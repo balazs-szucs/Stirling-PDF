@@ -15,6 +15,7 @@ export function useStopReadAloudOnNavigation(
 
   const previousStateRef = useRef({
     workbench,
+    activeFileId: viewer.activeFileId,
     activeFileIndex: viewer.activeFileIndex,
   });
 
@@ -27,19 +28,28 @@ export function useStopReadAloudOnNavigation(
       return;
     }
 
-    // Stop on active file change
+    // Stop on active file change (by index or file identity)
     if (
       isReadingAloud &&
-      previousStateRef.current.activeFileIndex !== viewer.activeFileIndex
+      (previousStateRef.current.activeFileIndex !== viewer.activeFileIndex ||
+        previousStateRef.current.activeFileId !== viewer.activeFileId)
     ) {
       onStop();
       previousStateRef.current.activeFileIndex = viewer.activeFileIndex;
+      previousStateRef.current.activeFileId = viewer.activeFileId;
       return;
     }
 
     previousStateRef.current.workbench = workbench;
+    previousStateRef.current.activeFileId = viewer.activeFileId;
     previousStateRef.current.activeFileIndex = viewer.activeFileIndex;
-  }, [workbench, viewer.activeFileIndex, isReadingAloud, onStop]);
+  }, [
+    workbench,
+    viewer.activeFileIndex,
+    viewer.activeFileId,
+    isReadingAloud,
+    onStop,
+  ]);
 
   // Stop on page unload (F5, navigation, close)
   useEffect(() => {

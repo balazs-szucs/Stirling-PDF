@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Stack,
@@ -135,6 +135,32 @@ const SignSettings = ({
   const [imageSignatureData, setImageSignatureData] = useState<
     string | undefined
   >();
+
+  // Cleanup blob URLs on change or unmount
+  useEffect(() => {
+    return () => {
+      if (canvasSignatureData?.startsWith("blob:")) {
+        try {
+          URL.revokeObjectURL(canvasSignatureData);
+        } catch {
+          // Ignore revocation errors
+        }
+      }
+    };
+  }, [canvasSignatureData]);
+
+  useEffect(() => {
+    return () => {
+      if (imageSignatureData?.startsWith("blob:")) {
+        try {
+          URL.revokeObjectURL(imageSignatureData);
+        } catch {
+          // Ignore revocation errors
+        }
+      }
+    };
+  }, [imageSignatureData]);
+
   const [signatureDrafts, setSignatureDrafts] = useState<SignatureDrafts>({});
   const lastSyncedTextDraft = useRef<SignatureDrafts["text"] | null>(null);
   const lastAppliedPlacementKey = useRef<string | null>(null);
@@ -655,6 +681,14 @@ const SignSettings = ({
     (data: string | null) => {
       const nextValue = data ?? undefined;
       setCanvasSignatureData((prevData) => {
+        // Revoke previous blob URL to prevent memory leaks
+        if (prevData?.startsWith("blob:") && prevData !== nextValue) {
+          try {
+            URL.revokeObjectURL(prevData);
+          } catch {
+            // Ignore revocation errors
+          }
+        }
         // Reset pause state and trigger placement for signature changes
         // (onDrawingComplete handles initial activation)
         if (prevData && prevData !== nextValue && nextValue) {

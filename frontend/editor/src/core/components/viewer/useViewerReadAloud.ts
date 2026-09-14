@@ -346,8 +346,16 @@ export function useViewerReadAloud(defaultLanguage?: string) {
 
       // Set specific voice if available
       const voice = findVoiceForLanguage(currentLang);
-      if (voice) {
-        utterance.voice = voice;
+      if (
+        voice &&
+        (typeof SpeechSynthesisVoice === "undefined" ||
+          voice instanceof SpeechSynthesisVoice)
+      ) {
+        try {
+          utterance.voice = voice;
+        } catch {
+          // Gracefully ignore WebIDL type assignment failures in mock/polyfilled environments
+        }
       }
 
       utterance.onstart = () => setIsReadingAloud(true);

@@ -41,10 +41,7 @@ import {
   ViewerPagePointerProvider,
 } from "@app/components/viewer/ViewerPointerProviders";
 import { SpreadPluginPackage, SpreadMode } from "@embedpdf/plugin-spread/react";
-import {
-  DirectionalPrefetchController,
-  isPrefetchSpikeEnabled,
-} from "@app/components/viewer/prefetchSpike";
+import { DirectionalPrefetchController } from "@app/components/viewer/prefetch";
 import { SearchPluginPackage } from "@embedpdf/plugin-search/react";
 import { ThumbnailPluginPackage } from "@embedpdf/plugin-thumbnail/react";
 import { RotatePluginPackage, Rotate } from "@embedpdf/plugin-rotate/react";
@@ -509,7 +506,7 @@ const LazyPageContent = ({
         setIsVisible(entry.isIntersecting);
       },
       {
-        rootMargin: "300px", // Pre-render pages within 300px margin to avoid flashes and save DOM node memory
+        rootMargin: "600px", // Pre-mount pages within 600px so fast scrolls mount placeholders before the page is visible
       },
     );
 
@@ -772,6 +769,7 @@ const TiledPageBackground = ({
               : undefined,
       }}
     >
+      <div className="pdf-page-placeholder" aria-hidden="true" />
       <RenderLayer
         documentId={documentId}
         pageIndex={pageIndex}
@@ -1045,14 +1043,13 @@ export function LocalEmbedPDF({
     if (file && !isBufferReady) return [];
     if (!isBufferReady && !pdfUrl) return [];
 
-    const prefetchActive = isPrefetchSpikeEnabled();
     const deviceMemory =
       typeof navigator !== "undefined"
         ? ((navigator as Navigator & { deviceMemory?: number }).deviceMemory ??
           4)
         : 4;
     const baseBufferSize = deviceMemory >= 4 ? 4 : 2;
-    const bufferSize = prefetchActive ? baseBufferSize + 2 : baseBufferSize;
+    const bufferSize = baseBufferSize;
 
     // The R2 release empties this exact array in place; stashing the identity
     // here (idempotent overwrite) is what makes that free work.
@@ -1137,7 +1134,7 @@ export function LocalEmbedPDF({
       createPluginRegistration(TilingPluginPackage, {
         tileSize: 1024,
         overlapPx: 2.5,
-        extraRings: prefetchActive ? 1 : 0,
+        extraRings: 0,
         defaultImageType: "image/bmp", // BMP is faster for local processing than WebP
       }),
 

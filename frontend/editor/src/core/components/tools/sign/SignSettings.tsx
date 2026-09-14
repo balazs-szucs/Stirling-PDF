@@ -633,6 +633,14 @@ const SignSettings = ({
     (data: string | null) => {
       const nextValue = data ?? undefined;
       setCanvasSignatureData((prevData) => {
+        // Revoke previous blob URL to prevent memory leaks
+        if (prevData?.startsWith("blob:") && prevData !== nextValue) {
+          try {
+            URL.revokeObjectURL(prevData);
+          } catch {
+            // Ignore revocation errors
+          }
+        }
         // Reset pause state and trigger placement for signature changes
         // (onDrawingComplete handles initial activation)
         if (prevData && prevData !== nextValue && nextValue) {

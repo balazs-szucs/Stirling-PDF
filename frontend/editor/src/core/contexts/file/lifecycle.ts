@@ -12,6 +12,7 @@ import {
 import { evictFileUrl } from "@app/hooks/useFileWithUrl";
 import { releaseSharedDocument } from "@app/services/pdfiumService";
 import { noteRemovedDocumentBytes } from "@app/services/engineRespawnSignal";
+import { thumbnailGenerationService } from "@app/services/thumbnailGenerationService";
 
 const DEBUG = process.env.NODE_ENV === "development";
 
@@ -160,6 +161,7 @@ export class FileLifecycleManager {
     // identity), so a lingering shared main-thread document of its bytes is
     // pure waste. The release waits for in-flight readers before closing.
     releaseSharedDocument();
+    thumbnailGenerationService.clearPDFCacheForFile(fileId);
 
     // Tell the engine respawn watcher how big the departing document was: the
     // engine worker's wasm floor only matters after a very large document.
