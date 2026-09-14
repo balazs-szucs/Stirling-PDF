@@ -506,7 +506,7 @@ const LazyPageContent = ({
         setIsVisible(entry.isIntersecting);
       },
       {
-        rootMargin: "600px", // Pre-mount pages within 600px so fast scrolls mount placeholders before the page is visible
+        rootMargin: "200%", // 2 viewports ahead/behind: ensures pages buffered by ScrollPlugin have placeholders mounted before momentum scrolling exposes them
       },
     );
 
@@ -1132,9 +1132,9 @@ export function LocalEmbedPDF({
 
       // Register tiling plugin (depends on Render, Scroll, Viewport)
       createPluginRegistration(TilingPluginPackage, {
-        tileSize: 1024,
+        tileSize: 768,
         overlapPx: 2.5,
-        extraRings: 0,
+        extraRings: 1, // Pre-renders 1 tile ring outside viewport to eliminate checkerboard during momentum scroll
         defaultImageType: "image/bmp", // BMP is faster for local processing than WebP
       }),
 
@@ -1559,7 +1559,11 @@ export function LocalEmbedPDF({
                       flex: 1,
                       minHeight: 0,
                       minWidth: 0,
-                      contain: "strict",
+                      contain: "content",
+                      WebkitOverflowScrolling: "touch",
+                      overscrollBehavior: "contain",
+                      transform: "translateZ(0)",
+                      willChange: "scroll-position",
                     }}
                   >
                     <DocumentScroller

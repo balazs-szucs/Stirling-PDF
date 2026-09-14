@@ -87,24 +87,9 @@ code {
   );
 }
 
-/* Smooth fade-in for lazy-loaded/rendered tile images */
+/* Instant display for rendered tile images: eliminates alpha-blending overhead and perceptual latency during scrolling */
 .pdf-tile-layer img {
-  animation: pdf-tile-fade-in 0.2s ease-out forwards;
-}
-
-@keyframes pdf-tile-fade-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .pdf-tile-layer img {
-    animation: none;
-  }
+  display: block;
 }
 
 /* Page placeholder behind the tiles: invisible for the first ~180ms so cached
