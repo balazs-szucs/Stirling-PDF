@@ -487,41 +487,13 @@ interface LazyPageContentProps {
   children: React.ReactNode;
 }
 
-const LazyPageContent = ({
-  pageIndex: _pageIndex,
-  width: _width,
-  height: _height,
-  children,
-}: LazyPageContentProps) => {
-  const [isVisible, setIsVisible] = useState(false);
-  const containerRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const entry = entries[0];
-        setIsVisible(entry.isIntersecting);
-      },
-      {
-        rootMargin: "200%", // 2 viewports ahead/behind: ensures pages buffered by ScrollPlugin have placeholders mounted before momentum scrolling exposes them
-      },
-    );
-
-    observer.observe(el);
-    return () => {
-      observer.disconnect();
-    };
-  }, []);
-
+// Scroller from @embedpdf/plugin-scroll already limits mounted pages to the active buffer.
+// Rendering children directly ensures that buffered pages have their low-res preview
+// rendered ahead of time before momentum scrolling exposes them.
+const LazyPageContent = ({ children }: LazyPageContentProps) => {
   return (
-    <div
-      ref={containerRef}
-      style={{ width: "100%", height: "100%", position: "relative" }}
-    >
-      {isVisible ? children : null}
+    <div style={{ width: "100%", height: "100%", position: "relative" }}>
+      {children}
     </div>
   );
 };

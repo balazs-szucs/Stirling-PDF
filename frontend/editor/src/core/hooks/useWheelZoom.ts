@@ -53,19 +53,12 @@ export function useWheelZoom({
     }
 
     let accumulator = 0;
+    let isNonPassiveAttached = false;
+    let modifierTimeout: ReturnType<typeof setTimeout> | null = null;
+    let isModifierKeyDown = false;
 
-    const handleWheel = (event: Event) => {
-      const wheelEvent = event as WheelEvent;
-      const hasModifier = wheelEvent.ctrlKey || wheelEvent.metaKey;
-      if (requireModifierKey && !hasModifier) {
-        return;
-      }
-
-      wheelEvent.preventDefault();
-      wheelEvent.stopPropagation();
-
-      accumulator += wheelEvent.deltaY;
-
+    const applyZoomDelta = (delta: number) => {
+      accumulator += delta;
       if (accumulator <= -threshold) {
         onZoomIn();
         accumulator = 0;
@@ -75,9 +68,130 @@ export function useWheelZoom({
       }
     };
 
-    element.addEventListener("wheel", handleWheel, { passive: false });
+    const handleWheelActive = (event: Event) => {
+      const wheelEvent = event as WheelEvent;
+      const hasModifier = wheelEvent.ctrlKey || wheelEvent.metaKey;
+      if (requireModifierKey && !hasModifier) {
+        return;
+      }
+
+      wheelEvent.preventDefault();
+      wheelEvent.stopPropagation();
+      applyZoomDelta(wheelEvent.deltaY);
+
+      if (requireModifierKey && !isModifierKeyDown) {
+        if (modifierTimeout) clearTimeout(modifierTimeout);
+        modifierTimeout = setTimeout(() => {
+          detachNonPassive();
+        }, 300);
+      }
+    };
+
+    const attachNonPassive = () => {
+      if (isNonPassiveAttached) return;
+      element.addEventListener("wheel", handleWheelActive, { passive: false });
+      isNonPassiveAttached = true;
+    };
+
+    const detachNonPassive = () => {
+      if (
+        !isNonPassiveAttached ||
+        (!requireModifierKey ? false : isModifierKeyDown)
+      )
+        return;
+      element.removeEventListener("wheel", handleWheelActive);
+      isNonPassiveAttached = false;
+    };
+
+    // If modifier is not required, keep the non-passive handler attached permanently.
+    if (!requireModifierKey) {
+      attachNonPassive();
+      return () => {
+        element.removeEventListener("wheel", handleWheelActive);
+      };
+    }
+
+    // Passive listener detects pinch/modifier wheel events without blocking WebKit's
+    // asynchronous compositor scrolling thread during standard navigation.
+    const handlePassiveWheel = (event: Event) => {
+      const wheelEvent = event as WheelEvent;
+      if (wheelEvent.ctrlKey || wheelEvent.metaKey) {
+        attachNonPassive();
+        applyZoomDelta(wheelEvent.deltaY);
+        if (modifierTimeout) clearTimeout(modifierTimeout);
+        modifierTimeout = setTimeout(() => {
+          detachNonPassive();
+        }, 300);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (
+        event.ctrlKey ||
+        event.metaKey ||
+        event.key === "Control" ||
+        event.key === "Meta"
+      ) {
+        isModifierKeyDown = true;
+        attachNonPassive();
+      }
+    };
+
+    const handleKeyUp = (event: KeyboardEvent) => {
+      if (!event.ctrlKey && !event.metaKey) {
+        isModifierKeyDown = false;
+        detachNonPassive();
+      }
+    };
+
+    const handleBlur = () => {
+      isModifierKeyDown = false;
+      detachNonPassive();
+    };
+
+    // WebKit-specific trackpad pinch gesture support (macOS WKWebView / Safari)
+    let lastGestureScale = 1;
+    const handleGestureStart = (event: Event) => {
+      event.preventDefault();
+      lastGestureScale = 1;
+      attachNonPassive();
+    };
+
+    const handleGestureChange = (event: Event) => {
+      event.preventDefault();
+      const gestureEvent = event as Event & { scale?: number };
+      if (typeof gestureEvent.scale === "number") {
+        const delta = (1 - gestureEvent.scale / lastGestureScale) * 100;
+        lastGestureScale = gestureEvent.scale;
+        applyZoomDelta(delta);
+      }
+    };
+
+    const handleGestureEnd = (event: Event) => {
+      event.preventDefault();
+      detachNonPassive();
+    };
+
+    element.addEventListener("wheel", handlePassiveWheel, { passive: true });
+    window.addEventListener("keydown", handleKeyDown, true);
+    window.addEventListener("keyup", handleKeyUp, true);
+    window.addEventListener("blur", handleBlur);
+    element.addEventListener("gesturestart", handleGestureStart);
+    element.addEventListener("gesturechange", handleGestureChange);
+    element.addEventListener("gestureend", handleGestureEnd);
+
     return () => {
-      element.removeEventListener("wheel", handleWheel);
+      if (modifierTimeout) clearTimeout(modifierTimeout);
+      element.removeEventListener("wheel", handlePassiveWheel);
+      if (isNonPassiveAttached) {
+        element.removeEventListener("wheel", handleWheelActive);
+      }
+      window.removeEventListener("keydown", handleKeyDown, true);
+      window.removeEventListener("keyup", handleKeyUp, true);
+      window.removeEventListener("blur", handleBlur);
+      element.removeEventListener("gesturestart", handleGestureStart);
+      element.removeEventListener("gesturechange", handleGestureChange);
+      element.removeEventListener("gestureend", handleGestureEnd);
     };
   }, [ref, onZoomIn, onZoomOut, enabled, threshold, requireModifierKey]);
 }

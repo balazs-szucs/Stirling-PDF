@@ -92,65 +92,11 @@ code {
   display: block;
 }
 
-/* Page placeholder behind the tiles: invisible for the first ~180ms so cached
-   pages do not flash, then fades in and stays until opaque tile images cover
-   it. It replaces the blank page area that used to read as a pop-in while
-   scrolling. */
+/* Page placeholder behind the tiles: provides a neutral background while
+   the low-res preview and high-res tiles render. */
 .pdf-page-placeholder {
   position: absolute;
   inset: 0;
   background-color: var(--pdf-page-bg);
-  opacity: 0;
   pointer-events: none;
-  animation: pdf-page-placeholder-in 0.25s ease-out 0.18s forwards;
-}
-
-/* Static gradient, compositor-only opacity pulse: animating
-   background-position repainted every frame and showed up as seconds of
-   main-thread task time in the perf harness. */
-.pdf-page-placeholder::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    100deg,
-    transparent 25%,
-    color-mix(in srgb, var(--pdf-page-bg) 88%, var(--c-text-muted) 12%) 50%,
-    transparent 75%
-  );
-  opacity: 0.45;
-  animation: pdf-page-placeholder-pulse 1.6s ease-in-out 0.4s infinite;
-}
-
-/* Once opaque tiles cover the page, stop the pulse (selectors without :has
-   support simply keep the cheap compositor animation). */
-.pdf-page-placeholder:has(~ .pdf-tile-layer img) {
-  animation: none;
-  opacity: 0;
-}
-
-@keyframes pdf-page-placeholder-in {
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes pdf-page-placeholder-pulse {
-  0%,
-  100% {
-    opacity: 0.35;
-  }
-  50% {
-    opacity: 0.7;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .pdf-page-placeholder {
-    animation: pdf-page-placeholder-in 0.01s linear 0.18s forwards;
-  }
-
-  .pdf-page-placeholder::after {
-    animation: none;
-  }
 }

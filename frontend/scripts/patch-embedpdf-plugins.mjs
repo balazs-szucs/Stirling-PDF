@@ -341,6 +341,138 @@ function applySearch(pkg) {
   return source;
 }
 
+// --- scroll: memoize pushScrollerLayout to avoid 120Hz redundant React re-renders ---
+const scrollPushLayoutFindEsm = `  pushScrollerLayout(documentId) {
+    const emitter = this.scrollerLayoutEmitters.get(documentId);
+    if (!emitter) return;
+    try {
+      const layout = this.getScrollerLayout(documentId);
+      emitter.emit(layout);
+    } catch (error) {
+    }
+  }`;
+
+const scrollPushLayoutReplaceEsm = `  pushScrollerLayout(documentId) {
+    const emitter = this.scrollerLayoutEmitters.get(documentId);
+    if (!emitter) return;
+    try {
+      const layout = this.getScrollerLayout(documentId);
+      if (this.__stirlingLastLayouts) {
+        const prev = this.__stirlingLastLayouts.get(documentId);
+        if (
+          prev &&
+          prev.startSpacing === layout.startSpacing &&
+          prev.endSpacing === layout.endSpacing &&
+          prev.totalWidth === layout.totalWidth &&
+          prev.totalHeight === layout.totalHeight &&
+          prev.pageGap === layout.pageGap &&
+          prev.strategy === layout.strategy &&
+          prev.items.length === layout.items.length &&
+          prev.items.every((it, i) => it.id === layout.items[i].id)
+        ) {
+          return;
+        }
+      } else {
+        this.__stirlingLastLayouts = /* @__PURE__ */ new Map();
+      }
+      this.__stirlingLastLayouts.set(documentId, layout);
+      emitter.emit(layout);
+    } catch (error) {
+    }
+  } /* ${MARKER} */`;
+
+function checkScrollEsm(pkg) {
+  return (
+    pkg.source.includes(MARKER) &&
+    pkg.source.includes("this.__stirlingLastLayouts")
+  );
+}
+
+function applyScrollEsm(pkg) {
+  if (pkg.source.includes(MARKER)) return pkg.source;
+  if (!pkg.source.includes(scrollPushLayoutFindEsm))
+    fail(pkg.name, "pushScrollerLayout ESM");
+  return pkg.source.replace(
+    scrollPushLayoutFindEsm,
+    () => scrollPushLayoutReplaceEsm,
+  );
+}
+
+const scrollPushLayoutFindCjs = `pushScrollerLayout(t){const e=this.scrollerLayoutEmitters.get(t);if(e)try{const a=this.getScrollerLayout(t);e.emit(a)}catch(a){}}`;
+const scrollPushLayoutReplaceCjs = `pushScrollerLayout(t){const e=this.scrollerLayoutEmitters.get(t);if(e)try{const a=this.getScrollerLayout(t);if(this.__stirlingLastLayouts){const e=this.__stirlingLastLayouts.get(t);if(e&&e.startSpacing===a.startSpacing&&e.endSpacing===a.endSpacing&&e.totalWidth===a.totalWidth&&e.totalHeight===a.totalHeight&&e.pageGap===a.pageGap&&e.strategy===a.strategy&&e.items.length===a.items.length&&e.items.every((e,t)=>e.id===a.items[t].id))return}else this.__stirlingLastLayouts=new Map;this.__stirlingLastLayouts.set(t,a);e.emit(a)}catch(a){}}/* ${MARKER} */`;
+
+function checkScrollCjs(pkg) {
+  return (
+    pkg.source.includes(MARKER) &&
+    pkg.source.includes("this.__stirlingLastLayouts")
+  );
+}
+
+function applyScrollCjs(pkg) {
+  if (pkg.source.includes(MARKER)) return pkg.source;
+  if (!pkg.source.includes(scrollPushLayoutFindCjs))
+    fail(pkg.name, "pushScrollerLayout CJS");
+  return pkg.source.replace(
+    scrollPushLayoutFindCjs,
+    () => scrollPushLayoutReplaceCjs,
+  );
+}
+
+// --- tiling: optimize onScroll throttle to avoid 50ms trailing lag -----------
+const tilingThrottleFindEsm = `    this.scrollCapability.onScroll(
+      (event) => this.calculateVisibleTiles(event.documentId, event.metrics),
+      {
+        mode: "throttle",
+        wait: 50,
+        throttleMode: "trailing"
+      }
+    );`;
+const tilingThrottleReplaceEsm = `    this.scrollCapability.onScroll(
+      (event) => this.calculateVisibleTiles(event.documentId, event.metrics),
+      {
+        mode: "throttle",
+        wait: 16,
+        throttleMode: "leading-trailing"
+      }
+    ); /* ${MARKER} */`;
+
+function checkTilingThrottleEsm(pkg) {
+  return (
+    pkg.source.includes(MARKER) &&
+    pkg.source.includes('throttleMode: "leading-trailing"')
+  );
+}
+
+function applyTilingThrottleEsm(pkg) {
+  if (pkg.source.includes(MARKER)) return pkg.source;
+  if (!pkg.source.includes(tilingThrottleFindEsm))
+    fail(pkg.name, "tiling onScroll throttle ESM");
+  return pkg.source.replace(
+    tilingThrottleFindEsm,
+    () => tilingThrottleReplaceEsm,
+  );
+}
+
+const tilingThrottleFindCjs = `this.scrollCapability.onScroll(e=>this.calculateVisibleTiles(e.documentId,e.metrics),{mode:"throttle",wait:50,throttleMode:"trailing"})`;
+const tilingThrottleReplaceCjs = `this.scrollCapability.onScroll(e=>this.calculateVisibleTiles(e.documentId,e.metrics),{mode:"throttle",wait:16,throttleMode:"leading-trailing"})/* ${MARKER} */`;
+
+function checkTilingThrottleCjs(pkg) {
+  return (
+    pkg.source.includes(MARKER) &&
+    pkg.source.includes('throttleMode:"leading-trailing"')
+  );
+}
+
+function applyTilingThrottleCjs(pkg) {
+  if (pkg.source.includes(MARKER)) return pkg.source;
+  if (!pkg.source.includes(tilingThrottleFindCjs))
+    fail(pkg.name, "tiling onScroll throttle CJS");
+  return pkg.source.replace(
+    tilingThrottleFindCjs,
+    () => tilingThrottleReplaceCjs,
+  );
+}
+
 const jobs = [
   {
     name: "@embedpdf/plugin-interaction-manager",
@@ -353,6 +485,30 @@ const jobs = [
     file: "dist/react/index.js",
     check: checkTiling,
     apply: applyTiling,
+  },
+  {
+    name: "@embedpdf/plugin-tiling",
+    file: "dist/index.js",
+    check: checkTilingThrottleEsm,
+    apply: applyTilingThrottleEsm,
+  },
+  {
+    name: "@embedpdf/plugin-tiling",
+    file: "dist/index.cjs",
+    check: checkTilingThrottleCjs,
+    apply: applyTilingThrottleCjs,
+  },
+  {
+    name: "@embedpdf/plugin-scroll",
+    file: "dist/index.js",
+    check: checkScrollEsm,
+    apply: applyScrollEsm,
+  },
+  {
+    name: "@embedpdf/plugin-scroll",
+    file: "dist/index.cjs",
+    check: checkScrollCjs,
+    apply: applyScrollCjs,
   },
   {
     name: "@embedpdf/plugin-render",
