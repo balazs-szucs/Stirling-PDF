@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { allowConsole } from "@app/tests/failOnConsole";
 
 /** Regression coverage for `BackendResolver`'s HTTP transport. */
 
@@ -341,6 +342,9 @@ describe("BackendResolver", () => {
     });
 
     it("resolve() splits a mixed chunk: real chars miss the cache, whitespace stays a gap", async () => {
+      // No editor document exists in this unit env; the background prefetch
+      // says so on console by design.
+      allowConsole.warn(/backend auto-prefetch: editor document unavailable/);
       const r = new BackendResolver();
       // "a b" - 'a' and 'b' are genuine cache misses (kick a prefetch), the
       // space is reported missing WITHOUT being counted as a prefetch miss.

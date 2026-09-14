@@ -3,6 +3,9 @@ import type {
   MultiFileSaveResult,
 } from "@core/services/localFileSaveService";
 export type { SaveResult, MultiFileSaveResult };
+import { open, save } from "@tauri-apps/plugin-dialog";
+import { join } from "@tauri-apps/api/path";
+import { writeFile } from "@tauri-apps/plugin-fs";
 
 /**
  * Save file data to a local filesystem path (Tauri desktop only)
@@ -16,7 +19,6 @@ export async function saveToLocalPath(
   filePath: string,
 ): Promise<SaveResult> {
   try {
-    const { writeFile } = await import("@tauri-apps/plugin-fs");
     const arrayBuffer = await data.arrayBuffer();
     await writeFile(filePath, new Uint8Array(arrayBuffer));
     return { success: true };
@@ -39,8 +41,6 @@ export async function showSaveDialog(
   defaultDirectory?: string,
 ): Promise<string | null> {
   try {
-    const { save } = await import("@tauri-apps/plugin-dialog");
-
     // Derive the file type filter from the filename extension so the dialog
     // doesn't force a .pdf extension when saving non-PDF outputs (e.g. .docx).
     const ext = defaultFilename.split(".").pop()?.toLowerCase() ?? "";
@@ -73,10 +73,6 @@ export async function saveMultipleFilesWithPrompt(
   defaultDirectory?: string,
 ): Promise<MultiFileSaveResult> {
   try {
-    const { open } = await import("@tauri-apps/plugin-dialog");
-    const { writeFile } = await import("@tauri-apps/plugin-fs");
-    const { join } = await import("@tauri-apps/api/path");
-
     // Prompt user to select folder
     const selectedFolder = await open({
       directory: true,

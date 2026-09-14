@@ -13,7 +13,11 @@ import {
   ProcessedFileMetadata,
 } from "@app/types/fileContext";
 import { FileId, ToolOperation } from "@app/types/file";
-import { generateThumbnailPairWithMetadata } from "@app/utils/thumbnailUtils";
+import {
+  generateThumbnailForFile,
+  generateThumbnailPairWithMetadata,
+} from "@app/utils/thumbnailUtils";
+import { pendingFilePathMappings } from "@app/services/pendingFilePathMappings";
 import { FileLifecycleManager } from "@app/contexts/file/lifecycle";
 import { buildQuickKeySet } from "@app/contexts/file/fileSelectors";
 import { StirlingFile } from "@app/types/fileContext";
@@ -475,8 +479,6 @@ export async function addFiles(
 
       // Check for pending file path mapping from Tauri file dialog (desktop only)
       try {
-        const { pendingFilePathMappings } =
-          await import("@app/services/pendingFilePathMappings");
         // DEBUG-gated: these fire per file, and a 300-file drop emitting 4 log
         // lines each measurably stalls the main thread with devtools open.
         if (DEBUG) {
@@ -539,8 +541,6 @@ export async function addFiles(
           }
         } else {
           try {
-            const { generateThumbnailForFile } =
-              await import("@app/utils/thumbnailUtils");
             thumbnail = await generateThumbnailForFile(targetFile);
           } catch (error) {
             console.warn(

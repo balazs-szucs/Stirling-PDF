@@ -1,5 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { generateId } from "@app/utils/generateId";
+import { tempDir, join } from "@tauri-apps/api/path";
+import { remove, writeFile } from "@tauri-apps/plugin-fs";
 
 function sanitizeFileName(fileName: string) {
   const cleaned = fileName.replace(/[^A-Za-z0-9._-]+/g, "_");
@@ -35,9 +37,6 @@ export async function printPdfNatively(
   if (!source) {
     throw new Error("No PDF source available for native print");
   }
-
-  const { tempDir, join } = await import("@tauri-apps/api/path");
-  const { remove, writeFile } = await import("@tauri-apps/plugin-fs");
 
   const tempPath = await join(
     await tempDir(),

@@ -5,6 +5,8 @@ import type {
   ResolverContext,
 } from "@app/tools/pdfTextEditor/charcode/CharcodeStrategy";
 import { getActiveCharcodeStrategy } from "@app/tools/pdfTextEditor/charcode/CharcodeStrategy";
+import { emitCharcodeEvent } from "@app/tools/pdfTextEditor/charcode/charcodeEvents";
+import { PdfiumSave } from "@app/tools/pdfTextEditor/pdfium/PdfiumSave";
 import { getCachedFontProgramSha256 } from "@app/tools/pdfTextEditor/charcode/CmapResolver";
 
 /** Strategy 3: ask the Spring backend (PDFBox) to encode chars. */
@@ -156,8 +158,6 @@ function maybeAutoPrefetch(
   autoPrefetchActive += 1;
   void (async () => {
     try {
-      const { PdfiumSave } =
-        await import("@app/tools/pdfTextEditor/pdfium/PdfiumSave");
       const doc = getEditorDocument();
       if (!doc) {
         if (typeof console !== "undefined") {
@@ -261,23 +261,15 @@ function maybeAutoPrefetch(
       // Negative-cache with TTL so we don't retry the same chars in a tight
       // loop but DO recover once the backend is reachable again.
       for (const ch of chars) setTransientNull(cacheKey(fontPtr, ch));
-      // Lazy-import charcodeRegistry to avoid the cyclic
-      // BackendResolver ↔ charcodeRegistry module init.
-      try {
-        const { emitCharcodeEvent } =
-          await import("@app/tools/pdfTextEditor/charcode/charcodeRegistry");
-        emitCharcodeEvent({
-          strategy: getActiveCharcodeStrategy(),
-          text: chars.join(""),
-          fontPtr,
-          resolved: [],
-          missing: [...chars],
-          note: `backend prefetch threw: ${msg}`,
-          outcome: "partial-coverage-fallback",
-        });
-      } catch {
-        /* registry import itself failed - already logged above */
-      }
+      emitCharcodeEvent({
+        strategy: getActiveCharcodeStrategy(),
+        text: chars.join(""),
+        fontPtr,
+        resolved: [],
+        missing: [...chars],
+        note: `backend prefetch threw: ${msg}`,
+        outcome: "partial-coverage-fallback",
+      });
     } finally {
       inFlight.delete(reqKey);
       autoPrefetchActive -= 1;
@@ -659,8 +651,6 @@ export async function prewarmBackendCacheForPage(
   prewarmedPages.add(pagePtr);
 
   try {
-    const { PdfiumSave } =
-      await import("@app/tools/pdfTextEditor/pdfium/PdfiumSave");
     const doc = getEditorDocument();
     if (!doc) return;
     const bytes = PdfiumSave.serialize(doc);

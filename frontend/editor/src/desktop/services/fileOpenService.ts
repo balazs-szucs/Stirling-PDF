@@ -1,4 +1,6 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+import { readFile } from "@tauri-apps/plugin-fs";
 
 export interface FileOpenService {
   getOpenedFiles(): Promise<string[]>;
@@ -31,8 +33,6 @@ class TauriFileOpenService implements FileOpenService {
     filePath: string,
   ): Promise<{ fileName: string; arrayBuffer: ArrayBuffer } | null> {
     try {
-      const { readFile } = await import("@tauri-apps/plugin-fs");
-
       const fileData = await readFile(filePath);
       const fileName = filePath.split(/[\\/]/).pop() || "opened-file.pdf";
 
@@ -108,8 +108,6 @@ class TauriFileOpenService implements FileOpenService {
 
         // Only import if in Tauri environment
         if (isTauri()) {
-          const { listen } = await import("@tauri-apps/api/event");
-
           // Check again after async import
           if (isCleanedUp) {
             return;

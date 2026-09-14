@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { getActiveCharcodeStrategy } from "@app/tools/pdfTextEditor/charcode/CharcodeStrategy";
+import { prewarmBackendCacheForPage } from "@app/tools/pdfTextEditor/charcode/charcodeRegistry";
 import type {
   TextRunSnapshot,
   WidthMode,
@@ -876,13 +878,6 @@ export function TextRunOverlay({
         // page in the background.
         void (async () => {
           try {
-            const [
-              { getActiveCharcodeStrategy },
-              { prewarmBackendCacheForPage },
-            ] = await Promise.all([
-              import("@app/tools/pdfTextEditor/charcode/CharcodeStrategy"),
-              import("@app/tools/pdfTextEditor/charcode/charcodeRegistry"),
-            ]);
             if (getActiveCharcodeStrategy() !== "backend") return;
             await prewarmBackendCacheForPage(run.pageIndex);
           } catch {

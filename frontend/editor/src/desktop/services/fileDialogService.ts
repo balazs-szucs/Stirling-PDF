@@ -5,6 +5,8 @@ import type {
 } from "@core/services/fileDialogService";
 import { createQuickKey } from "@app/types/fileContext";
 import { getDocumentFileDialogFilter } from "@app/utils/fileDialogUtils";
+import { open } from "@tauri-apps/plugin-dialog";
+import { readFile } from "@tauri-apps/plugin-fs";
 
 export type { FileWithPath, FileDialogOptions };
 
@@ -15,9 +17,6 @@ export async function openFileDialog(
   options?: FileDialogOptions,
 ): Promise<FileWithPath[]> {
   try {
-    const { open } = await import("@tauri-apps/plugin-dialog");
-    const { readFile } = await import("@tauri-apps/plugin-fs");
-
     console.log("[FileDialog] Opening file dialog...");
     const selectedPaths = await open({
       multiple: options?.multiple ?? true,
