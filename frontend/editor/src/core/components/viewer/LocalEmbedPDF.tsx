@@ -8,7 +8,7 @@ import React, {
 import { createPluginRegistration } from "@embedpdf/core";
 import type { PluginRegistry } from "@embedpdf/core";
 import { EmbedPDF, useDocumentState } from "@embedpdf/core/react";
-import { usePdfiumEngine } from "@embedpdf/engines/react";
+import { useLocalPdfiumEngine } from "@app/hooks/useLocalPdfiumEngine";
 import { PrivateContent } from "@app/components/shared/PrivateContent";
 import { useAppConfig } from "@app/contexts/AppConfigContext";
 
@@ -490,7 +490,7 @@ export function LocalEmbedPDF({
 
   const fontFallbackConfig = useMemo(() => getLocalFontFallbackConfig(), []);
 
-  const { engine, isLoading, error } = usePdfiumEngine({
+  const { engine, isLoading, error } = useLocalPdfiumEngine({
     wasmUrl: pdfiumWasmUrl,
     fontFallback: fontFallbackConfig,
   });

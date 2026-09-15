@@ -4,7 +4,7 @@ import pdfiumWasmAssetUrl from "@embedpdf/pdfium/pdfium.wasm?url";
 const getWasmUrl = (): string => {
   // In dev, Vite serves the statically-copied asset from the dev server root.
   if (import.meta.env.DEV) {
-    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const origin = typeof window === "undefined" ? "" : window.location.origin;
     return `${origin}${BASE_PATH}/pdfium/pdfium.wasm`;
   }
 
@@ -19,10 +19,19 @@ const getWasmUrl = (): string => {
 
 export const pdfiumWasmUrl = getWasmUrl();
 
-let resolvePromise: (module: WebAssembly.Module | null) => void;
+// No <link rel="preload">: WebKit does not reuse a preloaded fetch for
+// WebAssembly.compileStreaming(fetch(url)) and downloaded the 4.6 MB binary
+// twice (link + fetch, both in flight), while Chromium only saves ~10 ms over
+// starting the compile at module-eval time. startEagerWasmCompilation() below
+// runs on import so the fetch still starts before React mounts.
+export interface WasmModuleContainer {
+  module: WebAssembly.Module | null;
+}
+
+let resolvePromise: (container: WasmModuleContainer | null) => void;
 let compilationStarted = false;
 
-export const pdfiumWasmModulePromise = new Promise<WebAssembly.Module | null>(
+export const pdfiumWasmModulePromise = new Promise<WasmModuleContainer | null>(
   (resolve) => {
     resolvePromise = resolve;
   },
@@ -31,6 +40,9 @@ export const pdfiumWasmModulePromise = new Promise<WebAssembly.Module | null>(
 export function startEagerWasmCompilation(): void {
   if (compilationStarted) return;
   compilationStarted = true;
+  if (typeof performance !== "undefined") {
+    performance.mark("pdfium-eager-compile-start");
+  }
 
   if (typeof WebAssembly !== "object") {
     resolvePromise(null);
@@ -66,6 +78,19 @@ export function startEagerWasmCompilation(): void {
   };
 
   compileWithFallback()
-    .then(resolvePromise)
+    .then((module) => {
+      if (typeof performance !== "undefined") {
+        performance.mark("pdfium-eager-compile-end");
+      }
+      resolvePromise(module ? { module } : null);
+    })
     .catch(() => resolvePromise(null));
+}
+
+// Start at module-eval time (before React mounts) so the binary fetch and
+// compile begin as early as the removed preload link did; the flag in
+// startEagerWasmCompilation keeps later callers as no-ops. Skipped under
+// vitest so service tests do not issue a real fetch on import.
+if (import.meta.env.MODE !== "test") {
+  startEagerWasmCompilation();
 }
