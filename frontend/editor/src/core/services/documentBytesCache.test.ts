@@ -2,7 +2,10 @@
  * identical File wrapper), concurrent callers share it, and a failed read is
  * retryable. */
 import { describe, expect, it, vi } from "vitest";
-import { getDocumentBytes } from "@app/services/documentBytesCache";
+import {
+  getDocumentBytes,
+  releaseDocumentBytes,
+} from "@app/services/documentBytesCache";
 
 const makeFile = (name: string, bytes: number[], lastModified = 1000) =>
   new File([new Uint8Array(bytes)], name, {
@@ -83,5 +86,24 @@ describe("documentBytesCache", () => {
     const buffer = await getDocumentBytes(blob);
     expect(buffer.byteLength).toBe(1);
     expect(spy).toHaveBeenCalledTimes(2);
+  });
+
+  it("releases cached ArrayBuffer entry via releaseDocumentBytes and re-reads on demand", async () => {
+    const file = makeFile("release-test.pdf", [10, 20, 30]);
+    const spy = vi.spyOn(file, "arrayBuffer");
+
+    const first = await getDocumentBytes(file);
+    expect(first.byteLength).toBe(3);
+    expect(spy).toHaveBeenCalledTimes(1);
+
+    // Explicit release
+    releaseDocumentBytes(file);
+
+    // Next getDocumentBytes must re-read from the File
+    const second = await getDocumentBytes(file);
+    expect(second.byteLength).toBe(3);
+    expect(spy).toHaveBeenCalledTimes(2);
+    expect(second).not.toBe(first);
+    expect(Array.from(new Uint8Array(second))).toEqual([10, 20, 30]);
   });
 });
