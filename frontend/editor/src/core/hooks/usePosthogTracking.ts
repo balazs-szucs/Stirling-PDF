@@ -66,19 +66,28 @@ export function usePosthogTracking(): void {
     const analyticsEnabled = config?.enableAnalytics === true;
     const posthogEnabled = analyticsEnabled && config?.enablePosthog !== false;
     setAnalyticsEnabled(posthogEnabled);
+
+    if (!posthogEnabled) {
+      // Analytics off: do not import the chunk for an opt-out nobody asked
+      // for. Only an already-loaded module is asked to stop capturing; a
+      // later config/consent change re-runs this effect and loads it then.
+      if (posthogModule) {
+        void posthogModule.then((module) => {
+          const posthog = module.default;
+          if (posthog.__loaded) {
+            posthog.opt_out_capturing();
+            posthog.set_config({ persistence: "memory" });
+          }
+        });
+      }
+      return;
+    }
+
     let cancelled = false;
     let removeConsentListeners: (() => void) | undefined;
 
     void loadPosthog().then((posthog) => {
       if (!posthog || cancelled) return;
-
-      if (!posthogEnabled) {
-        if (posthog.__loaded) {
-          posthog.opt_out_capturing();
-          posthog.set_config({ persistence: "memory" });
-        }
-        return;
-      }
 
       if (!ensurePosthogInitialized(posthog)) {
         return;
