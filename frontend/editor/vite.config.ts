@@ -523,11 +523,13 @@ export default defineConfig(async ({ mode, command }) => {
             if (id.includes("node_modules")) {
               if (id.includes("pdfjs-dist")) return "vendor-pdfjs";
               // Keep the EmbedPDF pieces the startup graph actually uses (the
-              // engine stays out of it because only the lazy viewer imports it,
-              // and the spread enum is used by viewer contexts) in their own
-              // chunks, so the single `vendor-embedpdf` bundle is fetched only
-              // when the viewer opens.
-              if (id.includes("@embedpdf/engines")) return "vendor-embedpdf";
+              // spread enum is used by viewer contexts) in their own chunk, so
+              // the viewer-only bundle is fetched only when the viewer opens.
+              // The engines are left to Rollup: usePdfiumEngine picks the worker
+              // or the direct engine with a dynamic import, and a shared manual
+              // chunk here merges both, so opening the viewer (always worker)
+              // would pull the unused 342 KB direct engine with it.
+              if (id.includes("@embedpdf/engines")) return;
               if (id.includes("@embedpdf/pdfium")) return "vendor-pdfium";
               if (
                 id.includes("@embedpdf/core") ||
