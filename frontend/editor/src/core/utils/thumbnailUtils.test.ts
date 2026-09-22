@@ -93,12 +93,12 @@ describe("generateThumbnailForFile — images", () => {
   // Large enough to take the shrink-on-load path (>= 64 KiB).
   const bigBytes = new Uint8Array(70 * 1024).fill(7);
 
-  function stubBitmapPipeline() {
+  function stubBitmapPipeline(dimensions = { width: 320, height: 240 }) {
     const closed: string[] = [];
-    const draws: Array<[number, number]> = [];
+    const draws: Array<[number, number, number, number]> = [];
     const bitmap = {
-      width: 320,
-      height: 240,
+      width: dimensions.width,
+      height: dimensions.height,
       close: () => void closed.push("closed"),
     };
     const calls: Array<Record<string, unknown>> = [];
@@ -124,8 +124,14 @@ describe("generateThumbnailForFile — images", () => {
         getContext: () => ({
           fillStyle: "",
           fillRect: () => {},
-          drawImage: (img: unknown, x: number, y: number) => {
-            draws.push([x, y]);
+          drawImage: (
+            img: unknown,
+            x: number,
+            y: number,
+            dw?: number,
+            dh?: number,
+          ) => {
+            draws.push([x, y, dw ?? 0, dh ?? 0]);
             expect(img).toBe(bitmap);
           },
         }),
@@ -151,7 +157,18 @@ describe("generateThumbnailForFile — images", () => {
     const thumb = await generateThumbnailForFile(file);
     expect(thumb).toBe("data:image/jpeg;base64,stub");
     expect(calls[0].resizeWidth).toBe(320);
-    expect(draws).toEqual([[0, 0]]);
+    expect(draws).toEqual([[0, 0, 320, 240]]);
+    expect(closed).toEqual(["closed"]);
+  });
+
+  it("clamps extreme-aspect-ratio images so height does not exceed 640", async () => {
+    const { generateThumbnailForFile } =
+      await import("@app/utils/thumbnailUtils");
+    const { closed, draws } = stubBitmapPipeline({ width: 320, height: 3200 });
+    const file = new File([bigBytes], "long-scroll.png", { type: "image/png" });
+    const thumb = await generateThumbnailForFile(file);
+    expect(thumb).toBe("data:image/jpeg;base64,stub");
+    expect(draws).toEqual([[0, 0, 64, 640]]);
     expect(closed).toEqual(["closed"]);
   });
 

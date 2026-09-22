@@ -20,13 +20,20 @@ self.onmessage = async (event: MessageEvent<ThumbnailRequest>) => {
       imageOrientation: "from-image",
     });
     try {
-      const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+      const maxDimension = 640;
+      let dw = bitmap.width;
+      let dh = bitmap.height;
+      if (dh > maxDimension) {
+        dw = Math.max(1, Math.round((dw * maxDimension) / dh));
+        dh = maxDimension;
+      }
+      const canvas = new OffscreenCanvas(dw, dh);
       const context = canvas.getContext("2d");
       if (!context) throw new Error("2d context unavailable");
       // Flatten alpha onto white: the JPEG below has no alpha channel.
       context.fillStyle = "#ffffff";
       context.fillRect(0, 0, canvas.width, canvas.height);
-      context.drawImage(bitmap, 0, 0);
+      context.drawImage(bitmap, 0, 0, dw, dh);
       const blob = await canvas.convertToBlob({
         type: "image/jpeg",
         quality: 0.8,

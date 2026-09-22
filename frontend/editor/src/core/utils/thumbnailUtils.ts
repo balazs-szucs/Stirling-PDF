@@ -351,14 +351,21 @@ export async function generateThumbnailForFile(file: File): Promise<string> {
           imageOrientation: "from-image",
         });
         try {
+          const maxDimension = 640;
+          let dw = bitmap.width;
+          let dh = bitmap.height;
+          if (dh > maxDimension) {
+            dw = Math.max(1, Math.round((dw * maxDimension) / dh));
+            dh = maxDimension;
+          }
           const canvas = document.createElement("canvas");
-          canvas.width = bitmap.width;
-          canvas.height = bitmap.height;
+          canvas.width = dw;
+          canvas.height = dh;
           const ctx = canvas.getContext("2d");
           if (!ctx) throw new Error("2d context unavailable");
           ctx.fillStyle = "#ffffff";
           ctx.fillRect(0, 0, canvas.width, canvas.height);
-          ctx.drawImage(bitmap, 0, 0);
+          ctx.drawImage(bitmap, 0, 0, dw, dh);
           return canvas.toDataURL("image/jpeg", 0.8);
         } finally {
           bitmap.close();
