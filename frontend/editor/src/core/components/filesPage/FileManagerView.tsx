@@ -405,7 +405,8 @@ export default function FileManagerView() {
   const availableTypes = useMemo(() => {
     const set = new Set<string>();
     for (const f of filesInCurrentFolder) {
-      const ext = (f.name.split(".").pop() ?? "").toUpperCase();
+      const lastDot = f.name.lastIndexOf(".");
+      const ext = lastDot !== -1 ? f.name.slice(lastDot + 1).toUpperCase() : "";
       if (ext) set.add(ext);
     }
     return Array.from(set).sort();
@@ -415,27 +416,40 @@ export default function FileManagerView() {
   // (e.g. when the user navigates between folders).
   useEffect(() => {
     if (typeFilter.length === 0) return;
-    const stillValid = typeFilter.filter((t) => availableTypes.includes(t));
+    const availableSet = new Set(availableTypes);
+    const stillValid = typeFilter.filter((t) => availableSet.has(t));
     if (stillValid.length !== typeFilter.length) {
       setTypeFilter(stillValid);
     }
   }, [availableTypes, typeFilter, setTypeFilter]);
 
   const visibleFiles = useMemo(() => {
-    const filtered = filesInCurrentFolder
-      .filter((f) =>
-        search ? f.name.toLowerCase().includes(search.toLowerCase()) : true,
-      )
-      .filter((f) =>
-        originFilter === "all" ? true : getFileOrigin(f) === originFilter,
-      )
-      .filter((f) => {
-        if (typeFilter.length === 0) return true;
-        const ext = (f.name.split(".").pop() ?? "").toUpperCase();
-        return typeFilter.includes(ext);
-      });
-    const sorted = [...filtered];
-    sorted.sort((a, b) => {
+    const query = search ? search.toLowerCase() : null;
+    const hasTypeFilter = typeFilter.length > 0;
+    const typeSet = hasTypeFilter ? new Set(typeFilter) : null;
+    const hasOriginFilter = originFilter !== "all";
+
+    const filtered: typeof filesInCurrentFolder = [];
+    for (let i = 0; i < filesInCurrentFolder.length; i++) {
+      const f = filesInCurrentFolder[i];
+      if (query && !f.name.toLowerCase().includes(query)) {
+        continue;
+      }
+      if (hasOriginFilter && getFileOrigin(f) !== originFilter) {
+        continue;
+      }
+      if (typeSet) {
+        const lastDot = f.name.lastIndexOf(".");
+        const ext =
+          lastDot !== -1 ? f.name.slice(lastDot + 1).toUpperCase() : "";
+        if (!typeSet.has(ext)) {
+          continue;
+        }
+      }
+      filtered.push(f);
+    }
+
+    filtered.sort((a, b) => {
       switch (sortMode) {
         case "name-asc":
           return a.name.localeCompare(b.name);
@@ -452,7 +466,7 @@ export default function FileManagerView() {
           return (b.lastModified ?? 0) - (a.lastModified ?? 0);
       }
     });
-    return sorted;
+    return filtered;
   }, [filesInCurrentFolder, search, sortMode, originFilter, typeFilter]);
 
   const pathForFolderId = useCallback(
