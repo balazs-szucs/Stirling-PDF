@@ -44,6 +44,102 @@ export const LARGE_PDF_PARSE_LIMIT = 100 * 1024 * 1024;
  * prefix is often enough to render a thumbnail without reading the file. */
 const LINEARIZED_PREFIX_BYTES = 2 * 1024 * 1024;
 
+/** Image thumbnails decode at this width (aspect preserved); the hover
+ * preview renders at 150 CSS px, so this covers 2x displays. */
+const IMAGE_THUMBNAIL_WIDTH = 320;
+
+/**
+ * Files under this size pass through as data URLs: they already cost less
+ * than a tooltip JPEG, and resizing them would upscale small icons into a
+ * blurrier, larger file.
+ */
+const IMAGE_SHRINK_MIN_BYTES = 64 * 1024;
+
+/**
+ * One reused worker for image thumbnails, terminated shortly after the last
+ * request. Decode+encode a large photo is 15-60 ms of blocking work; a batch
+ * of images would otherwise stutter the sidebar as it fills.
+ */
+let thumbnailWorker: Worker | null = null;
+let thumbnailRequestId = 0;
+let thumbnailWorkerIdleTimer: number | null = null;
+const thumbnailRequests = new Map<
+  number,
+  { resolve: (blob: Blob) => void; reject: (error: Error) => void }
+>();
+
+function canUseThumbnailWorker(): boolean {
+  return (
+    typeof Worker !== "undefined" &&
+    typeof OffscreenCanvas !== "undefined" &&
+    typeof createImageBitmap === "function"
+  );
+}
+
+function releaseThumbnailWorkerSoon(): void {
+  if (thumbnailWorkerIdleTimer !== null) {
+    clearTimeout(thumbnailWorkerIdleTimer);
+  }
+  thumbnailWorkerIdleTimer = window.setTimeout(() => {
+    thumbnailWorkerIdleTimer = null;
+    thumbnailWorker?.terminate();
+    thumbnailWorker = null;
+    thumbnailRequests.clear();
+  }, 5000);
+}
+
+function thumbnailWorkerInstance(): Worker {
+  if (thumbnailWorker) return thumbnailWorker;
+  const worker = new Worker(
+    new URL("../workers/imageThumbnailWorker.ts", import.meta.url),
+    { type: "module" },
+  );
+  worker.onmessage = (event: MessageEvent) => {
+    const { id, blob, error } = event.data as {
+      id: number;
+      blob?: Blob;
+      error?: string;
+    };
+    const pending = thumbnailRequests.get(id);
+    if (!pending) return;
+    thumbnailRequests.delete(id);
+    if (blob) pending.resolve(blob);
+    else pending.reject(new Error(error ?? "thumbnail worker failed"));
+  };
+  worker.onerror = () => {
+    // A worker that cannot start must not strand callers: fail them all and
+    // let the inline path take over.
+    for (const pending of thumbnailRequests.values()) {
+      pending.reject(new Error("thumbnail worker unavailable"));
+    }
+    thumbnailRequests.clear();
+    worker.terminate();
+    thumbnailWorker = null;
+  };
+  thumbnailWorker = worker;
+  return worker;
+}
+
+async function renderImageThumbnailInWorker(file: Blob): Promise<Blob> {
+  const worker = thumbnailWorkerInstance();
+  const id = ++thumbnailRequestId;
+  const blob = await new Promise<Blob>((resolve, reject) => {
+    thumbnailRequests.set(id, { resolve, reject });
+    worker.postMessage({ id, file, width: IMAGE_THUMBNAIL_WIDTH });
+  });
+  releaseThumbnailWorkerSoon();
+  return blob;
+}
+
+async function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+}
+
 /** Window at each end of the file searched for an /Encrypt entry. */
 const ENCRYPT_PROBE_BYTES = 64 * 1024;
 
@@ -233,14 +329,45 @@ export async function generateThumbnailForFile(file: File): Promise<string> {
     return "";
   }
 
-  // Handle image files - convert to data URL for persistence
+  // Handle image files - decode once at tooltip size instead of full-res.
+  // A phone photo decodes to ~48 MB RGBA plus an ~11 MB data URL string that
+  // then lives in IndexedDB; the 320px JPEG below is ~30 KB and identical in
+  // the 150px hover preview. Anything createImageBitmap cannot handle (SVG
+  // without intrinsic size, exotic codecs) falls back to the data URL.
   if (file.type.startsWith("image/")) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = () => reject(reader.error);
-      reader.readAsDataURL(file);
-    });
+    if (file.size >= IMAGE_SHRINK_MIN_BYTES) {
+      // Worker first: same output, no main-thread stall.
+      if (canUseThumbnailWorker()) {
+        try {
+          return await blobToDataUrl(await renderImageThumbnailInWorker(file));
+        } catch {
+          // Fall through to the inline path.
+        }
+      }
+      try {
+        const bitmap = await createImageBitmap(file, {
+          resizeWidth: IMAGE_THUMBNAIL_WIDTH,
+          resizeQuality: "high",
+          imageOrientation: "from-image",
+        });
+        try {
+          const canvas = document.createElement("canvas");
+          canvas.width = bitmap.width;
+          canvas.height = bitmap.height;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) throw new Error("2d context unavailable");
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(bitmap, 0, 0);
+          return canvas.toDataURL("image/jpeg", 0.8);
+        } finally {
+          bitmap.close();
+        }
+      } catch {
+        // Fall through to the data URL below.
+      }
+    }
+    return blobToDataUrl(file);
   }
 
   // Handle PDF files
