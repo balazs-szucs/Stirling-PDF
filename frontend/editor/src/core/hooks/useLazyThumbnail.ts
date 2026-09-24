@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { FileId } from "@app/types/file";
-import { useFileManagement } from "@app/contexts/FileContext";
+import { useFileManagement, useStirlingFileStub } from "@app/contexts/FileContext";
 import { useIndexedDB } from "@app/contexts/IndexedDBContext";
 import { generateThumbnailForFile } from "@app/utils/thumbnailUtils";
 import { readDiskFile } from "@app/services/localFolderContents";
@@ -9,6 +9,10 @@ import {
   ENGINE_THUMBNAIL_ANNOUNCE_GRACE_MS,
   getEngineThumbnail,
 } from "@app/services/engineThumbnail";
+import {
+  NATIVE_THUMBNAIL_WIDTH,
+  renderNativeThumbnail,
+} from "@app/services/nativePdfRender";
 
 const THUMBNAIL_SIZE_LIMIT = 100 * 1024 * 1024; // 100MB
 
@@ -77,6 +81,8 @@ export function useLazyThumbnail(
   const attempted = useRef(false);
   const indexedDB = useIndexedDB();
   const { updateStirlingFileStub } = useFileManagement();
+  const { record } = useStirlingFileStub(fileId);
+  const localFilePath = record?.localFilePath;
 
   useEffect(() => {
     if (thumbnailUrl) setThumb(thumbnailUrl);
@@ -95,15 +101,24 @@ export function useLazyThumbnail(
       try {
         const file = await indexedDB.loadFile(fileId);
         if (!file || cancelled) return;
-        // Large files: the viewer's engine renders page 1 in its worker, so
-        // there is no reason to read the bytes here. Wait briefly for an open
-        // in flight; a file nobody opens still falls back to the local parse.
+        // Desktop files still on disk render in the OS engine: no read, no
+        // engine open. Everything else goes through the viewer's engine (page 1
+        // in its worker, so no main-thread read) or the local parse.
+        const nativeThumb = localFilePath
+          ? await renderNativeThumbnail(
+              localFilePath,
+              1,
+              NATIVE_THUMBNAIL_WIDTH,
+            )
+          : null;
+        if (cancelled) return;
         const engineThumb =
-          size >= EAGER_METADATA_MAX_BYTES
+          !nativeThumb && size >= EAGER_METADATA_MAX_BYTES
             ? await getEngineThumbnail(fileId, ENGINE_THUMBNAIL_ANNOUNCE_GRACE_MS)
             : null;
         if (cancelled) return;
-        const thumbnail = engineThumb ?? (await generateThumbnailForFile(file));
+        const thumbnail =
+          nativeThumb ?? engineThumb ?? (await generateThumbnailForFile(file));
         if (!thumbnail) return;
         if (!cancelled) setThumb(thumbnail);
         void indexedDB.updateThumbnail(fileId, thumbnail);
@@ -118,7 +133,14 @@ export function useLazyThumbnail(
     return () => {
       cancelled = true;
     };
-  }, [fileId, size, thumbnailUrl, indexedDB, updateStirlingFileStub]);
+  }, [
+    fileId,
+    size,
+    thumbnailUrl,
+    indexedDB,
+    updateStirlingFileStub,
+    localFilePath,
+  ]);
 
   return thumb;
 }
@@ -192,6 +214,19 @@ export function useDiskThumbnail(entry: {
     scheduleLazyThumb(async () => {
       if (cancelled || diskThumbCache.has(key)) return;
       try {
+        // A mounted-folder row has the path, so the OS engine can render it
+        // without the bytes ever crossing the webview.
+        const nativeThumb = await renderNativeThumbnail(
+          entry.path,
+          1,
+          NATIVE_THUMBNAIL_WIDTH,
+        );
+        if (cancelled) return;
+        if (nativeThumb) {
+          cacheDiskThumb(key, nativeThumb);
+          setThumb(nativeThumb);
+          return;
+        }
         const file = await readDiskFile(entry);
         if (!file || cancelled) return;
         const url = await generateThumbnailForFile(file);
