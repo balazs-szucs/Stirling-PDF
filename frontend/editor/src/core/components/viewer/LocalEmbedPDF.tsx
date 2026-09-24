@@ -72,6 +72,7 @@ import { PanAPIBridge } from "@app/components/viewer/PanAPIBridge";
 import { SpreadAPIBridge } from "@app/components/viewer/SpreadAPIBridge";
 import { SearchAPIBridge } from "@app/components/viewer/SearchAPIBridge";
 import { ThumbnailAPIBridge } from "@app/components/viewer/ThumbnailAPIBridge";
+import { NativeFirstPagePoster } from "@app/components/viewer/NativeFirstPagePoster";
 import { RotateAPIBridge } from "@app/components/viewer/RotateAPIBridge";
 import { SignatureAPIBridge } from "@app/components/viewer/SignatureAPIBridge";
 import { AnnotationAPIBridge } from "@app/components/viewer/AnnotationAPIBridge";
@@ -905,6 +906,7 @@ export function LocalEmbedPDF({
         <span className="sr-only" aria-live="polite" aria-atomic="true">
           {swapAnnouncement}
         </span>
+        <NativeFirstPagePoster filePath={nativeFilePath} />
         <EmbedPDF
           engine={engine}
           plugins={plugins}

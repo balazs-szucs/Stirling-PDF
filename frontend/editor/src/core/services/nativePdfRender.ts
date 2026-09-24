@@ -19,6 +19,18 @@ export interface NativePdfRect {
 }
 
 /**
+ * Page `page` (1-based) of the PDF at `path` as a JPEG Blob sized close to
+ * `maxWidth`, or null when the platform cannot render it.
+ */
+export async function renderNativePdfPageBlob(
+  _path: string,
+  _page: number,
+  _maxWidth: number,
+): Promise<Blob | null> {
+  return null;
+}
+
+/**
  * JPEG data URL for `page` (1-based) of the PDF at `path`, or null when the
  * platform cannot render it — the caller then falls back to the engine.
  */

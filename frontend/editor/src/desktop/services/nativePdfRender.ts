@@ -28,6 +28,27 @@ export async function renderNativeThumbnail(
   }
 }
 
+/** A whole page as a native JPEG Blob, for the first-paint poster. */
+export async function renderNativePdfPageBlob(
+  path: string,
+  page: number,
+  maxWidth: number,
+): Promise<Blob | null> {
+  if (!isTauri()) return null;
+  try {
+    const bytes = await invoke<ArrayBuffer>("render_pdf_page_thumbnail", {
+      path,
+      page,
+      maxWidth,
+    });
+    if (!(bytes instanceof ArrayBuffer) || bytes.byteLength === 0) return null;
+    return new Blob([bytes], { type: "image/jpeg" });
+  } catch (error) {
+    console.warn("[nativePdfRender] native page render failed:", path, error);
+    return null;
+  }
+}
+
 /** One tile of a page, native JPEG Blob or null (caller falls back). */
 export async function renderNativePdfRectBlob(
   path: string,

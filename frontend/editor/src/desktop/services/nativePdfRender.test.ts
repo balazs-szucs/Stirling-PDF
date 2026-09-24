@@ -25,6 +25,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 import {
   NATIVE_THUMBNAIL_WIDTH,
   canRenderNativeThumbnails,
+  renderNativePdfPageBlob,
   renderNativePdfRect,
   renderNativeThumbnail,
 } from "@app/services/nativePdfRender";
@@ -78,6 +79,19 @@ describe("nativePdfRender (desktop)", () => {
       {
         command: "render_pdf_rect",
         args: { path: "/tmp/a.pdf", ...rect },
+      },
+    ]);
+  });
+
+  test("hands the first-paint poster a JPEG Blob", async () => {
+    mocks.result = new Uint8Array([9, 8, 7]).buffer;
+    const blob = await renderNativePdfPageBlob("/tmp/a.pdf", 1, 1200);
+    expect(blob?.type).toBe("image/jpeg");
+    expect(blob?.size).toBe(3);
+    expect(mocks.invokes).toEqual([
+      {
+        command: "render_pdf_page_thumbnail",
+        args: { path: "/tmp/a.pdf", page: 1, maxWidth: 1200 },
       },
     ]);
   });
