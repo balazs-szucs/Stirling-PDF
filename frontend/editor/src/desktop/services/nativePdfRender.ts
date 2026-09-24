@@ -1,10 +1,13 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import type { NativePdfRect } from "@core/services/nativePdfRender";
+import type {
+  NativeDocumentInfo,
+  NativePdfRect,
+} from "@core/services/nativePdfRender";
 
 // Shadow of the core no-op; @app alias order gives desktop builds this one.
 export { NATIVE_THUMBNAIL_WIDTH } from "@core/services/nativePdfRender";
 
-export type { NativePdfRect };
+export type { NativeDocumentInfo, NativePdfRect };
 
 export const canRenderNativeThumbnails = true;
 
@@ -24,6 +27,23 @@ export async function renderNativeThumbnail(
     return `data:image/jpeg;base64,${toBase64(bytes)}`;
   } catch (error) {
     console.warn("[nativePdfRender] native render failed:", path, error);
+    return null;
+  }
+}
+
+/** Page count and first-page geometry from the OS engine, or null. */
+export async function renderNativeDocumentInfo(
+  path: string,
+): Promise<NativeDocumentInfo | null> {
+  if (!isTauri()) return null;
+  try {
+    const info = await invoke<NativeDocumentInfo>("pdf_document_info", { path });
+    if (!info || typeof info.pageCount !== "number" || !Array.isArray(info.pages)) {
+      return null;
+    }
+    return info;
+  } catch (error) {
+    console.warn("[nativePdfRender] native document info failed:", path, error);
     return null;
   }
 }

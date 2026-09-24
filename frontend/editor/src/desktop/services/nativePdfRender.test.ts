@@ -25,6 +25,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 import {
   NATIVE_THUMBNAIL_WIDTH,
   canRenderNativeThumbnails,
+  renderNativeDocumentInfo,
   renderNativePdfPageBlob,
   renderNativePdfRect,
   renderNativeThumbnail,
@@ -94,6 +95,20 @@ describe("nativePdfRender (desktop)", () => {
         args: { path: "/tmp/a.pdf", page: 1, maxWidth: 1200 },
       },
     ]);
+  });
+
+  test("returns the document info the engine reports", async () => {
+    const info = { pageCount: 3, pages: [{ width: 612, height: 792, rotation: 90 }] };
+    mocks.result = info as never;
+    await expect(renderNativeDocumentInfo("/tmp/a.pdf")).resolves.toEqual(info);
+    expect(mocks.invokes).toEqual([
+      { command: "pdf_document_info", args: { path: "/tmp/a.pdf" } },
+    ]);
+  });
+
+  test("rejects a malformed document info answer", async () => {
+    mocks.result = { nope: true } as never;
+    await expect(renderNativeDocumentInfo("/tmp/a.pdf")).resolves.toBeNull();
   });
 
   test("falls back when the render fails", async () => {
