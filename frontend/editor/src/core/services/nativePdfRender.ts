@@ -8,7 +8,7 @@ export const NATIVE_THUMBNAIL_WIDTH = 240;
 export const canRenderNativeThumbnails = false;
 
 /**
- * PNG data URL for `page` (1-based) of the PDF at `path`, or null when the
+ * JPEG data URL for `page` (1-based) of the PDF at `path`, or null when the
  * platform cannot render it — the caller then falls back to the engine.
  */
 export async function renderNativeThumbnail(
