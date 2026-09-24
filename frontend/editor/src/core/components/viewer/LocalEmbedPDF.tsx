@@ -192,6 +192,8 @@ interface LocalEmbedPDFProps {
    *  handshake keys on it, so a caller holding only the file can find the open
    *  document. Null for previews, which are never in the file list. */
   stableFileId?: FileId | null;
+  /** Disk path of the open file, for native tile rendering on desktop. */
+  nativeFilePath?: string | null;
   /** Comments sidebar visibility and offset (from EmbedPdfViewer) */
   isCommentsSidebarVisible?: boolean;
   commentsSidebarRightOffset?: string;
@@ -307,6 +309,7 @@ export function LocalEmbedPDF({
   redactionTrackerRef,
   fileId,
   stableFileId,
+  nativeFilePath,
   isCommentsSidebarVisible = false,
   commentsSidebarRightOffset = "0rem",
   isSignMode = false,
@@ -740,6 +743,7 @@ export function LocalEmbedPDF({
   const { engine, isLoading, error } = useLocalPdfiumEngine({
     wasmUrl: pdfiumWasmUrl,
     fontFallback: fontFallbackConfig,
+    nativeFilePath,
   });
 
   // The engine probe answers form, attachment and layer questions from the open
