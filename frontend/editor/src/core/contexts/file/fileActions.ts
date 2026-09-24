@@ -14,6 +14,7 @@ import {
 } from "@app/types/fileContext";
 import { FileId, ToolOperation } from "@app/types/file";
 import { generateThumbnailPairWithMetadata } from "@app/utils/thumbnailUtils";
+import { EAGER_METADATA_MAX_BYTES } from "@app/services/engineThumbnail";
 import { yieldToMain } from "@app/utils/taskYield";
 import { FileLifecycleManager } from "@app/contexts/file/lifecycle";
 import { buildQuickKeySet } from "@app/contexts/file/fileSelectors";
@@ -599,7 +600,16 @@ export async function addFiles(
           }
         }
       };
-      if (!options.skipMetadataHydration) pendingHydrations.push(hydrate);
+      // Large files skip the eager parse: reading the whole file on the main
+      // thread is exactly what the viewer's engine render and the lazy sidebar
+      // path exist to avoid. Their stub stays thumbnail-less until one of those
+      // fills it in.
+      if (
+        !options.skipMetadataHydration &&
+        file.size < EAGER_METADATA_MAX_BYTES
+      ) {
+        pendingHydrations.push(hydrate);
+      }
 
       reportBulkAddProgress(++scannedCount, filesToProcess.length);
       if (stirlingFileStubs.length - flushedStubs >= DISPATCH_CHUNK) {
