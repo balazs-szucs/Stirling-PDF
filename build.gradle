@@ -320,6 +320,10 @@ subprojects {
         jvmArgs '--enable-native-access=ALL-UNNAMED'
         systemProperty 'java.awt.headless', 'true'
         systemProperty 'apple.awt.UIElement', 'true'
+        // Opt-in for the L2 benchmarks: they pull a PostgreSQL container and print timings, so
+        // they must not run in the default suite. Enable with -Dstirling.benchmarks=true.
+        systemProperty 'stirling.benchmarks',
+                providers.systemProperty('stirling.benchmarks').getOrElse('false')
 
         testLogging {
             events "skipped", "failed"
