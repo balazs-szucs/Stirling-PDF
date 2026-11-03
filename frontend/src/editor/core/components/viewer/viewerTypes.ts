@@ -107,6 +107,7 @@ export interface HistoryAPI {
   redo: () => void;
   canUndo: () => boolean;
   canRedo: () => boolean;
+  getGlobalIndex?: () => number;
   subscribe?: (listener: () => void) => () => void;
   /**
    * Purges history entries that match the given predicate based on command metadata.

@@ -331,6 +331,7 @@ function TextSelectionMenuInner({
     setRedactionMode?.(true);
     navActions?.setHasUnsavedChanges(true);
     navActions?.setToolAndWorkbench("redact", "viewer");
+    handleToolSelectForced?.("redact");
     setLeftPanelView?.("toolContent");
     setPendingRedactActivation(true);
   }, [
@@ -342,6 +343,7 @@ function TextSelectionMenuInner({
     setRedactionConfig,
     setRedactionMode,
     navActions,
+    handleToolSelectForced,
     setLeftPanelView,
   ]);
 

@@ -1,5 +1,8 @@
 import { useImperativeHandle, forwardRef, useEffect, useRef } from "react";
-import { useHistoryCapability } from "@embedpdf/plugin-history/react";
+import {
+  useHistoryCapability,
+  useHistoryPlugin,
+} from "@embedpdf/plugin-history/react";
 import { useAnnotationCapability } from "@embedpdf/plugin-annotation/react";
 import { useSignature } from "@editor/contexts/SignatureContext";
 import { uuidV4, PdfAnnotationSubtype } from "@embedpdf/models";
@@ -29,6 +32,7 @@ import { useDocumentReady } from "@editor/components/viewer/hooks/useDocumentRea
 export const HistoryAPIBridge = forwardRef<HistoryAPI>(
   function HistoryAPIBridge(_, ref) {
     const { provides: historyApi } = useHistoryCapability();
+    const { plugin: historyPlugin } = useHistoryPlugin();
     const { provides: annotationApi } = useAnnotationCapability();
     const { getImageData, storeImageData } = useSignature();
     const documentReady = useDocumentReady();
@@ -205,6 +209,19 @@ export const HistoryAPIBridge = forwardRef<HistoryAPI>(
 
         canRedo: () => {
           return historyApi ? historyApi.canRedo() : false;
+        },
+
+        getGlobalIndex: () => {
+          if (!historyPlugin) return -1;
+          try {
+            const pluginWithData = historyPlugin as unknown as {
+              getDocumentHistoryData?: () => { globalIndex?: number };
+            };
+            const data = pluginWithData.getDocumentHistoryData?.();
+            return data?.globalIndex ?? -1;
+          } catch {
+            return -1;
+          }
         },
 
         isReady: () => !!historyApi && documentReady,

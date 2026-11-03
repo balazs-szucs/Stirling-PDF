@@ -215,8 +215,7 @@ const EmbedPdfViewerContent = ({
   // Ignore that stale update without suppressing future edits on the same instance.
   // Save point for annotations: history edits before the last save stay
   // undoable, but only edits after it make the document unsaved again.
-  const historyRevisionRef = useRef(0);
-  const savedHistoryRevisionRef = useRef(0);
+  const savedHistoryIndexRef = useRef(-1);
   const suppressHistoryDirtyRef = useRef(false);
 
   // Scroll position preservation system
@@ -992,8 +991,7 @@ const EmbedPdfViewerContent = ({
     if (!documentBytesReplaced(previous, current)) return;
 
     hasAnnotationChangesRef.current = false;
-    historyRevisionRef.current = 0;
-    savedHistoryRevisionRef.current = 0;
+    savedHistoryIndexRef.current = -1;
     setHasUnsavedChanges(false);
     setRedactionsApplied(false);
   }, [
@@ -1009,57 +1007,44 @@ const EmbedPdfViewerContent = ({
     previousSignaturesAppliedRef.current = signaturesApplied;
     if (wasApplied || !signaturesApplied) return;
     // Signature Apply saves through FileContext rather than the viewer save callback.
-    savedHistoryRevisionRef.current = historyRevisionRef.current;
+    savedHistoryIndexRef.current =
+      historyApiRef.current?.getGlobalIndex?.() ?? -1;
     hasAnnotationChangesRef.current = false;
     setHasUnsavedChanges(false);
   }, [signaturesApplied, setHasUnsavedChanges]);
 
   // Watch the annotation history API to detect when the document becomes "dirty".
-  // We treat any change that makes the history undoable as unsaved changes until
-  // the user explicitly applies them via applyChanges.
+  // We compare the timeline position to the save point: an index equal to the
+  // save point means the annotations match exported bytes again.
   useEffect(() => {
     const historyApi = historyApiRef.current;
     if (!historyApi || !historyApi.subscribe) {
       return;
     }
 
-    const updateHasChanges = (historyChanged: boolean) => {
-      const canUndo = historyApi.canUndo?.() ?? false;
-      if (!canUndo && savedHistoryRevisionRef.current === 0) {
-        historyRevisionRef.current = 0;
-        hasAnnotationChangesRef.current = false;
-        const hasPendingRedactions =
-          (redactionTrackerRef.current?.getPendingCount() ?? 0) > 0;
-        if (!hasPendingRedactions && !redactionsAppliedRef.current) {
-          setHasUnsavedChanges(false);
-        }
-        return;
-      }
-      if (!historyChanged) return;
-      historyRevisionRef.current += 1;
+    const updateHasChanges = () => {
       if (suppressHistoryDirtyRef.current) return;
-      // A revision equal to the save point means the annotations match the
-      // exported bytes again (for example an undo that lands back on them).
-      const annotationDirty =
-        historyRevisionRef.current !== savedHistoryRevisionRef.current;
+      const canUndo = historyApi.canUndo?.() ?? false;
+      const currentIndex = historyApi.getGlobalIndex?.() ?? (canUndo ? 1 : -1);
+
+      const annotationDirty = currentIndex !== savedHistoryIndexRef.current;
       hasAnnotationChangesRef.current = annotationDirty;
-      if (annotationDirty) {
-        setHasUnsavedChanges(true);
-        return;
-      }
-      // Undo back to the saved state disarms the warning, but redactions keep
-      // their own claim on the flag.
+
       const hasPendingRedactions =
         (redactionTrackerRef.current?.getPendingCount() ?? 0) > 0;
-      if (!hasPendingRedactions && !redactionsAppliedRef.current) {
-        setHasUnsavedChanges(false);
-      }
+      const hasAppliedRedactions = redactionsAppliedRef.current;
+
+      setHasUnsavedChanges(
+        annotationDirty || hasPendingRedactions || hasAppliedRedactions,
+      );
     };
 
     // Reconnecting after a permissions check emits the existing history, not a new edit.
     let subscribing = true;
     const unsubscribe = historyApi.subscribe(() => {
-      updateHasChanges(!subscribing);
+      if (!subscribing) {
+        updateHasChanges();
+      }
     });
     subscribing = false;
     return () => {
@@ -1107,14 +1092,10 @@ const EmbedPdfViewerContent = ({
       return;
     }
     annotationUiOpenedRef.current = true;
-    // Already annotating: only the panel needs to come back on screen
-    // (collapsed rail on phones), so an edit while selected still shows the
-    // save UI.
-    if (isInAnnotationTool) {
-      setLeftPanelView("toolContent");
-      return;
+    if (selectedTool !== "annotate") {
+      handleToolSelectForced("annotate");
     }
-    handleToolSelectForced("annotate");
+    setLeftPanelView("toolContent");
   });
 
   // Register checker for unsaved changes (annotations only for now)
@@ -1185,7 +1166,8 @@ const EmbedPdfViewerContent = ({
 
       if (applySignatures) {
         await applySignatures();
-        savedHistoryRevisionRef.current = historyRevisionRef.current;
+        savedHistoryIndexRef.current =
+          historyApiRef.current?.getGlobalIndex?.() ?? -1;
         hasAnnotationChangesRef.current = false;
         setHasUnsavedChanges(false);
         setRedactionsApplied(false);
@@ -1197,7 +1179,9 @@ const EmbedPdfViewerContent = ({
 
       // Step 1: Export PDF with annotations using EmbedPDF
       suppressHistoryDirtyRef.current = true;
-      const exportRevision = historyRevisionRef.current;
+      const exportIndex =
+        historyApiRef.current?.getGlobalIndex?.() ??
+        (historyApiRef.current?.canUndo?.() ? 1 : -1);
       const arrayBuffer = await exportActions.saveAsCopy();
       if (!arrayBuffer) {
         throw new Error("Failed to export PDF");
@@ -1237,11 +1221,13 @@ const EmbedPdfViewerContent = ({
       // Step 4: Consume only the current file (replace in context)
       await actions.consumeFiles([currentFileId], stirlingFiles, stubs);
 
-      // The exported bytes cover everything up to this revision; an edit that
+      // The exported bytes cover everything up to this index; an edit that
       // landed while the save was in flight stays unsaved.
-      savedHistoryRevisionRef.current = exportRevision;
-      hasAnnotationChangesRef.current =
-        historyRevisionRef.current !== exportRevision;
+      savedHistoryIndexRef.current = exportIndex;
+      const currentIndex =
+        historyApiRef.current?.getGlobalIndex?.() ??
+        (historyApiRef.current?.canUndo?.() ? 1 : -1);
+      hasAnnotationChangesRef.current = currentIndex !== exportIndex;
       suppressHistoryDirtyRef.current = false;
       setHasUnsavedChanges(hasAnnotationChangesRef.current);
       setRedactionsApplied(false);
@@ -1499,14 +1485,23 @@ const EmbedPdfViewerContent = ({
       onDiscardAndContinue: async () => {
         await discardAndSaveApplied();
         const historyApi = historyApiRef.current;
-        if (historyApi?.canUndo) {
-          while (historyApi.canUndo()) {
+        if (historyApi) {
+          const targetIndex = savedHistoryIndexRef.current;
+          while (
+            (historyApi.getGlobalIndex?.() ?? -1) > targetIndex &&
+            historyApi.canUndo?.()
+          ) {
             historyApi.undo?.();
+          }
+          while (
+            (historyApi.getGlobalIndex?.() ?? -1) < targetIndex &&
+            historyApi.canRedo?.()
+          ) {
+            historyApi.redo?.();
           }
         }
         hasAnnotationChangesRef.current = false;
-        historyRevisionRef.current = 0;
-        savedHistoryRevisionRef.current = 0;
+        setHasUnsavedChanges(false);
       },
     });
     return () => unregisterNavigationWarningHandlers();
@@ -1517,6 +1512,7 @@ const EmbedPdfViewerContent = ({
     discardAndSaveApplied,
     registerNavigationWarningHandlers,
     unregisterNavigationWarningHandlers,
+    setHasUnsavedChanges,
   ]);
 
   // Veto the byte swap for a key whose visual state is already on screen.
@@ -1950,7 +1946,7 @@ const EmbedPdfViewerContent = ({
         pointerEvents: isApplyingSignatures ? "none" : undefined,
       }}
     >
-      <AnnotationDirtyWatcher onDirty={openAnnotationUi} />
+      {!previewFile && <AnnotationDirtyWatcher onDirty={openAnnotationUi} />}
       {/* Close Button - Only show in preview mode */}
       {onClose && previewFile && (
         <ActionIcon

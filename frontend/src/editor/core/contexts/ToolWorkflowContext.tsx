@@ -504,13 +504,14 @@ export function ToolWorkflowProvider({ children }: ToolWorkflowProviderProps) {
         return;
       }
 
-      // Guard: if there are unsaved changes and we're switching away from the current tool,
-      // show the save modal before proceeding.
       const hasUnsavedChanges = navigationState.hasUnsavedChanges;
+      const isOpeningViewerToolFromViewer =
+        navigationState.selectedTool === null &&
+        (toolId === "annotate" || toolId === "redact");
       if (
         hasUnsavedChanges &&
-        navigationState.selectedTool &&
-        navigationState.selectedTool !== toolId
+        navigationState.selectedTool !== toolId &&
+        !isOpeningViewerToolFromViewer
       ) {
         actions.requestNavigation(() => handleToolSelectRef.current(toolId));
         return;

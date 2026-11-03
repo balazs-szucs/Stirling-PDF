@@ -5,12 +5,6 @@ import { Tooltip } from "@editor/components/shared/Tooltip";
 import { ViewerContext } from "@editor/contexts/ViewerContext";
 import { useSignature } from "@editor/contexts/SignatureContext";
 import {
-  useAllFiles,
-  useFileSelectors,
-  useFileContext,
-} from "@editor/contexts/FileContext";
-import { createStirlingFilesAndStubs } from "@editor/services/fileStubHelpers";
-import {
   useNavigationState,
   useNavigationGuard,
   useNavigationActions,
@@ -43,28 +37,23 @@ export default function ViewerAnnotationControls({
   const viewerContext = React.useContext(ViewerContext);
 
   // Signature context for accessing drawing API
-  const { historyApiRef, isPlacementMode } = useSignature();
-
-  // File state for save functionality
-  const selectors = useFileSelectors();
-  const { files: activeFiles, fileIds } = useAllFiles();
-  const { actions: fileActions } = useFileContext();
+  const { isPlacementMode } = useSignature();
 
   // Check if we're in sign mode or redaction mode
-  const { selectedTool } = useNavigationState();
+  const { selectedTool, hasUnsavedChanges } = useNavigationState();
   const { actions: navActions } = useNavigationActions();
   const isSignMode = selectedTool === "sign";
   const isRedactMode = selectedTool === "redact";
 
   // Get redaction pending state and navigation guard
-  const { isRedacting: _isRedacting } = useRedactionMode();
-  const { requestNavigation, setHasUnsavedChanges } = useNavigationGuard();
+  const { pendingCount } = useRedactionMode();
+  const { requestNavigation } = useNavigationGuard();
   const {
     setRedactionMode,
     activateRedact,
     deactivateRedact,
     setRedactionConfig,
-    setRedactionsApplied,
+    redactionsApplied,
     redactionApiRef,
     setActiveType,
   } = useRedaction();
@@ -81,41 +70,6 @@ export default function ViewerAnnotationControls({
   const annotationsHidden = viewerContext
     ? !viewerContext.isAnnotationsVisible
     : false;
-
-  // Persist annotations to file if there are unsaved changes
-  const saveAnnotationsIfNeeded = async () => {
-    if (
-      !viewerContext?.exportActions?.saveAsCopy ||
-      currentView !== "viewer" ||
-      !historyApiRef?.current?.canUndo()
-    )
-      return;
-    if (activeFiles.length === 0 || fileIds.length === 0) return;
-
-    try {
-      const arrayBuffer = await viewerContext.exportActions.saveAsCopy();
-      if (!arrayBuffer) return;
-
-      const file = new File([new Blob([arrayBuffer])], activeFiles[0].name, {
-        type: "application/pdf",
-      });
-      const parentStub = selectors.getStirlingFileStub(fileIds[0]);
-      if (!parentStub) return;
-
-      const { stirlingFiles, stubs } = await createStirlingFilesAndStubs(
-        [file],
-        parentStub,
-        "redact",
-      );
-      await fileActions.consumeFiles([fileIds[0]], stirlingFiles, stubs);
-
-      // Clear unsaved changes flags after successful save
-      setHasUnsavedChanges(false);
-      setRedactionsApplied(false);
-    } catch (error) {
-      console.error("Error auto-saving annotations before redaction:", error);
-    }
-  };
 
   const exitRedactionMode = useCallback(() => {
     navActions.setToolAndWorkbench(null, "viewer");
@@ -134,13 +88,13 @@ export default function ViewerAnnotationControls({
   // Handle redaction mode toggle
   const handleRedactionToggle = async () => {
     if (isRedactMode) {
-      exitRedactionMode();
+      if (pendingCount > 0 || redactionsApplied) {
+        requestNavigation(exitRedactionMode);
+      } else {
+        exitRedactionMode();
+      }
     } else {
-      const hasAnnotationChanges = historyApiRef?.current?.canUndo() ?? false;
-
-      const enterRedactionMode = async () => {
-        await saveAnnotationsIfNeeded();
-
+      const enterRedactionMode = () => {
         const manualConfig: RedactParameters = {
           ...defaultParameters,
           mode: "manual",
@@ -148,9 +102,7 @@ export default function ViewerAnnotationControls({
         setRedactionConfig(manualConfig);
 
         navActions.setToolAndWorkbench("redact", "viewer");
-
         setLeftPanelView("toolContent");
-
         setRedactionMode(true);
         setTimeout(() => {
           const currentType = redactionApiRef.current?.getActiveType?.();
@@ -160,10 +112,10 @@ export default function ViewerAnnotationControls({
         }, 200);
       };
 
-      if (hasAnnotationChanges) {
+      if (hasUnsavedChanges) {
         requestNavigation(enterRedactionMode);
       } else {
-        await enterRedactionMode();
+        enterRedactionMode();
       }
     }
   };

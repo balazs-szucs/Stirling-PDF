@@ -1,18 +1,24 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useDocumentEditSession } from "@editor/contexts/documentEdit/DocumentEditSessionContext";
 
 /**
- * The viewer watches the edit revision only to surface the Annotate panel, and
- * a comment edited in the sidebar commits per keystroke. Subscribing from a
- * leaf keeps those commits from re-rendering the viewer itself; the panel this
- * opens still updates.
+ * Watches the edit revision to surface the Annotate panel when an annotation is
+ * edited on the canvas. Subscribing from a leaf prevents keystrokes or minor
+ * state updates from re-rendering the viewer itself.
  */
 export function AnnotationDirtyWatcher({ onDirty }: { onDirty: () => void }) {
   const { workingRevision } = useDocumentEditSession();
+  const lastSeenRevisionRef = useRef(0);
 
   useEffect(() => {
-    if (workingRevision > 0) {
+    if (
+      workingRevision > 0 &&
+      workingRevision !== lastSeenRevisionRef.current
+    ) {
+      lastSeenRevisionRef.current = workingRevision;
       onDirty();
+    } else if (workingRevision === 0) {
+      lastSeenRevisionRef.current = 0;
     }
   }, [workingRevision, onDirty]);
 
