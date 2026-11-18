@@ -1,9 +1,9 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
-import { Text, Stack, Group } from "@mantine/core";
+import { Text, Stack, Group, Tooltip } from "@mantine/core";
 import { ActionIcon } from "@editor/ui/ActionIcon";
+import { Button } from "@editor/ui/Button";
 import { Icon, type IconName } from "@editor/ui/Icon";
-import { Tooltip } from "@editor/components/shared/Tooltip";
 import { AutomationTool } from "@editor/types/automation";
 import { ToolRegistry } from "@editor/data/toolsTaxonomy";
 import { ToolId } from "@editor/types/toolId";
@@ -48,7 +48,7 @@ function ToolRowAction({
   onClick: () => void;
 }) {
   return (
-    <Tooltip content={label} position="top">
+    <Tooltip label={label} withArrow>
       <ActionIcon
         variant="quiet"
         size="sm"
@@ -98,90 +98,69 @@ export default function ToolList({
       <Stack gap="0">
         {tools.map((tool, index) => (
           <React.Fragment key={tool.id}>
-            <div
-              style={{
-                border: "1px solid var(--c-border-subtle)",
-                borderRadius:
-                  tool.operation && !tool.configured
-                    ? "var(--mantine-radius-md) var(--mantine-radius-md) 0 0"
-                    : "var(--mantine-radius-md)",
-                backgroundColor: "var(--c-surface-sunken)",
-                position: "relative",
-                padding: "var(--mantine-spacing-xs)",
-                borderBottomWidth:
-                  tool.operation && !tool.configured ? "0" : "1px",
-              }}
-            >
-              <Group gap="xs" align="center" wrap="nowrap">
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <ToolSelector
-                    key={`tool-selector-${tool.id}`}
-                    onSelect={(newOperation) =>
-                      handleToolSelect(index, newOperation)
-                    }
-                    excludeTools={["automate"]}
-                    toolRegistry={toolRegistry}
-                    selectedValue={tool.operation}
-                    placeholder={tool.name}
-                  />
-                </div>
-
-                <Group gap={2} wrap="nowrap">
-                  {tool.operation && (
-                    <ToolRowAction
-                      label={t(
-                        "automate.creation.tools.configure",
-                        "Configure tool",
-                      )}
-                      icon="settings"
-                      onClick={() => onToolConfigure(index)}
-                    />
-                  )}
-                  {canRemove && (
-                    <ToolRowAction
-                      label={t("automate.creation.tools.remove", "Remove tool")}
-                      icon="x"
-                      onClick={() => onToolRemove(index)}
-                    />
-                  )}
-                </Group>
-              </Group>
-            </div>
-            {tool.operation && !tool.configured && (
-              <button
-                type="button"
-                onClick={() => onToolConfigure(index)}
-                aria-label={t(
-                  "automate.creation.tools.configureTool",
-                  "Configure {{name}}",
-                  { name: tool.name },
-                )}
+            <Stack gap={6}>
+              <div
                 style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.375rem",
-                  width: "100%",
-                  border: "1px solid var(--c-warning)",
-                  borderTop: "none",
-                  borderRadius:
-                    "0 0 var(--mantine-radius-md) var(--mantine-radius-md)",
-                  backgroundColor: "var(--c-warning-subtle)",
-                  color: "var(--c-warning)",
+                  border: "1px solid var(--c-border-subtle)",
+                  borderRadius: "var(--mantine-radius-md)",
+                  backgroundColor: "var(--c-surface-sunken)",
                   padding: "var(--mantine-spacing-xs)",
-                  textAlign: "left",
-                  font: "inherit",
-                  cursor: "pointer",
                 }}
               >
-                <Icon name="triangle-alert" size={14} />
-                <Text size="xs" fw={500}>
+                <Group gap="xs" align="center" wrap="nowrap">
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <ToolSelector
+                      key={`tool-selector-${tool.id}`}
+                      onSelect={(newOperation) =>
+                        handleToolSelect(index, newOperation)
+                      }
+                      excludeTools={["automate"]}
+                      toolRegistry={toolRegistry}
+                      selectedValue={tool.operation}
+                      placeholder={tool.name}
+                    />
+                  </div>
+
+                  <Group gap={2} wrap="nowrap">
+                    {tool.operation && (
+                      <ToolRowAction
+                        label={t(
+                          "automate.creation.tools.configure",
+                          "Configure tool",
+                        )}
+                        icon="settings"
+                        onClick={() => onToolConfigure(index)}
+                      />
+                    )}
+                    {canRemove && (
+                      <ToolRowAction
+                        label={t(
+                          "automate.creation.tools.remove",
+                          "Remove tool",
+                        )}
+                        icon="x"
+                        onClick={() => onToolRemove(index)}
+                      />
+                    )}
+                  </Group>
+                </Group>
+              </div>
+              {tool.operation && !tool.configured && (
+                <Button
+                  variant="secondary"
+                  accent="warning"
+                  size="sm"
+                  fullWidth
+                  leftSection={<Icon name="triangle-alert" size={14} />}
+                  onClick={() => onToolConfigure(index)}
+                >
                   {t(
                     "automate.creation.tools.notConfigured",
                     "Configuration required",
                   )}
-                </Text>
-              </button>
-            )}
+                </Button>
+              )}
+            </Stack>
             {index < tools.length - 1 && <StepArrow />}
           </React.Fragment>
         ))}
