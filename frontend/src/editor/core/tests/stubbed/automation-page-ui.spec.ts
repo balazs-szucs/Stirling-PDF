@@ -314,7 +314,7 @@ test.describe("11.4 Automation - builder usability", () => {
       page.getByRole("button", { name: "Save Automation" }),
     ).toBeEnabled();
 
-    // Cancelling must not leave an orphan copy in Saved.
+    // Cancel must not leave a saved orphan copy.
     await page.getByRole("button", { name: "Cancel" }).click();
     await expect(
       page.getByRole("button", { name: "Security Workflow", exact: true }),
@@ -339,7 +339,7 @@ test.describe("11.4 Automation - builder usability", () => {
         exact: true,
       }),
     ).toHaveCount(1, { timeout: 5_000 });
-    // Only the Suggested copy keeps the old name; the saved one was updated.
+    // Only the Suggested copy keeps the old name.
     await expect(
       page.getByRole("button", {
         name: "Secure PDF Ingestion",

@@ -17,6 +17,7 @@ import { useToolRegistry } from "@editor/contexts/ToolRegistryContext";
 import { AutomationConfig, ExecutionStep } from "@editor/types/automation";
 import { EXECUTION_STATUS } from "@editor/constants/automation";
 import { useResourceCleanup } from "@editor/utils/resourceManager";
+import StickyFooter from "@editor/components/tools/automate/StickyFooter";
 import type { useAutomateOperation } from "@editor/hooks/tools/automate/useAutomateOperation";
 
 interface AutomationRunProps {
@@ -84,9 +85,6 @@ export default function AutomationRun({
   // Cleanup when component unmounts
   useEffect(() => {
     return () => {
-      // Reset progress state when component unmounts
-      setExecutionSteps([]);
-      setCurrentStepIndex(-1);
       // Clean up any blob URLs
       cleanup();
     };
@@ -151,7 +149,6 @@ export default function AutomationRun({
 
       // Mark all as completed and reset current step
       setCurrentStepIndex(-1);
-      console.log(`✅ Automation completed successfully`);
     } catch (error: unknown) {
       console.error("Automation execution failed:", error);
       setCurrentStepIndex(-1);
@@ -265,16 +262,7 @@ export default function AutomationRun({
         </Stack>
 
         {/* Action Buttons */}
-        <div
-          style={{
-            position: "sticky",
-            bottom: 0,
-            zIndex: 2,
-            background: "var(--c-bg-raised)",
-            paddingTop: "var(--mantine-spacing-sm)",
-            borderTop: "1px solid var(--c-border-subtle)",
-          }}
-        >
+        <StickyFooter>
           <Stack gap="sm">
             <Tooltip
               label={runDisabledReason}
@@ -314,17 +302,8 @@ export default function AutomationRun({
               </Button>
             )}
           </Stack>
-        </div>
+        </StickyFooter>
       </Stack>
-
-      <style>
-        {`
-          @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-          }
-        `}
-      </style>
     </div>
   );
 }

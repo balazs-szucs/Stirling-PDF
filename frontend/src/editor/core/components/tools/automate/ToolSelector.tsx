@@ -111,22 +111,18 @@ export default function ToolSelector({
       return [];
     }
 
-    // Recommended tools live in the quick section and are deliberately absent
-    // from "all"; a selector that only reads "all" silently loses Compress,
-    // Merge and the rest of the common tools. Merge both sections by
-    // subcategory so every automatable tool is offered once.
+    // "all" omits the quick section's recommended tools, so merge every
+    // section by subcategory to offer each automatable tool exactly once.
     const merged = new Map<string, SubcategoryGroup>();
-    for (const section of sections) {
-      for (const group of section.subcategories) {
-        const existing = merged.get(group.subcategoryId);
-        if (existing) {
-          existing.tools.push(...group.tools);
-        } else {
-          merged.set(group.subcategoryId, {
-            subcategoryId: group.subcategoryId,
-            tools: [...group.tools],
-          });
-        }
+    for (const group of sections.flatMap((s) => s.subcategories)) {
+      const existing = merged.get(group.subcategoryId);
+      if (existing) {
+        existing.tools.push(...group.tools);
+      } else {
+        merged.set(group.subcategoryId, {
+          subcategoryId: group.subcategoryId,
+          tools: [...group.tools],
+        });
       }
     }
     return [...merged.values()];

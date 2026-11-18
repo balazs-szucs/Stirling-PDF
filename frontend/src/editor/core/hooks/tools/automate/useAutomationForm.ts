@@ -50,9 +50,8 @@ export function useAutomationForm({
     [toolRegistry],
   );
 
-  // Dirty-check against the form as it was initialised, not against the saved
-  // config: defaults merged into step parameters would otherwise make an
-  // untouched edit look changed and prompt on Cancel.
+  // Snapshot the initialised form, not the saved config: default parameters
+  // merged into steps would make an untouched edit look dirty.
   const initialSnapshotRef = useRef<string | null>(null);
   const serializeForm = useCallback(
     (
@@ -91,9 +90,9 @@ export function useAutomationForm({
         const toolEntry = toolRegistry[operation as ToolId];
         // If tool has no settingsComponent, it's automatically configured
         const isConfigured =
-          mode === AutomationMode.EDIT || mode === AutomationMode.SUGGESTED
-            ? true
-            : !toolEntry?.automationSettings;
+          mode === AutomationMode.EDIT ||
+          mode === AutomationMode.SUGGESTED ||
+          !toolEntry?.automationSettings;
 
         return {
           id: `${operation}-${Date.now()}-${index}`,

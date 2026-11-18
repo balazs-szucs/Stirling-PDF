@@ -2,7 +2,7 @@ import React from "react";
 import { useTranslation } from "react-i18next";
 import { Text, Stack, Group } from "@mantine/core";
 import { ActionIcon } from "@editor/ui/ActionIcon";
-import { Icon } from "@editor/ui/Icon";
+import { Icon, type IconName } from "@editor/ui/Icon";
 import { Tooltip } from "@editor/components/shared/Tooltip";
 import { AutomationTool } from "@editor/types/automation";
 import { ToolRegistry } from "@editor/data/toolsTaxonomy";
@@ -35,6 +35,30 @@ function StepArrow() {
     >
       <Icon name="arrow-down" size={14} />
     </div>
+  );
+}
+
+function ToolRowAction({
+  label,
+  icon,
+  onClick,
+}: {
+  label: string;
+  icon: IconName;
+  onClick: () => void;
+}) {
+  return (
+    <Tooltip content={label} position="top">
+      <ActionIcon
+        variant="quiet"
+        size="sm"
+        onClick={onClick}
+        aria-label={label}
+        style={{ color: "var(--c-text-muted)" }}
+      >
+        <Icon name={icon} size={16} />
+      </ActionIcon>
+    </Tooltip>
   );
 }
 
@@ -104,48 +128,21 @@ export default function ToolList({
 
                 <Group gap={2} wrap="nowrap">
                   {tool.operation && (
-                    <Tooltip
-                      content={t(
+                    <ToolRowAction
+                      label={t(
                         "automate.creation.tools.configure",
                         "Configure tool",
                       )}
-                      position="top"
-                    >
-                      <ActionIcon
-                        variant="quiet"
-                        size="sm"
-                        onClick={() => onToolConfigure(index)}
-                        aria-label={t(
-                          "automate.creation.tools.configure",
-                          "Configure tool",
-                        )}
-                        style={{ color: "var(--c-text-muted)" }}
-                      >
-                        <Icon name="settings" size={16} />
-                      </ActionIcon>
-                    </Tooltip>
+                      icon="settings"
+                      onClick={() => onToolConfigure(index)}
+                    />
                   )}
                   {canRemove && (
-                    <Tooltip
-                      content={t(
-                        "automate.creation.tools.remove",
-                        "Remove tool",
-                      )}
-                      position="top"
-                    >
-                      <ActionIcon
-                        variant="quiet"
-                        size="sm"
-                        onClick={() => onToolRemove(index)}
-                        aria-label={t(
-                          "automate.creation.tools.remove",
-                          "Remove tool",
-                        )}
-                        style={{ color: "var(--c-text-muted)" }}
-                      >
-                        <Icon name="x" size={16} />
-                      </ActionIcon>
-                    </Tooltip>
+                    <ToolRowAction
+                      label={t("automate.creation.tools.remove", "Remove tool")}
+                      icon="x"
+                      onClick={() => onToolRemove(index)}
+                    />
                   )}
                 </Group>
               </Group>

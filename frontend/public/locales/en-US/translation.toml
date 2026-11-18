@@ -2332,7 +2332,6 @@ placeholder = "My Automation"
 [automate.creation.tools]
 add = "Add a tool..."
 addTool = "Add Tool"
-change = "Change tool"
 changeTool = "Change tool: {{name}}"
 configure = "Configure tool"
 configureTool = "Configure {{name}}"

@@ -118,8 +118,7 @@ const Automate = ({ onPreviewFile, onComplete, onError }: BaseToolProps) => {
   };
 
   const handleEditCopy = (automation: AutomationConfig) => {
-    // Prefill the builder with the pre-made definition but keep it unsaved
-    // until the user chooses Save; cancelling must not leave an orphan copy.
+    // Stays unsaved until Save; cancelling must not leave an orphan copy.
     handleStepChange({
       step: AUTOMATION_STEPS.CREATION,
       mode: AutomationMode.SUGGESTED,
@@ -232,12 +231,10 @@ const Automate = ({ onPreviewFile, onComplete, onError }: BaseToolProps) => {
     createStep(
       t("automate.selection.title", "Automation Selection"),
       {
-        // The builder owns the panel while it is open; Cancel on the sticky
-        // footer is the supported way back and can ask before discarding.
+        // The builder owns its discard confirmation, so the selection panel
+        // stays hidden while it is open instead of collapsing away the draft.
         isVisible: currentStep !== AUTOMATION_STEPS.CREATION,
         isCollapsed: currentStep !== AUTOMATION_STEPS.SELECTION,
-        // Creation owns its discard confirmation; collapsing straight back to
-        // the selection from there would drop the draft without asking.
         onCollapsedClick:
           currentStep === AUTOMATION_STEPS.SELECTION
             ? () => {

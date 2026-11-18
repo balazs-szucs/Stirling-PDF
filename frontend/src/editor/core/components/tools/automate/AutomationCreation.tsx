@@ -17,6 +17,7 @@ import { ToolRegistry } from "@editor/data/toolsTaxonomy";
 import ToolConfigurationModal from "@editor/components/tools/automate/ToolConfigurationModal";
 import ToolList from "@editor/components/tools/automate/ToolList";
 import IconSelector from "@editor/components/tools/automate/IconSelector";
+import StickyFooter from "@editor/components/tools/automate/StickyFooter";
 import {
   AutomationConfig,
   AutomationMode,
@@ -62,7 +63,7 @@ export default function AutomationCreation({
   } = useAutomationForm({ mode, existingAutomation, toolRegistry });
 
   const [configModalOpen, setConfigModalOpen] = useState(false);
-  const [configuraingToolIndex, setConfiguringToolIndex] = useState(-1);
+  const [configuringToolIndex, setConfiguringToolIndex] = useState(-1);
   const [unsavedWarningOpen, setUnsavedWarningOpen] = useState(false);
 
   const configureTool = (index: number) => {
@@ -71,8 +72,8 @@ export default function AutomationCreation({
   };
 
   const handleToolConfigSave = (parameters: Record<string, unknown>) => {
-    if (configuraingToolIndex >= 0) {
-      updateTool(configuraingToolIndex, {
+    if (configuringToolIndex >= 0) {
+      updateTool(configuringToolIndex, {
         configured: true,
         parameters,
       });
@@ -161,7 +162,7 @@ export default function AutomationCreation({
   };
 
   const currentConfigTool =
-    configuraingToolIndex >= 0 ? selectedTools[configuraingToolIndex] : null;
+    configuringToolIndex >= 0 ? selectedTools[configuringToolIndex] : null;
 
   /**
    * Build a temporary AutomationConfig from in-progress form state so the
@@ -249,16 +250,7 @@ export default function AutomationCreation({
           />
         )}
 
-        <div
-          style={{
-            position: "sticky",
-            bottom: 0,
-            zIndex: 2,
-            background: "var(--c-bg-raised)",
-            paddingTop: "var(--mantine-spacing-sm)",
-            borderTop: "1px solid var(--c-border-subtle)",
-          }}
-        >
+        <StickyFooter>
           <Stack gap="sm">
             <Button
               leftSection={<Icon name="check" />}
@@ -272,9 +264,9 @@ export default function AutomationCreation({
             <Button
               variant="secondary"
               leftSection={<Icon name="download" />}
-              onClick={() => {
-                downloadAutomationConfig(buildExportableAutomation());
-              }}
+              onClick={() =>
+                downloadAutomationConfig(buildExportableAutomation())
+              }
               disabled={!canSaveAutomation()}
               fullWidth
             >
@@ -283,12 +275,12 @@ export default function AutomationCreation({
             <Button
               variant="secondary"
               leftSection={<Icon name="folder-input" />}
-              onClick={() => {
+              onClick={() =>
                 downloadFolderScanningConfig(
                   buildExportableAutomation(),
                   toolRegistry,
-                );
-              }}
+                )
+              }
               disabled={!canSaveAutomation()}
               fullWidth
             >
@@ -306,7 +298,7 @@ export default function AutomationCreation({
               {t("automate.creation.cancel", "Cancel")}
             </Button>
           </Stack>
-        </div>
+        </StickyFooter>
       </Stack>
 
       {/* Tool Configuration Modal */}
