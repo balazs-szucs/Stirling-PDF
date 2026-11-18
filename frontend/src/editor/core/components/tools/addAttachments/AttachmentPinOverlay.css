@@ -1,0 +1,41 @@
+.attachment-pin-overlay {
+  position: fixed;
+  z-index: 40;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.attachment-pin-overlay__page {
+  position: absolute;
+  overflow: hidden;
+  border-radius: 2px;
+  pointer-events: none;
+}
+
+.attachment-pin-overlay__page--active {
+  pointer-events: auto;
+  cursor: crosshair;
+}
+
+.attachment-pin-overlay__marker {
+  position: absolute;
+  display: flex;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--c-primary);
+  cursor: pointer;
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 35%));
+  pointer-events: auto;
+  transform: translate(-50%, -100%);
+}
+
+.attachment-pin-overlay__marker:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.attachment-pin-overlay__marker:focus-visible {
+  outline: 2px solid var(--c-primary);
+  outline-offset: 2px;
+}
