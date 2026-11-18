@@ -18,6 +18,11 @@ import { BaseToolProps } from "@editor/types/tool";
 import { useToolRegistry } from "@editor/contexts/ToolRegistryContext";
 import { useSavedAutomations } from "@editor/hooks/tools/automate/useSavedAutomations";
 import {
+  useAutomateCreationTips,
+  useAutomateRunTips,
+  useAutomateSelectionTips,
+} from "@editor/components/tooltips/useAutomateTips";
+import {
   AutomationConfig,
   AutomationStepData,
   AutomationMode,
@@ -50,6 +55,10 @@ const Automate = ({ onPreviewFile, onComplete, onError }: BaseToolProps) => {
     copyFromSuggested,
     importAutomation,
   } = useSavedAutomations();
+
+  const selectionTips = useAutomateSelectionTips();
+  const creationTips = useAutomateCreationTips();
+  const runTips = useAutomateRunTips();
 
   // Use ref to store the latest reset function to avoid closure issues
   const resetFunctionRef = React.useRef<() => void>(null);
@@ -235,6 +244,7 @@ const Automate = ({ onPreviewFile, onComplete, onError }: BaseToolProps) => {
         // stays hidden while it is open instead of collapsing away the draft.
         isVisible: currentStep !== AUTOMATION_STEPS.CREATION,
         isCollapsed: currentStep !== AUTOMATION_STEPS.SELECTION,
+        tooltip: selectionTips,
         onCollapsedClick:
           currentStep === AUTOMATION_STEPS.SELECTION
             ? () => {
@@ -256,6 +266,7 @@ const Automate = ({ onPreviewFile, onComplete, onError }: BaseToolProps) => {
       {
         isVisible: currentStep === AUTOMATION_STEPS.CREATION,
         isCollapsed: false,
+        tooltip: creationTips,
       },
       currentStep === AUTOMATION_STEPS.CREATION ? renderCurrentStep() : null,
     ),
@@ -272,6 +283,7 @@ const Automate = ({ onPreviewFile, onComplete, onError }: BaseToolProps) => {
       {
         isVisible: currentStep === AUTOMATION_STEPS.RUN,
         isCollapsed: hasResults,
+        tooltip: runTips,
       },
       currentStep === AUTOMATION_STEPS.RUN ? renderCurrentStep() : null,
     ),
