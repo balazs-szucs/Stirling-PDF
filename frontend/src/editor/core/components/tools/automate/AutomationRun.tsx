@@ -170,9 +170,7 @@ export default function AutomationRun({
           <Icon name="check" size={16} style={{ color: "var(--c-success)" }} />
         );
       case EXECUTION_STATUS.ERROR:
-        return (
-          <span style={{ fontSize: 16, color: "var(--c-danger)" }}>✕</span>
-        );
+        return <Icon name="x" size={16} style={{ color: "var(--c-danger)" }} />;
       case EXECUTION_STATUS.RUNNING:
         return <Loader size={16} />;
       default:
